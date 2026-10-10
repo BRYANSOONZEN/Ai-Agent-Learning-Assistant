@@ -1,0 +1,18 @@
+# IDE / OS
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Backend (Spring Boot / Maven)
+backend/target/
+backend/uploads/
+backend/data/
+*.log
+
+# Local secrets
+.env.local
+.env.*.local
+application-local.yml

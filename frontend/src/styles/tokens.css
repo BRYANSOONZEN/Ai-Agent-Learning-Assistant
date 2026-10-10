@@ -1,0 +1,53 @@
+/*
+ * Design tokens — the ONLY place colors, spacing, radius and shadows are defined.
+ * Pages must use these variables (var(--app-space-md)) instead of raw values.
+ * Change a value here and the whole app updates.
+ */
+:root {
+  /* Brand color, also fed into Element Plus so its components match */
+  --app-primary: #0e7c6b;
+  --el-color-primary: #0e7c6b;
+  --el-color-primary-light-3: #56a397;
+  --el-color-primary-light-5: #86beb5;
+  --el-color-primary-light-7: #b7d8d3;
+  --el-color-primary-light-8: #cfe5e1;
+  --el-color-primary-light-9: #e7f2f0;
+  --el-color-primary-dark-2: #0b6356;
+
+  /* Status colors */
+  --app-success: #2e9d5b;
+  --app-warning: #d98a1c;
+  --app-danger: #d0453a;
+  --app-info: #6b7785;
+
+  /* Surfaces and text */
+  --app-bg: #f4f6f5;
+  --app-surface: #ffffff;
+  --app-border: #e3e8e6;
+  --app-text: #1f2a28;
+  --app-text-secondary: #5e6b68;
+  --app-text-muted: #8a9693;
+
+  /* Layout */
+  --app-sidebar-width: 220px;
+  --app-sidebar-bg: #15302b;
+  --app-sidebar-text: #b9cbc6;
+  --app-header-height: 56px;
+
+  /* Spacing scale — use only these */
+  --app-space-xs: 4px;
+  --app-space-sm: 8px;
+  --app-space-md: 16px;
+  --app-space-lg: 24px;
+  --app-space-xl: 32px;
+
+  /* Shape */
+  --app-radius: 8px;
+  --app-shadow: 0 1px 3px rgba(20, 40, 36, 0.06);
+
+  /* Typography */
+  --app-font-size-sm: 13px;
+  --app-font-size: 14px;
+  --app-font-size-lg: 16px;
+  --app-font-size-title: 20px;
+}
