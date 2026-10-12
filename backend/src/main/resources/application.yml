@@ -1,0 +1,51 @@
+# 后端配置文件。YAML 格式：用缩进（2 个空格）表示层级，冒号后面必须有空格。
+
+server:
+  port: 8080                     # 前端 Vite 把 /api 代理到这个端口（frontend/vite.config.js）
+
+spring:
+  application:
+    name: se-learning-platform
+
+  # ---------- 数据库 ----------
+  # 开发阶段用 H2 内存数据库：每次启动都是全新的库，自动执行 schema.sql（建表）和 data.sql（初始数据）。
+  # URL 参数说明：
+  #   MODE=MySQL               尽量兼容 MySQL 语法，以后切换到 MySQL 不用改 SQL
+  #   DATABASE_TO_LOWER=TRUE   表名、列名统一小写，和 MySQL 的习惯一致
+  #   NON_KEYWORDS=USER        user 在 H2 里是关键字，不加这个就不能建 user 表
+  #   DB_CLOSE_DELAY=-1        程序运行期间不关闭内存库
+  datasource:
+    url: jdbc:h2:mem:platform;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always               # 每次启动执行 classpath 下的 schema.sql / data.sql（有才执行）
+      encoding: UTF-8
+
+  # H2 网页控制台：启动后浏览器打开 http://localhost:8080/h2-console 可以直接看表、写 SQL
+  # 登录时 JDBC URL 填上面 datasource.url 的值，用户名 sa，密码留空
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # 上传文件大小限制（资料上传功能用，见 docs/api.md 3.5 节）
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+
+# ---------- MyBatis-Plus ----------
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true                          # 列 teacher_id ↔ 字段 teacherId
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl       # 在控制台打印执行的 SQL，学习和排错时很有用
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto                  # 主键用数据库自增
+      logic-delete-field: deleted    # 逻辑删除：deleteById 实际执行 UPDATE ... SET deleted = 1
+      logic-delete-value: 1
+      logic-not-delete-value: 0

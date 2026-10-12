@@ -16,3 +16,6 @@ backend/data/
 .env.local
 .env.*.local
 application-local.yml
+
+# Local archives
+*.zip
