@@ -297,7 +297,8 @@ erDiagram
 | student_id | BIGINT | NOT NULL, 索引 | |
 | exercise_id | BIGINT | NOT NULL, 索引 | |
 | course_id | BIGINT | NOT NULL | 冗余，方便按课程统计 |
-| answer | VARCHAR(255) | NOT NULL | 学生的答案 |
+| item_id | BIGINT | | 哪一次练习 → `chapter_item.id`；同一次交卷的几题 `submitted_at` 相同 |
+| answer | VARCHAR(255) | NOT NULL | 学生的答案，没作答存空串 |
 | is_correct | TINYINT(1) | NOT NULL | |
 | time_spent_sec | INT | | 作答用时 |
 | submitted_at | DATETIME | NOT NULL, 索引 | |
@@ -310,8 +311,9 @@ erDiagram
 |---|---|---|---|
 | id | BIGINT | PK, 自增 | |
 | student_id | BIGINT | NOT NULL, 索引 | |
-| event_type | VARCHAR(32) | NOT NULL | `view_knowledge_point` / `view_material` / `login` |
-| target_id | BIGINT | | 对应知识点或资料的 id |
+| event_type | VARCHAR(32) | NOT NULL | 已实现：`view_item` 看了一项内容 / `finish_item` 学完一项；预留：`view_knowledge_point` / `login` |
+| target_id | BIGINT | | 对应的内容项（`chapter_item.id`）或知识点 id |
+| course_id | BIGINT | | 冗余，方便按课程统计 |
 | duration_sec | INT | | 停留时长 |
 | created_at | DATETIME | NOT NULL, 索引 | |
 
@@ -418,3 +420,7 @@ erDiagram
 | 日期 | 版本 | 变更 | 作者 |
 |---|---|---|---|
 | 2026-10-10 | v0.2 | 首版：全组表结构；新增 `clazz`、`enrollment`、`material`；明确不建物理外键 | A |
+| 2026-10-30 | v0.3 | 实现 `answer_record`（加 `item_id`）和 `learning_event`（加 `course_id`，事件类型改为按内容项记）；AI 对话记录直接读 `dialogue_session` / `dialogue_message` | A |
+| 2026-10-30 | v0.4 | 实现 `mastery`：交卷后按 docs/design.md 5.1 的公式重算 | A |
+| 2026-10-30 | v0.5 | 学生画像先不建 `student_profile` / `profile_tag`：打开页面时用 `learning_event`、`answer_record`、`mastery`、对话结果现算 | A |
+| 2026-10-30 | v0.6 | 实现 `recommendation`（首版只推题，`target_type = exercise`；加唯一约束 student_id + target_type + target_id）；`exercise.item_id` 为空表示题库题，只给推荐用；`answer_record.item_id` 为空表示在推荐页做的题 | A |

@@ -1,10 +1,18 @@
 <script setup>
-// Title row used at the top of EVERY page. Put page-level buttons in the default slot.
-defineProps({
+// Title row at the top of EVERY page (Studywise "page intro"): small English label, heading, one line of
+// description. The label comes from the route (meta.eyebrow) unless passed in. Page-level buttons go in the slot.
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const props = defineProps({
   title: { type: String, required: true },
   description: { type: String, default: '' },
+  eyebrow: { type: String, default: '' },
   back: { type: Boolean, default: false },
 })
+
+const route = useRoute()
+const label = computed(() => props.eyebrow || route.meta.eyebrow || '')
 </script>
 
 <template>
@@ -12,7 +20,8 @@ defineProps({
     <div class="left">
       <el-button v-if="back" icon="ArrowLeft" circle size="small" @click="$router.back()" />
       <div>
-        <h1 class="title">{{ title }}</h1>
+        <span v-if="label" class="sw-eyebrow">{{ label }}</span>
+        <h2 class="title">{{ title }}</h2>
         <p v-if="description" class="description">{{ description }}</p>
       </div>
     </div>
@@ -24,9 +33,9 @@ defineProps({
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--app-space-md);
-  margin-bottom: var(--app-space-lg);
+  margin: 7px 0 22px;
 }
 
 .left {
@@ -36,14 +45,18 @@ defineProps({
 }
 
 .title {
-  margin: 0;
-  font-size: var(--app-font-size-title);
-  font-weight: 600;
+  margin: 9px 0 5px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.7px;
 }
 
 .description {
-  margin: var(--app-space-xs) 0 0;
-  color: var(--app-text-secondary);
+  margin: 0;
+  max-width: 60em;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .actions {

@@ -1,8 +1,11 @@
-import request, { USE_MOCK, mockResponse } from './request'
-import { mockProfile } from '@/mock/data'
+import request from './request'
 
-// GET /api/students/{id}/profile
-export function getStudentProfile(studentId) {
-  if (USE_MOCK) return mockResponse(mockProfile)
-  return request.get(`/students/${studentId}/profile`)
+/*
+ * 学生画像 (backend: ProfileController, /api/profiles). No mock branch: the profile is worked out
+ * from the real learning records and mastery every time the page opens.
+ */
+
+// GET /api/profiles/me -> { studentName, stats, tags, dimensions, days, quizTrend }
+export function getMyProfile() {
+  return request.get('/profiles/me')
 }

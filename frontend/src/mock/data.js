@@ -15,20 +15,3 @@ export const mockCourses = [
   { id: 6, name: 'UML 建模', teacher: '赵老师', status: 'published', chapterCount: 6, studentCount: 58, description: '用例图、类图、时序图与状态图。', createdAt: '2026-09-15' },
 ]
 
-export const mockProfile = {
-  student: { id: 1001, name: '张同学', className: '软工 2301 班' },
-  stats: { studyHours: 46.5, exercisesDone: 312, accuracy: 0.78, weakPoints: 4 },
-  mastery: [
-    { name: '需求分析', value: 0.82 },
-    { name: '系统设计', value: 0.64 },
-    { name: '设计模式', value: 0.48 },
-    { name: '软件测试', value: 0.75 },
-    { name: '项目管理', value: 0.58 },
-    { name: 'UML 建模', value: 0.88 },
-  ],
-  weeklyTrend: {
-    weeks: ['第1周', '第2周', '第3周', '第4周', '第5周', '第6周'],
-    accuracy: [0.62, 0.66, 0.7, 0.69, 0.75, 0.78],
-    studyHours: [5.5, 7, 8.5, 6, 9.5, 10],
-  },
-}

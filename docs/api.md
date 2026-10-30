@@ -249,6 +249,12 @@
 | GET | `/api/diagnosis/students/{id}?courseId=` | 学生诊断：各知识点掌握度 + 薄弱点 | 本人、教师 |
 | GET | `/api/diagnosis/classes/{id}?courseId=` | 班级诊断：各知识点平均掌握度 | 教师 |
 
+> **已实现（2026-10-30）**，和上面草案的差别：
+> - 答题不单独提交：学生交卷走 `POST /api/learn/items/{id}/submit`，自动写 `answer_record`、重算掌握度，响应里带 `masteryChanges`
+> - 学习行为：`POST /api/learn/events {type: view_item | finish_item, itemId, durationSec}`；学习记录页一次拿全：`GET /api/learn/records`
+> - 学生诊断：`GET /api/diagnosis/me`（当前学生）、`GET /api/diagnosis/students/{id}`；除了 `items`，还带每个知识点最近几次对错、上次答错的误解说明、可以重做的练习，以及 AI 对话话题的结果
+> - 班级表还没建，老师先按课程看：`GET /api/diagnosis/courses/{id}`（各知识点平均掌握度、薄弱人数、常见误解）
+
 提交答案请求：`{ "exerciseId": 501, "answer": "B", "timeSpentSec": 35 }`
 
 响应 `data`：
@@ -282,9 +288,18 @@
 | GET | `/api/profiles/classes/{id}?courseId=` | 班级总览：学生列表 + 关键指标 | 教师 |
 | POST | `/api/profiles/refresh?courseId=` | 重新计算画像快照 | 教师、管理员 |
 
+> **已实现（2026-10-30）**：`GET /api/profiles/me`、`GET /api/profiles/students/{id}`。打开时用学习记录 + 掌握度 + 对话结果现算，
+> 返回 `stats`、`tags`（每个带 `reason` 依据）、`dimensions`（投入 / 完成度 / 正确率 / 掌握度 / 订正 / 独立思考，数据不够时 `value` 为空）、
+> `days`（近 14 天每天的分钟数）、`quizTrend`（每次交卷的正确率）。快照表 `student_profile` / `profile_tag` 和 refresh、班级总览暂时没做。
+
 > ⚠️ 前端改动：`api/profile.js` 现在用的是 `/students/{id}/profile`，统一改成 `/profiles/students/{id}`，和模块前缀约定一致。
 
 ## 6. 荐 + 干（成员 D，草案）
+
+> **已实现（2026-10-30）：推荐**。`GET /api/recommendations` 打开时按最新掌握度挑题（相当于 generate，不用单独调），
+> 按薄弱知识点分组返回：掌握度、误解、知识点说明、本章可回看的视频 / 文档、推荐的题（不带答案，每道有 `reason`）。
+> 新增 `POST /api/recommendations/practice` `{answers: {"3": "A"}}`：在推荐页做题，返回格式和交卷相同（含 `masteryChanges`），
+> 做对的题标为 `done`。`POST /api/recommendations/{id}/feedback` 已实现。`courseId` 筛选和老师端 generate 暂时没做。预警、干预还没做。
 
 | 方法 | 路径 | 说明 | 角色 |
 |---|---|---|---|

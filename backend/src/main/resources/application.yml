@@ -6,6 +6,9 @@ server:
 spring:
   application:
     name: se-learning-platform
+  config:
+    # 额外读取本机私有配置（放 API key），optional: 表示文件不存在也照常启动
+    import: optional:classpath:application-local.yml
 
   # ---------- 数据库 ----------
   # 开发阶段用 H2 内存数据库：每次启动都是全新的库，自动执行 schema.sql（建表）和 data.sql（初始数据）。
@@ -34,8 +37,8 @@ spring:
   # 上传文件大小限制（资料上传功能用，见 docs/api.md 3.5 节）
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 25MB
+      max-file-size: 200MB         # 视频可能比较大
+      max-request-size: 210MB
 
 # ---------- MyBatis-Plus ----------
 mybatis-plus:
@@ -49,3 +52,23 @@ mybatis-plus:
       logic-delete-field: deleted    # 逻辑删除：deleteById 实际执行 UPDATE ... SET deleted = 1
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# ---------- 大模型（AI 对话等功能用，见 docs/ai-implementation.md 第 3 节第 1 步）----------
+# 对应的 Java 类：com.se.platform.ai.config.LlmProperties（短横线写法 base-url 会自动对应字段 baseUrl）
+llm:
+  # 现在用 Gemini 的 OpenAI 兼容接口（免费额度）。换 DeepSeek 时改成 https://api.deepseek.com
+  # 千问：https://dashscope.aliyuncs.com/compatible-mode/v1
+  base-url: https://generativelanguage.googleapis.com/v1beta/openai
+  # 主模型：3.1-flash-lite 免费额度大，但高峰期常返回 503（high demand）
+  model: gemini-3.1-flash-lite
+  # 备用模型：主模型重试后仍是 503 / 超时，才改用它（3-flash-preview 免费额度很少，只在必要时用）。留空 = 不用备用
+  fallback-model: gemini-3-flash-preview
+  # 真实 key 绝不写在这里。写在同目录的 application-local.yml（已被 Git 忽略），它会覆盖这一行。
+  # ${LLM_API_KEY:} 的意思：没有 local 文件时读环境变量 LLM_API_KEY；都没有就是空字符串，程序照常启动。
+  api-key: ${LLM_API_KEY:}
+  connect-timeout-ms: 5000                    # 连上服务器最多等 5 秒
+  read-timeout-ms: 30000                      # 连上后等回复最多 30 秒（Gemini 2.5 会先"思考"，比文档的 15 秒放宽）
+  max-retries: 2                              # 超时或 5xx 时重试几次；4xx 不重试（Gemini 免费版常返回 503，多试一次）
+  price-input-per-million: 0                  # 元 / 百万 token；Gemini 免费额度先填 0
+  price-output-per-million: 0
+  extra-body: {}                              # 原样合并进请求体的额外参数；千问 qwen3 系列填 {enable_thinking: false}

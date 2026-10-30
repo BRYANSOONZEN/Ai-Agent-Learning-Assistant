@@ -15,8 +15,8 @@ body {
   background: var(--app-bg);
   color: var(--app-text);
   font-size: var(--app-font-size);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--app-font-family);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Standard white content block. Wrap page sections in <div class="app-card"> */
@@ -45,4 +45,372 @@ body {
   display: flex;
   justify-content: flex-end;
   margin-top: var(--app-space-md);
+}
+
+/* Keyboard users can always see where they are */
+:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Element Plus touches to match the Studywise look ---------- */
+.el-button {
+  font-weight: 600;
+}
+.el-tag {
+  border-radius: 6px;
+}
+.el-dialog {
+  border-radius: var(--app-radius);
+}
+.el-table {
+  --el-table-header-text-color: var(--app-text-muted);
+  --el-table-row-hover-bg-color: #f6f8ff;
+}
+.el-table th.el-table__cell {
+  font-weight: 500;
+}
+
+/* =====================================================================
+ * Studywise pieces (group prototype Ai-agent-learning-assistant/src/styles.css).
+ * Shared by every page so the look stays the same; only style, no data.
+ * ===================================================================== */
+
+/* small uppercase label above a heading */
+.sw-eyebrow {
+  display: block;
+  color: #9aaabd;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.sw-eyebrow.on-dark {
+  color: #a5d9d1;
+}
+
+/* card heading: eyebrow + title on the left, a text link / button on the right */
+.sw-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sw-heading h3 {
+  margin: 6px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+.sw-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #57769a;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.sw-link:hover {
+  color: var(--app-primary);
+}
+
+/* dark gradient hero with the orbit illustration (首页) */
+.sw-banner {
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  display: flex;
+  padding: 34px 40px;
+  border-radius: 16px;
+  background: linear-gradient(115deg, #203e60, #193651 67%, #224967);
+  color: #fff;
+}
+.sw-banner-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+}
+.sw-banner-copy h2 {
+  margin: 12px 0 8px;
+  color: #fff;
+  font-size: 28px;
+  letter-spacing: -0.8px;
+  line-height: 1.25;
+}
+.sw-banner-copy h2 .spark {
+  color: #8ed5ca;
+  font-size: 20px;
+  vertical-align: 3px;
+}
+.sw-banner-copy p {
+  margin: 0 0 22px;
+  color: #a7bdd0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.sw-art {
+  position: absolute;
+  right: 7%;
+  top: -20px;
+  width: 310px;
+  height: 275px;
+  pointer-events: none;
+}
+.sw-orbit {
+  position: absolute;
+  border: 1px solid rgba(150, 206, 210, 0.25);
+  border-radius: 50%;
+}
+.sw-orbit.one {
+  width: 290px;
+  height: 112px;
+  left: 15px;
+  top: 73px;
+  transform: rotate(-28deg);
+}
+.sw-orbit.two {
+  width: 230px;
+  height: 95px;
+  left: 45px;
+  top: 81px;
+  transform: rotate(42deg);
+}
+.sw-planet {
+  position: absolute;
+  border-radius: 50%;
+}
+.sw-planet.big {
+  width: 52px;
+  height: 52px;
+  left: 117px;
+  top: 86px;
+  background: radial-gradient(circle at 34% 30%, #ffc384, #d47a67 75%);
+  box-shadow: 0 0 0 12px rgba(246, 179, 123, 0.07), 0 0 32px rgba(255, 155, 119, 0.25);
+}
+.sw-planet.small {
+  width: 14px;
+  height: 14px;
+  left: 52px;
+  top: 42px;
+  background: #91d2d1;
+  box-shadow: 0 0 12px #91d2d1;
+}
+.sw-art-card {
+  position: absolute;
+  right: 9px;
+  bottom: 36px;
+  min-width: 110px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  color: #fff;
+}
+.sw-art-card strong {
+  display: block;
+  font-size: 23px;
+}
+.sw-art-card small {
+  color: #abc4d7;
+  font-size: 11px;
+}
+
+/* light button on dark banners */
+.sw-button-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #f6fbff;
+  color: #254769;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.18s;
+}
+.sw-button-light:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+/* dark summary strip: a sentence on the left, key numbers on the right (老师审核页的样式) */
+.sw-summary {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  min-height: 112px;
+  padding: 24px 29px;
+  border-radius: 13px;
+  background: linear-gradient(105deg, #284f72, #1b3a5a);
+  color: #fff;
+}
+.sw-summary-main {
+  flex: 1;
+  min-width: 0;
+}
+.sw-summary-main h2,
+.sw-summary-main h3 {
+  margin: 7px 0 6px;
+  color: #fff;
+  font-size: 19px;
+  letter-spacing: -0.3px;
+}
+.sw-summary-main p {
+  max-width: 52em;
+  margin: 0;
+  color: #aac0d1;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.sw-summary-stat {
+  min-width: 100px;
+  padding-left: 28px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+.sw-summary-stat strong {
+  display: block;
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+}
+.sw-summary-stat span {
+  display: block;
+  margin-top: 4px;
+  color: #a8bfd0;
+  font-size: 11px;
+}
+
+/* tinted icon tiles */
+.sw-icon {
+  flex: none;
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+}
+.sw-icon.sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.sw-icon.lg {
+  width: 47px;
+  height: 47px;
+  border-radius: 12px;
+}
+.tone-blue.sw-icon,
+.sw-icon.tone-blue {
+  color: #6e82f5;
+  background: #eff1ff;
+}
+.sw-icon.tone-green {
+  color: #35aa94;
+  background: #eaf8f4;
+}
+.sw-icon.tone-orange {
+  color: #e79f58;
+  background: #fff3e7;
+}
+.sw-icon.tone-purple {
+  color: #8f7cf5;
+  background: #f0edff;
+}
+
+/* soft tags */
+.sw-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sw-tag.purple {
+  background: #f0edff;
+  color: #7c6dd7;
+}
+.sw-tag.teal {
+  background: #e8f7f4;
+  color: #2e8b7f;
+}
+.sw-tag.gray {
+  background: #f0f3f6;
+  color: #66788c;
+}
+.sw-tag.orange {
+  background: #fff0df;
+  color: #b8712c;
+}
+.sw-tag.red {
+  background: #fdeeec;
+  color: #b23b2f;
+}
+
+/* timeline dot with a halo */
+.sw-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7486f1;
+  box-shadow: 0 0 0 4px #eef1ff;
+}
+.sw-dot.green {
+  background: #56b9a6;
+  box-shadow: 0 0 0 4px #e7f8f2;
+}
+.sw-dot.purple {
+  background: #a084e9;
+  box-shadow: 0 0 0 4px #f2edff;
+}
+.sw-dot.orange {
+  background: #efa45d;
+  box-shadow: 0 0 0 4px #fff1e2;
+}
+
+/* thin progress line */
+.sw-progress {
+  height: 5px;
+  border-radius: 4px;
+  background: #e8edf3;
+}
+.sw-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: #7b87f7;
+}
+
+@media (max-width: 900px) {
+  .sw-banner {
+    padding: 26px 22px;
+  }
+  .sw-art {
+    display: none;
+  }
+  .sw-summary {
+    flex-wrap: wrap;
+    gap: 16px 24px;
+  }
+  .sw-summary-main {
+    flex-basis: 100%;
+  }
+  .sw-summary-stat {
+    padding-left: 16px;
+  }
 }
