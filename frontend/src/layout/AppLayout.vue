@@ -5,12 +5,14 @@
  * + light top bar (page title and subtitle, today, user).
  * The menu comes straight from the route table, filtered by the current role.
  * The student prompt is real: weak knowledge points from 学情诊断, linking to 学习推荐.
+ * Teachers see the number of open alerts next to 干预管理.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { layoutChildren } from '@/router'
 import { getMyDiagnosis } from '@/api/diagnosis'
+import { getOpenAlertCount } from '@/api/intervention'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,6 +51,21 @@ watch(
   },
   { immediate: true },
 )
+// teacher: open alerts, shown as a number on 干预管理 (refreshed on every page change)
+const openAlerts = ref(0)
+async function refreshAlerts() {
+  if (userStore.role !== 'teacher') return (openAlerts.value = 0)
+  try {
+    openAlerts.value = await getOpenAlertCount()
+  } catch {
+    openAlerts.value = 0
+  }
+}
+watch(() => [route.name, userStore.role], refreshAlerts, { immediate: true })
+// 干预管理 fires this after the teacher approves or ignores an alert
+onMounted(() => window.addEventListener('alerts-changed', refreshAlerts))
+onBeforeUnmount(() => window.removeEventListener('alerts-changed', refreshAlerts))
+
 const studyPrompt = computed(() => {
   const s = study.value
   if (!s?.total) return null
@@ -89,6 +106,7 @@ function logout() {
         >
           <el-icon :size="18"><component :is="item.meta.icon" /></el-icon>
           <span v-show="!collapsed">{{ item.meta.title }}</span>
+          <span v-if="item.name === 'intervention' && openAlerts && !collapsed" class="nav-badge">{{ openAlerts }}</span>
         </router-link>
       </nav>
 
@@ -257,6 +275,17 @@ function logout() {
   background: var(--app-sidebar-active);
   color: #fff;
   box-shadow: inset 3px 0 #8ed7cf;
+}
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #e8775f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
 }
 .sidebar-bottom {
   margin-top: auto;

@@ -75,11 +75,13 @@ class DiagnosisControllerTest {
     @Test
     void teacherSeesWholeCourse() throws Exception {
         mockMvc.perform(get("/api/diagnosis/courses/1"))
-                .andExpect(jsonPath("$.data.studentCount").value(1))
+                // 种子数据：学生01～07 做过练习（学生02～07 是干预的演示数据）
+                .andExpect(jsonPath("$.data.studentCount").value(7))
                 .andExpect(jsonPath("$.data.points.length()").value(2))
-                .andExpect(jsonPath("$.data.points[0].avgMastery").value(0.3704))
-                .andExpect(jsonPath("$.data.points[0].weakStudents").value(1))
-                .andExpect(jsonPath("$.data.points[0].misconceptions[0].count").value(1));
+                .andExpect(jsonPath("$.data.points[0].avgMastery").value(0.5345))
+                .andExpect(jsonPath("$.data.points[0].weakStudents").value(4))
+                .andExpect(jsonPath("$.data.points[0].misconceptions[0].note").value("只取了边界和内侧，缺少越过边界的值"))
+                .andExpect(jsonPath("$.data.points[0].misconceptions[0].count").value(7));
 
         // 别的老师的课不能看（1 号课属于李老师，5 号课不是）
         mockMvc.perform(get("/api/diagnosis/courses/5")).andExpect(jsonPath("$.code").value(403));

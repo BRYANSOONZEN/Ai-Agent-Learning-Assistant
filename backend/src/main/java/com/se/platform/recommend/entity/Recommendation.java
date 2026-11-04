@@ -17,6 +17,9 @@ public class Recommendation {
     public static final String DONE = "done";
     /** 学生点了"换一道" */
     public static final String DISMISSED = "dismissed";
+    public static final String SYSTEM = "system";
+    /** 老师在干预里布置的题 */
+    public static final String TEACHER = "teacher";
 
     private Long id;
     private Long studentId;
@@ -25,6 +28,8 @@ public class Recommendation {
     private Long knowledgePointId;
     private String reason;
     private String status;
+    private String source;
+    private Long interventionId;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

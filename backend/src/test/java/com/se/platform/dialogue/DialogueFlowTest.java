@@ -47,13 +47,23 @@ class DialogueFlowTest {
 
     private FakeAiClient fake;
 
+    /** 本次测试新开的对话（种子数据里已有几段别的学生的对话，所以编号不一定是 1） */
+    private long sessionId;
+
     @BeforeEach
     void setUp() {
         fake = (FakeAiClient) aiClient;
     }
 
+    private ResultActions start() throws Exception {
+        ResultActions result = mockMvc.perform(post("/api/dialogue/sessions"));
+        sessionId = ((Number) com.jayway.jsonpath.JsonPath.read(
+                result.andReturn().getResponse().getContentAsString(), "$.data.sessionId")).longValue();
+        return result;
+    }
+
     private ResultActions say(String text) throws Exception {
-        return mockMvc.perform(post("/api/dialogue/sessions/1/messages")
+        return mockMvc.perform(post("/api/dialogue/sessions/" + sessionId + "/messages")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\": \"" + text + "\"}"));
     }
@@ -63,8 +73,7 @@ class DialogueFlowTest {
         mockMvc.perform(get("/api/dialogue/chapters/1"))
                 .andExpect(jsonPath("$.data.topicTitles", hasSize(2)));
 
-        mockMvc.perform(post("/api/dialogue/sessions"))
-                .andExpect(jsonPath("$.data.sessionId").value(1))
+        start()
                 .andExpect(jsonPath("$.data.status").value("OPEN"))
                 .andExpect(jsonPath("$.data.messages[0].content", containsString("每单购买数量为 1 到 99 件")));
 
@@ -82,7 +91,7 @@ class DialogueFlowTest {
 
         // 话题 2：我卡住了 → 预写提示 L0，不调模型
         int callsBefore = fake.requests().size();
-        mockMvc.perform(post("/api/dialogue/sessions/1/stuck"))
+        mockMvc.perform(post("/api/dialogue/sessions/" + sessionId + "/stuck"))
                 .andExpect(jsonPath("$.data.messages[-1].content", containsString("想想程序员写判断条件时")))
                 .andExpect(jsonPath("$.data.messages[-1].source").value("TEMPLATE"));
         org.assertj.core.api.Assertions.assertThat(fake.requests()).hasSize(callsBefore);
@@ -111,7 +120,7 @@ class DialogueFlowTest {
 
     @Test
     void modelFails_fallsBackToPrewrittenHint() throws Exception {
-        mockMvc.perform(post("/api/dialogue/sessions"));
+        start();
         fake.fail("等待模型回复超时");
         say("17")
                 .andExpect(jsonPath("$.code").value(200))
@@ -121,7 +130,7 @@ class DialogueFlowTest {
 
     @Test
     void irrelevantTwice_skipsTopic_andModelCannotForceCorrect() throws Exception {
-        mockMvc.perform(post("/api/dialogue/sessions"));
+        start();
         fake.reply("{\"type\":\"irrelevant\",\"hit_points\":[],\"reply\":\"\"}");
         say("哈哈").andExpect(jsonPath("$.data.messages[-1].content", containsString("我们先回到这个问题")));
         say("嘿嘿").andExpect(jsonPath("$.data.topics[0].result").value("SKIPPED_IRRELEVANT"))

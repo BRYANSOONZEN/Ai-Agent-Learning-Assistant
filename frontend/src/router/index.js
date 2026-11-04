@@ -105,7 +105,7 @@ export const layoutChildren = [
   {
     path: 'intervention',
     name: 'intervention',
-    component: () => import('@/components/PlaceholderPage.vue'),
+    component: () => import('@/views/intervention/InterventionView.vue'),
     meta: {
       eyebrow: 'INTERVENTION', title: '干预管理',
       icon: 'Bell',

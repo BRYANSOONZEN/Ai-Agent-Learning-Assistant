@@ -105,6 +105,7 @@ public class DialogueTopicService {
         topic.setSourceRef(req.sourceRef());
         topic.setSourceText(req.sourceText());
         topic.setCreatedByAi(Boolean.TRUE.equals(req.createdByAi()));
+        topic.setKnowledgePointId(req.knowledgePointId());
     }
 
     /** 去掉空白项；null 当成空列表 */
@@ -116,7 +117,7 @@ public class DialogueTopicService {
     }
 
     private TopicView toView(DialogueTopic t) {
-        return new TopicView(t.getId(), t.getItemId(), t.getSortOrder(), t.getTitle(), t.getQuestion(), t.getSimpleQuestion(),
+        return new TopicView(t.getId(), t.getItemId(), t.getKnowledgePointId(), t.getSortOrder(), t.getTitle(), t.getQuestion(), t.getSimpleQuestion(),
                 fromJson(t.getKeyPoints()), fromJson(t.getHints()), t.getRevealText(), t.getSourceRef(),
                 t.getSourceText(), t.getCreatedByAi(), t.getEnabled(), t.getCreatedAt());
     }

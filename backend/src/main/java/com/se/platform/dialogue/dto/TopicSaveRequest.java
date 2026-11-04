@@ -15,5 +15,7 @@ public record TopicSaveRequest(
         @NotBlank(message = "讲解原文不能为空") String revealText,
         @Size(max = 100, message = "出处不超过 100 字") String sourceRef,
         String sourceText,
-        Boolean createdByAi) {
+        Boolean createdByAi,
+        /* 考哪个知识点（概念层），选填；干预按它和练习题对上 */
+        Long knowledgePointId) {
 }

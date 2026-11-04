@@ -17,6 +17,16 @@ request.interceptors.request.use((config) => {
   if (userStore.token) {
     config.headers.Authorization = `Bearer ${userStore.token}`
   }
+  // temporary until the backend has login: act as another demo student (see backend DemoIdentity)
+  let demoStudent = null
+  try {
+    demoStudent = localStorage.getItem('se-demo-student-id')
+  } catch {
+    // storage unavailable: stay the default demo student
+  }
+  if (demoStudent && userStore.role === 'student') {
+    config.headers['X-Demo-Student-Id'] = demoStudent
+  }
   return config
 })
 

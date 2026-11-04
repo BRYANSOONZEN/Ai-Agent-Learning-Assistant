@@ -23,6 +23,8 @@ import com.se.platform.diagnosis.dto.DiagnosisDtos.PointDiagnosis;
 import com.se.platform.diagnosis.dto.DiagnosisDtos.StudentDiagnosis;
 import com.se.platform.diagnosis.service.DiagnosisService;
 import com.se.platform.diagnosis.service.MasteryService;
+import com.se.platform.intervention.entity.Intervention;
+import com.se.platform.intervention.mapper.InterventionMapper;
 import com.se.platform.recommend.dto.RecommendDtos.PointRecommendation;
 import com.se.platform.recommend.dto.RecommendDtos.RecExercise;
 import com.se.platform.recommend.dto.RecommendDtos.RecommendationList;
@@ -49,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 每个知识点最多 3 道，一共最多 5 道，每道写明理由。
  * 推荐过的题记在 recommendation 表：做对了是 done，点"换一道"是 dismissed，这两种以后都不再推。
  * 在推荐页做题和交卷一样记进学习记录、重算掌握度，所以做完刷新，推荐会跟着变。
+ * 老师正在干预的知识点（干预执行中）不在这里推，学生按"老师布置"的安排做，干预结束后再恢复。
  */
 @Service
 public class RecommendService {
@@ -67,12 +70,14 @@ public class RecommendService {
     private final KnowledgePointMapper kpMapper;
     private final ChapterMapper chapterMapper;
     private final ChapterItemMapper itemMapper;
+    private final InterventionMapper interventionMapper;
 
     public RecommendService(DiagnosisService diagnosisService, MasteryService masteryService,
                             RecordService recordService, ExerciseService exerciseService,
                             RecommendationMapper recommendationMapper, AnswerRecordMapper answerMapper,
                             ExerciseKnowledgePointMapper linkMapper, ExerciseMapper exerciseMapper,
-                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper) {
+                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
+                            InterventionMapper interventionMapper) {
         this.diagnosisService = diagnosisService;
         this.masteryService = masteryService;
         this.recordService = recordService;
@@ -84,6 +89,7 @@ public class RecommendService {
         this.kpMapper = kpMapper;
         this.chapterMapper = chapterMapper;
         this.itemMapper = itemMapper;
+        this.interventionMapper = interventionMapper;
     }
 
     // ------------------------------------------------------------------ 推荐列表
@@ -99,10 +105,17 @@ public class RecommendService {
                         .eq(Recommendation::getTargetType, Recommendation.EXERCISE))
                 .stream().collect(Collectors.toMap(Recommendation::getTargetId, r -> r));
         Map<Long, List<Boolean>> history = history(studentId);
+        Set<Long> managed = interventionMapper.selectList(new LambdaQueryWrapper<Intervention>()
+                        .eq(Intervention::getStudentId, studentId)
+                        .eq(Intervention::getStatus, Intervention.APPROVED))
+                .stream().map(Intervention::getKnowledgePointId).collect(Collectors.toSet());
 
         List<PointRecommendation> points = new ArrayList<>();
         int left = MAX_TOTAL;
         for (PointDiagnosis p : diagnosis.weakPoints()) { // 已经按掌握度从低到高
+            if (managed.contains(p.knowledgePointId())) {
+                continue; // 老师在干预，按"老师布置"做
+            }
             KnowledgePoint kp = kpMapper.selectById(p.knowledgePointId());
             List<RecExercise> picked = new ArrayList<>();
             for (Candidate c : candidates(kp, mine, history)) {
@@ -146,8 +159,9 @@ public class RecommendService {
         for (Exercise e : exercises) {
             Recommendation r = mine.get(e.getId());
             if (!published.contains(e.getChapterId())
-                    || r != null && !Recommendation.NEW.equals(r.getStatus())) {
-                continue;
+                    || r != null && !Recommendation.NEW.equals(r.getStatus())
+                    || r != null && Recommendation.TEACHER.equals(r.getSource())) {
+                continue; // 老师布置的题单独显示在"老师布置"里，不占系统推荐的名额
             }
             List<Boolean> h = history.getOrDefault(e.getId(), List.of());
             if (h.isEmpty()) {
@@ -177,6 +191,7 @@ public class RecommendService {
         }
         Recommendation r = new Recommendation();
         r.setStudentId(studentId);
+        r.setSource(Recommendation.SYSTEM);
         r.setTargetType(Recommendation.EXERCISE);
         r.setTargetId(c.exercise.getId());
         r.setKnowledgePointId(kpId);

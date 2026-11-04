@@ -179,6 +179,7 @@ CREATE TABLE dialogue_topic (
     id              BIGINT       NOT NULL AUTO_INCREMENT,
     chapter_id      BIGINT       NOT NULL,              -- 所属章节 → chapter.id
     item_id         BIGINT,                             -- 属于哪个 AI 对话项 → chapter_item.id（type = dialogue）
+    knowledge_point_id BIGINT,                          -- 考哪个知识点（概念层）→ knowledge_point.id；干预按它对上练习题（应用层）
     sort_order      INT          NOT NULL DEFAULT 0,    -- 对话里的先后顺序，小的在前
     title           VARCHAR(100) NOT NULL,              -- 话题名
     question        TEXT         NOT NULL,              -- 情境问题
@@ -339,8 +340,65 @@ CREATE TABLE recommendation (
     knowledge_point_id BIGINT,                             -- 针对的薄弱知识点
     reason             VARCHAR(255),                       -- 如「上次做错了」「还没做过」
     status             VARCHAR(16)  NOT NULL DEFAULT 'new', -- new / done 做对了 / dismissed 不想做
+    source             VARCHAR(16)  NOT NULL DEFAULT 'system', -- system 系统推荐 / teacher 老师布置（干预）
+    intervention_id    BIGINT,                             -- 老师布置时：哪条干预 → intervention.id
     created_at         DATETIME,
     updated_at         DATETIME,
     PRIMARY KEY (id),
     CONSTRAINT uk_recommendation UNIQUE (student_id, target_type, target_id)
 );
+
+-- ---------------------------------------------------------------------
+-- 「干」：预警（docs/计划-干预A和B.md）
+-- 按两层判断：概念层看 AI 对话话题结果，应用层看掌握度。一人一个知识点同时最多一条没处理完的
+-- type：A 应用问题 / B 概念问题 / AB 两层都不好
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS alert;
+CREATE TABLE alert (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    course_id          BIGINT       NOT NULL,
+    student_id         BIGINT       NOT NULL,
+    knowledge_point_id BIGINT       NOT NULL,
+    type               VARCHAR(8)   NOT NULL,              -- A / B / AB
+    level              VARCHAR(8)   NOT NULL,              -- high / medium
+    message            VARCHAR(255) NOT NULL,              -- 给老师看的一句话
+    evidence           TEXT,                               -- 判断时的数据快照（JSON），数据以后变了也能看到当时为什么报警
+    status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 待处理 / handled 已处理 / ignored 已忽略
+    handled_at         DATETIME,
+    created_at         DATETIME,
+    updated_at         DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_alert_course ON alert (course_id, status);
+
+-- ---------------------------------------------------------------------
+-- 「干」：干预。系统按预警写好建议（pending），老师通过后才推给学生
+-- type：PRACTICE 变式练习（A）/ REVIEW 复习 + 重做对话（B）/ REVIEW_PRACTICE 先复习后练习（AB，step 1→2）
+-- before_value / after_value：A 是掌握度；B 是话题结果
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS intervention;
+CREATE TABLE intervention (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    alert_id           BIGINT,
+    course_id          BIGINT       NOT NULL,
+    student_id         BIGINT       NOT NULL,
+    knowledge_point_id BIGINT       NOT NULL,
+    type               VARCHAR(16)  NOT NULL,
+    step               INT          NOT NULL DEFAULT 1,     -- REVIEW_PRACTICE 进行到第几步
+    exercise_ids       VARCHAR(255),                       -- 布置的题，逗号分隔，如 "3,5"
+    item_ids           VARCHAR(255),                       -- 要复习的内容项，逗号分隔
+    note               VARCHAR(500),                       -- 老师给学生的话
+    source             VARCHAR(16)  NOT NULL DEFAULT 'system', -- system 系统建议 / teacher 老师新建
+    status             VARCHAR(16)  NOT NULL DEFAULT 'pending', -- pending 待审核 / approved 执行中 / rejected 已驳回 / done 已完成
+    before_value       VARCHAR(32),
+    after_value        VARCHAR(32),
+    effective          TINYINT(1),                         -- 完成时判断：1 有效 / 0 无效
+    reviewer_id        BIGINT,
+    reviewed_at        DATETIME,
+    step2_at           DATETIME,                           -- AB 进入第 2 步的时间（之后的作答才算第 2 步的）
+    completed_at       DATETIME,
+    created_at         DATETIME,
+    updated_at         DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_intervention_student ON intervention (student_id, status);

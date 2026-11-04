@@ -106,15 +106,15 @@ INSERT INTO exercise_knowledge_point (exercise_id, knowledge_point_id) VALUES (1
 -- 对话话题示例：第 1 章"边界值分析"的 2 个话题（代替老师录入，方便直接看到效果；先只放两个，跑通为主）
 -- 情境用"订单数量 1～99"，故意不和练习题的"年龄 18～60"重复，避免提前泄露练习答案
 -- ---------------------------------------------------------------------
-INSERT INTO dialogue_topic (chapter_id, item_id, sort_order, title, question, simple_question, key_points, hints, reveal_text, source_ref, source_text, created_by_ai, created_at, updated_at) VALUES
-(1, 3, 0, '下边界取哪些值',
+INSERT INTO dialogue_topic (chapter_id, item_id, knowledge_point_id, sort_order, title, question, simple_question, key_points, hints, reveal_text, source_ref, source_text, created_by_ai, created_at, updated_at) VALUES
+(1, 3, 1, 0, '下边界取哪些值',
  '某网上商城规定每单购买数量为 1 到 99 件。测试"下限"时，你会挑哪几个数量来测？为什么？',
  '每单最少能买几件？比它少一件、多一件分别是几件？',
  '["越过下边界的 0（应被拒绝）","正好在边界上的 1","边界内侧的 2"]',
  '["想想边界本身、边界外面、边界里面，各取一个值。","最少能买 1 件，那和 1 紧挨着的两个数是多少？"]',
  '取 0、1、2。0 刚越过下边界，系统应拒绝；1 正好在边界上，应接受；2 在边界内侧，应接受。',
  '课件第 13 页', '边界值分析：在边界上、边界外侧、边界内侧各取值进行测试。', 0, NOW(), NOW()),
-(1, 3, 1, '为什么要测边界附近',
+(1, 3, 2, 1, '为什么要测边界附近',
  '有人说：只测一个数量的话，测 50 最好，因为它在中间、最有代表性。你觉得为什么边界附近的值反而更值得测？',
  '如果程序员把"至少 1 件"写错了，用 50 测得出来吗？',
  '["程序员常把边界条件写错，如 >= 写成 >","这类错误只有边界附近的输入才能发现","中间值发现不了这类错误"]',
@@ -147,3 +147,74 @@ INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, 
 INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, updated_at) VALUES
 (5, 1, 0.3704, 2, 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW())),
 (5, 2, 0.6667, 2, 2, TIMESTAMPADD(MINUTE, -1440 - 45, NOW()));
+
+-- =====================================================================
+-- 「干」演示数据（docs/计划-干预A和B.md 第 2 步）
+-- 两层：概念层看 AI 对话话题结果（话题已关联知识点），应用层看掌握度。都在第 1 章知识点 1「边界测试值的选取」
+--   学生02（6）：练习 3 次全错，没做对话 → 概念层未测，属于"先补测"，这次不报警
+--   学生03（7）：对话自己答出，练习掌握度 0.22，两次都选"缺少越过边界的值" → A
+--   学生04（8）：练习全对，对话里知识点 1 的话题系统讲解 → B
+--   学生05（9）、学生06（10）：两层都好 → 不报警（对照）
+--   学生07（11）：对话系统讲解，练习掌握度 0.33 → A + B
+--   学生01（5）：原有数据不动，练习只做 2 次、没做对话 → 不报警
+-- 题目正确答案：1 A、3 A、4 C、5 B
+-- =====================================================================
+INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, is_correct, submitted_at) VALUES
+(6, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(6, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(6, 5, 1, NULL, 'A', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(7, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -4 * 1440 - 30, NOW())),
+(7, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(7, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(7, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(8, 1, 1, 2, 'A', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(8, 3, 1, NULL, 'A', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(8, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(9, 1, 1, 2, 'A', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(9, 3, 1, NULL, 'A', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(9, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(10, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -4 * 1440 - 30, NOW())),
+(10, 1, 1, 2, 'A', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(10, 3, 1, NULL, 'A', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(10, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(11, 1, 1, 2, 'B', 0, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(11, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
+(11, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW()));
+
+-- 掌握度按上面的作答算好（公式见 docs/design.md 5.1），例如学生03：(0.64×1) / (0.512+0.64+0.8+1) = 0.2168
+INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, updated_at) VALUES
+(6, 1, 0.0000, 3, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(7, 1, 0.2168, 4, 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(8, 1, 1.0000, 3, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(9, 1, 1.0000, 3, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(10, 1, 0.8266, 4, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(11, 1, 0.3279, 3, 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW()));
+
+-- 已结束的章节对话。手动指定 id（101 起），方便下面的话题进度引用；
+-- 实测 H2 会把自增计数器推到最大 id 之后，新开的对话从 106 开始编号
+INSERT INTO dialogue_session (id, student_id, chapter_id, item_id, kind, status, current_idx, irrelevant_topics_in_row, created_at, updated_at) VALUES
+(101, 7, 1, 3, 'CHAPTER', 'FINISHED', 2, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW()), TIMESTAMPADD(MINUTE, -2 * 1440 - 0, NOW())),
+(102, 8, 1, 3, 'CHAPTER', 'FINISHED', 2, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW()), TIMESTAMPADD(MINUTE, -2 * 1440 - 0, NOW())),
+(103, 9, 1, 3, 'CHAPTER', 'FINISHED', 2, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW()), TIMESTAMPADD(MINUTE, -2 * 1440 - 0, NOW())),
+(104, 10, 1, 3, 'CHAPTER', 'FINISHED', 2, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW()), TIMESTAMPADD(MINUTE, -2 * 1440 - 0, NOW())),
+(105, 11, 1, 3, 'CHAPTER', 'FINISHED', 2, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW()), TIMESTAMPADD(MINUTE, -2 * 1440 - 0, NOW()));
+
+INSERT INTO dialogue_topic_state (id, session_id, topic_idx, topic_id, wrong_count, stuck_count, irrelevant_count, hint_level, hit_points, result) VALUES
+(1001, 101, 0, 1, 0, 0, 0, -1, NULL, 'SELF_CORRECT'),
+(1002, 101, 1, 2, 0, 0, 0, -1, NULL, 'SELF_CORRECT'),
+(1003, 102, 0, 1, 2, 0, 0, 1, NULL, 'REVEALED'),
+(1004, 102, 1, 2, 1, 0, 0, 1, NULL, 'HINT_CORRECT'),
+(1005, 103, 0, 1, 0, 0, 0, -1, NULL, 'SELF_CORRECT'),
+(1006, 103, 1, 2, 0, 0, 0, -1, NULL, 'SELF_CORRECT'),
+(1007, 104, 0, 1, 1, 0, 0, 1, NULL, 'HINT_CORRECT'),
+(1008, 104, 1, 2, 0, 0, 0, -1, NULL, 'SELF_CORRECT'),
+(1009, 105, 0, 1, 1, 2, 0, 1, NULL, 'REVEALED'),
+(1010, 105, 1, 2, 1, 0, 0, 1, NULL, 'HINT_CORRECT');
+
+-- 学生04 的对话记录（老师在干预页可以展开看）
+INSERT INTO dialogue_message (id, session_id, topic_idx, role, content, source, judged_type, created_at) VALUES
+(1001, 102, 0, 'AI', '我们开始吧。先来讨论「下边界取哪些值」。', 'RULE', NULL, TIMESTAMPADD(MINUTE, -2 * 1440 - 10, NOW())),
+(1002, 102, 0, 'STUDENT', '测 50 吧，中间的数最有代表性', NULL, 'WRONG', TIMESTAMPADD(MINUTE, -2 * 1440 - 9, NOW())),
+(1003, 102, 0, 'AI', '想想边界本身、边界外面、边界里面，各取一个值。', 'TEMPLATE', NULL, TIMESTAMPADD(MINUTE, -2 * 1440 - 9, NOW())),
+(1004, 102, 0, 'STUDENT', '1 和 99', NULL, 'WRONG', TIMESTAMPADD(MINUTE, -2 * 1440 - 8, NOW())),
+(1005, 102, 0, 'AI', '我们一起来看：取 0、1、2。0 刚越过下边界，系统应拒绝；1 正好在边界上，应接受；2 在边界内侧，应接受。', 'TEMPLATE', NULL, TIMESTAMPADD(MINUTE, -2 * 1440 - 8, NOW()));

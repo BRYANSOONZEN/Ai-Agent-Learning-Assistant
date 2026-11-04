@@ -8,6 +8,7 @@ import com.se.platform.ai.client.ChatResult;
 import com.se.platform.ai.log.AiCallLogService;
 import com.se.platform.ai.prompt.PromptTemplate;
 import com.se.platform.common.BusinessException;
+import com.se.platform.common.DemoIdentity;
 import com.se.platform.dialogue.dto.DialogueOpening;
 import com.se.platform.dialogue.dto.DialogueView;
 import com.se.platform.dialogue.dto.TopicView;
@@ -44,8 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DialogueService {
 
-    /** 登录还没做，先固定一个演示学生（data.sql 里的"学生01"） */
-    public static final long DEMO_STUDENT_ID = 5L;
     /** 回复超过这个长度就不用模型的，改用预写提示 */
     private static final int MAX_REPLY_CHARS = 120;
     private static final int RECENT_MESSAGES = 6;
@@ -90,7 +89,7 @@ public class DialogueService {
             throw BusinessException.badRequest("这一章还没有对话话题，请老师先添加");
         }
         DialogueSession session = new DialogueSession();
-        session.setStudentId(DEMO_STUDENT_ID);
+        session.setStudentId(DemoIdentity.studentId());
         session.setChapterId(chapterId);
         session.setItemId(itemId);
         session.setKind("CHAPTER");

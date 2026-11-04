@@ -23,6 +23,8 @@ public class DialogueTopic {
     private Long chapterId;
     /** 属于哪个 AI 对话内容项 → chapter_item.id；老的独立话题页建的话题为空 */
     private Long itemId;
+    /** 考哪个知识点（概念层），干预按它和练习题（应用层）对上 */
+    private Long knowledgePointId;
     private Integer sortOrder;
     private String title;
     private String question;

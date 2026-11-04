@@ -373,34 +373,51 @@ erDiagram
 | knowledge_point_id | BIGINT | | 针对的薄弱知识点 |
 | reason | VARCHAR(255) | | 如「螺旋模型掌握度 0.40，推荐巩固」 |
 | status | VARCHAR(16) | NOT NULL, 默认 `new` | `new` / `done` 已完成 / `dismissed` 不感兴趣 |
+| source | VARCHAR(16) | NOT NULL, 默认 `system` | `system` 系统推荐 / `teacher` 老师在干预里布置的（v0.7） |
+| intervention_id | BIGINT | | 老师布置时：哪条干预（v0.7） |
 | created_at / updated_at | DATETIME | | |
 
-#### `alert` 预警
+#### `alert` 预警（v0.7 已实现，按两层判断，见 `docs/计划-干预A和B.md`）
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | id | BIGINT | PK, 自增 | |
-| student_id | BIGINT | NOT NULL, 索引 | |
-| rule_code | VARCHAR(32) | NOT NULL | `LOW_MASTERY` / `INACTIVE` / `ACCURACY_DROP` |
-| level | VARCHAR(8) | NOT NULL | `low` / `medium` / `high` |
-| message | VARCHAR(255) | NOT NULL | 如「螺旋模型掌握度 0.40，低于 0.6」 |
+| course_id | BIGINT | NOT NULL, 索引 | |
+| student_id | BIGINT | NOT NULL | |
+| knowledge_point_id | BIGINT | NOT NULL | |
+| type | VARCHAR(8) | NOT NULL | `A` 应用问题（对话讲得出、练习不好）/ `B` 概念问题（练习好或未测、对话讲不出）/ `AB` 两层都不好 |
+| level | VARCHAR(8) | NOT NULL | `high` / `medium`（A：掌握度 < 0.4 为 high；AB 为 high；B 为 medium） |
+| message | VARCHAR(255) | NOT NULL | 给老师看的一句话 |
+| evidence | TEXT | | 判断时的数据快照（JSON）：两层状态、掌握度、话题结果、最近作答、主要误解 |
 | status | VARCHAR(16) | NOT NULL, 默认 `open` | `open` 待处理 / `handled` 已处理 / `ignored` 已忽略 |
+| handled_at | DATETIME | | |
 | created_at / updated_at | DATETIME | | |
 
-#### `intervention` 干预
+原设计的 `rule_code`（`LOW_MASTERY` / `INACTIVE` / `ACCURACY_DROP`）这一版不用：不活跃、正确率下降两条规则还没做。
+
+#### `intervention` 干预（v0.7 已实现）
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | id | BIGINT | PK, 自增 | |
 | alert_id | BIGINT | 可空 | 由哪条预警触发 |
+| course_id | BIGINT | NOT NULL | |
 | student_id | BIGINT | NOT NULL, 索引 | |
-| content | TEXT | NOT NULL | 干预措施，如「布置螺旋模型专项练习 10 道并约谈」 |
+| knowledge_point_id | BIGINT | NOT NULL | |
+| type | VARCHAR(16) | NOT NULL | `PRACTICE` 变式练习（A）/ `REVIEW` 复习 + 重做对话（B）/ `REVIEW_PRACTICE` 先复习后练习（AB） |
+| step | INT | NOT NULL, 默认 1 | `REVIEW_PRACTICE` 进行到第几步 |
+| exercise_ids / item_ids | VARCHAR(255) | | 布置的题 / 要复习的内容项，逗号分隔 |
+| note | VARCHAR(500) | | 给学生的话（模板生成，老师可改） |
 | source | VARCHAR(16) | NOT NULL | `system` 系统建议 / `teacher` 教师创建 |
-| status | VARCHAR(16) | NOT NULL | `pending` 待审核 / `approved` 已通过 / `rejected` 已驳回 / `done` 已完成 |
-| reviewer_id | BIGINT | | 审核教师 |
-| review_comment | VARCHAR(255) | | |
-| reviewed_at | DATETIME | | |
+| status | VARCHAR(16) | NOT NULL | `pending` 待审核 / `approved` 执行中 / `rejected` 已驳回 / `done` 已完成 |
+| before_value / after_value | VARCHAR(32) | | A、AB：掌握度（如 `0.22`）；B：概念层状态（`bad` / `good` …） |
+| effective | TINYINT(1) | | 完成时判断：有效 / 无效 |
+| reviewer_id / reviewed_at | | | 审核教师和时间 |
+| step2_at | DATETIME | | AB 进入第 2 步的时间，之后的作答才算第 2 步的练习 |
+| completed_at | DATETIME | | |
 | created_at / updated_at | DATETIME | | |
+
+原设计的 `content`、`review_comment` 改为 `note` 和结构化的 `type` / `exercise_ids` / `item_ids`，方便自动推给学生和判断是否完成。
 
 ## 5. 初始化数据（首版）
 
@@ -424,3 +441,4 @@ erDiagram
 | 2026-10-30 | v0.4 | 实现 `mastery`：交卷后按 docs/design.md 5.1 的公式重算 | A |
 | 2026-10-30 | v0.5 | 学生画像先不建 `student_profile` / `profile_tag`：打开页面时用 `learning_event`、`answer_record`、`mastery`、对话结果现算 | A |
 | 2026-10-30 | v0.6 | 实现 `recommendation`（首版只推题，`target_type = exercise`；加唯一约束 student_id + target_type + target_id）；`exercise.item_id` 为空表示题库题，只给推荐用；`answer_record.item_id` 为空表示在推荐页做的题 | A |
+| 2026-11-03 | v0.7 | 实现 `alert`、`intervention`（按两层判断 A / B / AB，字段见 4.4）；`recommendation` 加 `source`、`intervention_id`；`dialogue_topic` 加 `knowledge_point_id`（话题考哪个知识点，概念层） | A |

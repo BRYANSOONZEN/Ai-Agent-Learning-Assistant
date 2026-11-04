@@ -3,6 +3,7 @@ package com.se.platform.record.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.se.platform.common.BusinessException;
+import com.se.platform.common.DemoIdentity;
 import com.se.platform.course.dto.LearnDtos.QuestionResult;
 import com.se.platform.course.entity.Chapter;
 import com.se.platform.course.entity.ChapterItem;
@@ -16,7 +17,6 @@ import com.se.platform.dialogue.entity.DialogueMessage;
 import com.se.platform.dialogue.entity.DialogueSession;
 import com.se.platform.dialogue.mapper.DialogueMessageMapper;
 import com.se.platform.dialogue.mapper.DialogueSessionMapper;
-import com.se.platform.dialogue.service.DialogueService;
 import com.se.platform.record.dto.RecordDtos.CourseProgress;
 import com.se.platform.record.dto.RecordDtos.DialogueRecord;
 import com.se.platform.record.dto.RecordDtos.QuizAttempt;
@@ -83,7 +83,7 @@ public class RecordService {
     }
 
     public long currentStudentId() {
-        return DialogueService.DEMO_STUDENT_ID;
+        return DemoIdentity.studentId();
     }
 
     // ------------------------------------------------------------------ 写

@@ -4,6 +4,7 @@
  * Flow: teacher writes question + reference answer -> "AI 拆要点" -> edit the draft -> save.
  * Saved topics are what the student-side AI dialogue will ask, in this order.
  * Used two ways: as its own page (chapter 1), and embedded in CourseBuilder inside an AI 对话 item.
+ * Each topic tests one knowledge point (the concept layer); 干预 matches it with that point's exercises.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -16,6 +17,7 @@ import {
   updateTopic,
   deleteTopic,
 } from '@/api/teacherTopic'
+import { getKnowledgePoints } from '@/api/teacherCourse'
 
 const props = defineProps({
   chapterId: { type: Number, default: 1 },
@@ -26,6 +28,7 @@ const emit = defineEmits(['changed'])
 
 const aiStatus = ref({ available: true, model: '' })
 const topics = ref([])
+const points = ref([]) // this chapter's knowledge points, for the topic's 考哪个知识点
 const loading = ref(false)
 
 const dialogVisible = ref(false)
@@ -44,9 +47,11 @@ const emptyForm = () => ({
   simpleQuestion: '',
   hints: ['', ''],
   createdByAi: false,
+  knowledgePointId: null,
 })
 const form = reactive(emptyForm())
 
+const pointName = (id) => points.value.find((kp) => kp.id === id)?.name
 const hasDraft = computed(() => form.keyPoints.length > 0 || form.title !== '')
 
 async function load() {
@@ -76,6 +81,7 @@ function openEdit(t) {
     simpleQuestion: t.simpleQuestion || '',
     hints: [t.hints[0] || '', t.hints[1] || ''],
     createdByAi: t.createdByAi,
+    knowledgePointId: t.knowledgePointId ?? null,
   })
   editingId.value = t.id
   draftInfo.value = ''
@@ -129,6 +135,7 @@ async function save() {
       sourceRef: form.sourceRef,
       sourceText: form.sourceText,
       createdByAi: form.createdByAi,
+      knowledgePointId: form.knowledgePointId,
     }
     if (editingId.value) await updateTopic(editingId.value, payload)
     else await createTopic(payload, props.chapterId, props.itemId)
@@ -151,6 +158,9 @@ async function remove(t) {
 
 onMounted(async () => {
   load()
+  getKnowledgePoints(props.chapterId)
+    .then((list) => (points.value = list))
+    .catch(() => {})
   aiStatus.value = await getAiStatus()
 })
 </script>
@@ -187,6 +197,7 @@ onMounted(async () => {
             <span class="order">话题 {{ i + 1 }}</span>
             <strong>{{ t.title }}</strong>
             <el-tag v-if="t.createdByAi" size="small" type="warning">AI 起草</el-tag>
+            <el-tag v-if="pointName(t.knowledgePointId)" size="small" effect="plain">考：{{ pointName(t.knowledgePointId) }}</el-tag>
           </div>
           <div>
             <el-button link type="primary" @click="openEdit(t)">编辑</el-button>
@@ -278,6 +289,11 @@ onMounted(async () => {
           <el-form label-position="top">
             <el-form-item label="话题名" required>
               <el-input v-model="form.title" placeholder="AI 起草，或自己填写" />
+            </el-form-item>
+            <el-form-item label="考哪个知识点（AI 对话考基础概念，干预时和这个知识点的练习题对照）">
+              <el-select v-model="form.knowledgePointId" placeholder="选择本章的知识点" clearable style="width: 100%">
+                <el-option v-for="kp in points" :key="kp.id" :label="kp.name" :value="kp.id" />
+              </el-select>
             </el-form-item>
             <el-form-item label="要点（学生要答到的几条）" required>
               <div class="point-edit">

@@ -7,6 +7,7 @@ import java.util.List;
 public record TopicView(
         Long id,
         Long itemId,
+        Long knowledgePointId,
         Integer sortOrder,
         String title,
         String question,

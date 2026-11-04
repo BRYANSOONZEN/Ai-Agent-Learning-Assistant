@@ -280,15 +280,18 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
   margin-bottom: 16px;
 }
+.ai-dialogue {
+  container-type: inline-size; /* stack by the space it gets: the learning page's middle column can be narrow */
+}
 .layout {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: var(--app-space-md);
   align-items: start;
 }
-@media (max-width: 760px) {
+@container (max-width: 640px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 /* the global .app-card + .app-card top margin is for stacked cards; these sit side by side */

@@ -299,7 +299,21 @@
 > **已实现（2026-10-30）：推荐**。`GET /api/recommendations` 打开时按最新掌握度挑题（相当于 generate，不用单独调），
 > 按薄弱知识点分组返回：掌握度、误解、知识点说明、本章可回看的视频 / 文档、推荐的题（不带答案，每道有 `reason`）。
 > 新增 `POST /api/recommendations/practice` `{answers: {"3": "A"}}`：在推荐页做题，返回格式和交卷相同（含 `masteryChanges`），
-> 做对的题标为 `done`。`POST /api/recommendations/{id}/feedback` 已实现。`courseId` 筛选和老师端 generate 暂时没做。预警、干预还没做。
+> 做对的题标为 `done`。`POST /api/recommendations/{id}/feedback` 已实现。`courseId` 筛选和老师端 generate 暂时没做。
+> 老师正在干预的知识点（干预执行中）不出现在系统推荐里，学生按"老师布置"做。
+>
+> **已实现（2026-11-03）：干预 A、B**（规则见 `docs/计划-干预A和B.md`）。和下面的草案相比，老师页一次取全，接口合并为：
+>
+> | 方法 | 路径 | 说明 | 角色 |
+> |---|---|---|---|
+> | GET | `/api/interventions/board?courseId=` | 先扫描生成新预警，再返回 `{counts, alerts, interventions}`；每条待处理预警带 `evidence`（两层证据）和 `suggestion`（系统建议，待审核） | 教师 |
+> | GET | `/api/interventions/open-count` | 当前老师所有课程里待处理预警的数量（侧边栏数字） | 教师 |
+> | POST | `/api/interventions/{id}/review` | `{approve: true, exerciseIds?: [3, 5], note?: "..."}` 通过（可改题目和留言）；`{approve: false}` 驳回，预警标为忽略 | 教师 |
+> | PUT | `/api/alerts/{id}` | `{status: "ignored"}` 忽略预警，它的建议一起驳回 | 教师 |
+> | GET | `/api/interventions/mine` | 学生：`{running, done}` 老师布置的内容和进度（AB 第 1 步不含练习）；练习用 `POST /api/recommendations/practice` 作答 | 学生 |
+>
+> 完成和效果在读取时检查（不需要 `complete` 接口）。登录还没做，"学生不能调老师接口"等登录完成后再加；
+> 演示时学生端可带请求头 `X-Demo-Student-Id` 切换演示学生（临时，见 `DemoIdentity`）。
 
 | 方法 | 路径 | 说明 | 角色 |
 |---|---|---|---|
@@ -333,3 +347,4 @@
 | 日期 | 版本 | 变更 | 作者 |
 |---|---|---|---|
 | 2026-10-10 | v0.2 | 首版：全组接口清单；登录改为用户名 + 密码；画像路径统一为 `/profiles/...` | A |
+| 2026-11-03 | v0.7 | 实现干预 A、B：`/api/interventions/board`、`/open-count`、`/{id}/review`、`/mine`，`PUT /api/alerts/{id}`；推荐跳过执行中干预的知识点；话题保存加 `knowledgePointId` | A |
