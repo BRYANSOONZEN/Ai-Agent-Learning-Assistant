@@ -34,6 +34,11 @@ public class DialogueTopic {
     private String revealText;
     private String sourceRef;
     private String sourceText;
+    /** 变式题：换情境考同一个知识点；旧话题可以为空 */
+    private String transferQuestion;
+    /** 变式题的要点，JSON 字符串 */
+    private String transferPoints;
+    private String transferReveal;
     private Boolean createdByAi;
     private Boolean enabled;
 

@@ -45,7 +45,10 @@ const emptyForm = () => ({
   title: '',
   keyPoints: [],
   simpleQuestion: '',
-  hints: ['', ''],
+  hints: ['', '', ''],
+  transferQuestion: '',
+  transferPoints: '', // one per line in the form
+  transferReveal: '',
   createdByAi: false,
   knowledgePointId: null,
 })
@@ -79,7 +82,10 @@ function openEdit(t) {
     title: t.title,
     keyPoints: [...t.keyPoints],
     simpleQuestion: t.simpleQuestion || '',
-    hints: [t.hints[0] || '', t.hints[1] || ''],
+    hints: [t.hints[0] || '', t.hints[1] || '', t.hints[2] || ''],
+    transferQuestion: t.transferQuestion || '',
+    transferPoints: (t.transferPoints || []).join('\n'),
+    transferReveal: t.transferReveal || '',
     createdByAi: t.createdByAi,
     knowledgePointId: t.knowledgePointId ?? null,
   })
@@ -104,7 +110,10 @@ async function runDraft() {
     form.title = d.title
     form.keyPoints = d.keyPoints
     form.simpleQuestion = d.simpleQuestion
-    form.hints = [d.hints[0] || '', d.hints[1] || '']
+    form.hints = [d.hints[0] || '', d.hints[1] || '', d.hints[2] || '']
+    form.transferQuestion = d.transferQuestion || ''
+    form.transferPoints = (d.transferPoints || []).join('\n')
+    form.transferReveal = d.transferReveal || ''
     form.createdByAi = true
     draftInfo.value = `${d.model}，用时 ${(d.latencyMs / 1000).toFixed(1)} 秒`
   } finally {
@@ -131,6 +140,9 @@ async function save() {
       simpleQuestion: form.simpleQuestion,
       keyPoints: form.keyPoints,
       hints: form.hints,
+      transferQuestion: form.transferQuestion,
+      transferPoints: form.transferPoints.split('\n'),
+      transferReveal: form.transferReveal,
       revealText: form.answer,
       sourceRef: form.sourceRef,
       sourceText: form.sourceText,
@@ -220,12 +232,28 @@ onMounted(async () => {
           <span>{{ t.simpleQuestion }}</span>
         </div>
         <div v-for="(h, j) in t.hints" :key="'h' + j" class="row">
-          <span class="label">提示 L{{ j }}</span>
+          <span class="label">提示 L{{ j + 1 }}</span>
           <span>{{ h }}</span>
         </div>
         <div class="row">
           <span class="label">讲解</span>
           <span>{{ t.revealText }}</span>
+        </div>
+        <div v-if="t.transferQuestion" class="row">
+          <span class="label">变式题</span>
+          <span>{{ t.transferQuestion }}</span>
+        </div>
+        <div v-if="t.transferQuestion" class="row">
+          <span class="label">变式要点</span>
+          <div class="points">
+            <el-tag v-for="(p, j) in t.transferPoints" :key="j" type="info" effect="plain">
+              {{ j + 1 }}. {{ p }}
+            </el-tag>
+          </div>
+        </div>
+        <div v-if="t.transferQuestion" class="row">
+          <span class="label">变式答案</span>
+          <span>{{ t.transferReveal }}</span>
         </div>
         <div v-if="t.sourceRef" class="row muted">
           <span class="label">出处</span>
@@ -308,11 +336,23 @@ onMounted(async () => {
             <el-form-item label="简单问法（学生答非所问时用）">
               <el-input v-model="form.simpleQuestion" />
             </el-form-item>
-            <el-form-item label="提示 L0（只指方向）">
+            <el-form-item label="提示 L1（只指方向）">
               <el-input v-model="form.hints[0]" />
             </el-form-item>
-            <el-form-item label="提示 L1（更具体，但不说答案）">
+            <el-form-item label="提示 L2（缩小范围，反问错误想法）">
               <el-input v-model="form.hints[1]" />
+            </el-form-item>
+            <el-form-item label="提示 L3（拆成一个很小的问题）">
+              <el-input v-model="form.hints[2]" />
+            </el-form-item>
+            <el-form-item label="变式题（换情境考同一个知识点，学生试过才看完整讲解）">
+              <el-input v-model="form.transferQuestion" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item label="变式要点（一行一条）">
+              <el-input v-model="form.transferPoints" type="textarea" :rows="3" />
+            </el-form-item>
+            <el-form-item label="变式参考答案">
+              <el-input v-model="form.transferReveal" type="textarea" :rows="2" />
             </el-form-item>
           </el-form>
         </section>

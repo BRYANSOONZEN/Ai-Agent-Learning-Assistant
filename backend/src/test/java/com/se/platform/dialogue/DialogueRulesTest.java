@@ -26,67 +26,149 @@ class DialogueRulesTest {
         s.setHintLevel(-1);
     }
 
+    /** 答错、没有新要点，还缺 uncovered 条 */
+    private Decision wrong(int uncovered) {
+        return rules.onAnswer(s, JudgedType.WRONG, false, uncovered);
+    }
+
     @Test
     void correct_firstTry_isSelfCorrect() {
-        Decision d = rules.onJudged(s, JudgedType.CORRECT);
+        Decision d = rules.onAnswer(s, JudgedType.CORRECT, true, 0);
         assertThat(d.action()).isEqualTo(NextAction.NEXT_TOPIC);
         assertThat(d.result()).isEqualTo(TopicResult.SELF_CORRECT);
     }
 
     @Test
-    void correct_afterOneWrong_isHintCorrect() {
-        rules.onJudged(s, JudgedType.WRONG);
-        assertThat(rules.onJudged(s, JudgedType.CORRECT).result()).isEqualTo(TopicResult.HINT_CORRECT);
+    void correct_afterWrong_isHintCorrect() {
+        wrong(3);
+        assertThat(rules.onAnswer(s, JudgedType.CORRECT, true, 0).result()).isEqualTo(TopicResult.HINT_CORRECT);
     }
 
     @Test
     void correct_afterStuck_isHintCorrect() {
-        rules.onStuck(s);
-        assertThat(rules.onJudged(s, JudgedType.CORRECT).result()).isEqualTo(TopicResult.HINT_CORRECT);
+        rules.onAnswer(s, JudgedType.WANT_ANSWER, false, 3);
+        assertThat(rules.onAnswer(s, JudgedType.CORRECT, true, 0).result()).isEqualTo(TopicResult.HINT_CORRECT);
     }
 
     @Test
-    void partialOnce_givesHint() {
-        Decision d = rules.onJudged(s, JudgedType.PARTIAL);
-        assertThat(d.action()).isEqualTo(NextAction.HINT);
-        assertThat(d.result()).isNull();
-        assertThat(s.getWrongCount()).isEqualTo(1);
+    void newPoint_keepsAsking_withoutRaisingLevel() {
+        for (int i = 0; i < 7; i++) {
+            Decision d = rules.onAnswer(s, JudgedType.PARTIAL, true, 3);
+            assertThat(d.action()).isEqualTo(NextAction.HINT);
+            assertThat(d.result()).isNull();
+        }
+        assertThat(s.getHintLevel()).isEqualTo(-1);
     }
 
     @Test
-    void wrongTwice_reveals() {
-        rules.onJudged(s, JudgedType.WRONG);
-        Decision d = rules.onJudged(s, JudgedType.PARTIAL);
-        assertThat(d.action()).isEqualTo(NextAction.REVEAL);
-        assertThat(d.result()).isEqualTo(TopicResult.REVEALED);
-        assertThat(s.getResult()).isEqualTo("REVEALED");
-    }
-
-    @Test
-    void stuckOnce_givesFirstPrewrittenHint() {
-        Decision d = rules.onStuck(s);
-        assertThat(d.action()).isEqualTo(NextAction.HINT);
+    void noProgress_goesL1L2L3_thenGivesPoint() {
+        wrong(3);
         assertThat(s.getHintLevel()).isEqualTo(0);
+        wrong(3);
+        assertThat(s.getHintLevel()).isEqualTo(1);
+        assertThat(wrong(3).action()).isEqualTo(NextAction.HINT);
+        assertThat(s.getHintLevel()).isEqualTo(2);
+        Decision d = wrong(3);
+        assertThat(d.action()).isEqualTo(NextAction.GIVE_POINT);
+        assertThat(d.result()).isNull();
     }
 
     @Test
-    void stuckThenWantAnswer_reveals() {
-        rules.onStuck(s);
-        assertThat(rules.onJudged(s, JudgedType.WANT_ANSWER).action()).isEqualTo(NextAction.REVEAL);
+    void lastMissingPointAnswered_afterGiven_startsTransfer() {
+        assertThat(rules.onAnswer(s, JudgedType.PARTIAL, true, 0).action()).isEqualTo(NextAction.START_TRANSFER);
     }
 
     @Test
-    void irrelevantOnce_continues_twice_skips() {
-        assertThat(rules.onJudged(s, JudgedType.IRRELEVANT).action()).isEqualTo(NextAction.CONTINUE);
-        Decision d = rules.onJudged(s, JudgedType.IRRELEVANT);
+    void wantAnswer_afterAttempt_raisesLevel_neverEnds() {
+        wrong(3);
+        Decision d = rules.onAnswer(s, JudgedType.WANT_ANSWER, false, 3);
+        assertThat(d.action()).isEqualTo(NextAction.HINT);
+        assertThat(s.getHintLevel()).isEqualTo(1);
+    }
+
+    @Test
+    void wantAnswer_neverAttempted_thirdTimeSkips_withoutAnswer() {
+        assertThat(rules.onAnswer(s, JudgedType.WANT_ANSWER, false, 3).action()).isEqualTo(NextAction.HINT);
+        assertThat(rules.onAnswer(s, JudgedType.WANT_ANSWER, false, 3).action()).isEqualTo(NextAction.HINT);
+        Decision d = rules.onAnswer(s, JudgedType.WANT_ANSWER, false, 3);
         assertThat(d.action()).isEqualTo(NextAction.SKIP);
         assertThat(d.result()).isEqualTo(TopicResult.SKIPPED_IRRELEVANT);
     }
 
     @Test
-    void offTopic_continues_withoutCounting() {
-        assertThat(rules.onJudged(s, JudgedType.OFF_TOPIC).action()).isEqualTo(NextAction.CONTINUE);
+    void irrelevantOnce_continues_twice_skips() {
+        assertThat(rules.onAnswer(s, JudgedType.IRRELEVANT, false, 3).action()).isEqualTo(NextAction.CONTINUE);
+        Decision d = rules.onAnswer(s, JudgedType.IRRELEVANT, false, 3);
+        assertThat(d.action()).isEqualTo(NextAction.SKIP);
+        assertThat(d.result()).isEqualTo(TopicResult.SKIPPED_IRRELEVANT);
+    }
+
+    @Test
+    void offTopicAndClarify_continue_withoutRaisingLevel() {
+        assertThat(rules.onAnswer(s, JudgedType.OFF_TOPIC, false, 3).action()).isEqualTo(NextAction.CONTINUE);
+        assertThat(rules.onAnswer(s, JudgedType.CLARIFY, false, 3).action()).isEqualTo(NextAction.CONTINUE);
+        assertThat(s.getHintLevel()).isEqualTo(-1);
         assertThat(s.getWrongCount() + s.getStuckCount() + s.getIrrelevantCount()).isZero();
+    }
+
+    @Test
+    void turnLimit_attempted_goesToTransfer() {
+        for (int i = 0; i < DialogueRules.MAX_TURNS - 1; i++) {
+            rules.onAnswer(s, JudgedType.PARTIAL, true, 3);
+        }
+        assertThat(rules.onAnswer(s, JudgedType.PARTIAL, true, 3).action()).isEqualTo(NextAction.START_TRANSFER);
+    }
+
+    @Test
+    void turnLimit_neverAttempted_skips() {
+        for (int i = 0; i < DialogueRules.MAX_TURNS - 1; i++) {
+            rules.onAnswer(s, JudgedType.CLARIFY, false, 3);
+        }
+        assertThat(rules.onAnswer(s, JudgedType.CLARIFY, false, 3).action()).isEqualTo(NextAction.SKIP);
+    }
+
+    @Test
+    void transfer_complete_isRevealedApplied() {
+        rules.startTransfer(s);
+        Decision d = rules.onTransfer(s, JudgedType.CORRECT, true, true);
+        assertThat(d.action()).isEqualTo(NextAction.REVEAL);
+        assertThat(d.result()).isEqualTo(TopicResult.REVEALED_APPLIED);
+    }
+
+    @Test
+    void transfer_notCompleteTwice_isRevealed() {
+        rules.startTransfer(s);
+        assertThat(rules.onTransfer(s, JudgedType.WRONG, false, true).action()).isEqualTo(NextAction.HINT);
+        Decision d = rules.onTransfer(s, JudgedType.PARTIAL, false, true);
+        assertThat(d.action()).isEqualTo(NextAction.REVEAL);
+        assertThat(d.result()).isEqualTo(TopicResult.REVEALED);
+    }
+
+    @Test
+    void transfer_refusingThreeTimes_endsWithoutAnswer() {
+        rules.startTransfer(s);
+        rules.onTransfer(s, JudgedType.WANT_ANSWER, false, true);
+        rules.onTransfer(s, JudgedType.IRRELEVANT, false, true);
+        Decision d = rules.onTransfer(s, JudgedType.WANT_ANSWER, false, true);
+        assertThat(d.action()).isEqualTo(NextAction.END_WITHHELD);
+        assertThat(d.result()).isEqualTo(TopicResult.REVEALED);
+    }
+
+    @Test
+    void transfer_turnLimit_withoutAttempt_endsWithoutAnswer() {
+        rules.startTransfer(s);
+        for (int i = 0; i < DialogueRules.MAX_TURNS - 1; i++) {
+            rules.onTransfer(s, JudgedType.CLARIFY, false, true);
+        }
+        assertThat(rules.onTransfer(s, JudgedType.CLARIFY, false, true).action()).isEqualTo(NextAction.END_WITHHELD);
+    }
+
+    @Test
+    void noTransferQuestion_oneAttemptEnds_asRevealed() {
+        rules.startTransfer(s);
+        Decision d = rules.onTransfer(s, JudgedType.WRONG, false, false);
+        assertThat(d.action()).isEqualTo(NextAction.REVEAL);
+        assertThat(d.result()).isEqualTo(TopicResult.REVEALED);
     }
 
     @Test

@@ -39,7 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 学生 AI 对话的总流程（docs/ai-implementation.md 第 8 步）。
  *
  * <p>一轮的顺序：存学生消息 → 拼提示词 → 调模型 → 解析 → 程序重新数要点 → 规则决定下一步 → 生成要显示的消息。
- * 模型只负责"判断 + 写一句提示"；讲解、换话题、总结都用老师确认过的文字或程序生成。
+ * 模型读完这个话题的对话后判断并回复，下一步由规则决定；给要点、讲解、换话题、总结都用老师确认过的文字或程序生成。
+ * 模型的回复要过检查（不为空、不太长、不泄露要点）才发给学生，否则才用预写提示。
  */
 @Slf4j
 @Service
@@ -47,7 +48,8 @@ public class DialogueService {
 
     /** 回复超过这个长度就不用模型的，改用预写提示 */
     private static final int MAX_REPLY_CHARS = 120;
-    private static final int RECENT_MESSAGES = 6;
+    /** 给模型看这个话题最近几条消息 */
+    private static final int RECENT_MESSAGES = 12;
 
     private final DialogueTopicService topicService;
     private final DialogueSessionMapper sessionMapper;
@@ -56,7 +58,7 @@ public class DialogueService {
     private final AiCallLogService callLog;
     private final JudgementParser parser;
     private final DialogueRules rules;
-    private final PromptTemplate turnTemplate = PromptTemplate.load("dialogue_turn_v1");
+    private final PromptTemplate turnTemplate = PromptTemplate.load("dialogue_turn_v2");
 
     public DialogueService(DialogueTopicService topicService, DialogueSessionMapper sessionMapper,
                            DialogueTopicStateMapper stateMapper, DialogueMessageMapper messageMapper,
@@ -117,59 +119,13 @@ public class DialogueService {
     /** 学生发一句话 */
     @Transactional
     public DialogueView send(Long sessionId, String text) {
-        DialogueSession session = requireOpen(sessionId);
-        DialogueTopicState state = currentState(session);
-        TopicView topic = topicService.get(state.getTopicId());
-
-        DialogueMessage studentMsg = save(session.getId(), state.getTopicIdx(), "STUDENT", text.trim(), null);
-
-        // 1. 调模型；失败（超时、报错、格式不对）就按"答错"处理，回复改用预写提示
-        //    每次调用（成功或失败）都由 AiCallLogService 记一条日志：token、耗时、费用
-        Judgement judgement;
-        String modelReply;
-        Long logId = null;
-        try {
-            AiCallLogService.Logged logged = callLog.call(AiCallLogService.TASK_DIALOGUE_TURN, turnTemplate.name(),
-                    new ChatRequest(List.of(ChatMessage.user(buildPrompt(session, state, topic, text.trim()))),
-                            // maxTokens 4096：Gemini 3 先"思考"，思考的 token 也算在上限里；
-                            // 设 1024 时实测回复会被截断成半个 JSON
-                            0.2, 4096, true));
-            logId = logged.logId();
-            ChatResult result = logged.result();
-            judgement = parser.parse(result.content());
-            modelReply = usable(judgement.reply()) ? judgement.reply() : null;
-            callLog.markCheck(logId, modelReply != null, modelReply != null ? null : "回复为空或超过 " + MAX_REPLY_CHARS + " 字");
-            log.info("对话判断：type={} hit={} 耗时 {} ms", judgement.type(), judgement.hitPoints(), result.latencyMs());
-        } catch (AiCallException e) {
-            log.warn("对话调用模型失败，走兜底：{}", e.getMessage());
-            if (logId != null) {
-                callLog.markCheck(logId, false, e.getMessage());   // 调用成功但格式不对
-            }
-            judgement = new Judgement(JudgedType.WRONG, List.of(), "");
-            modelReply = null;
-        }
-        studentMsg.setAiCallId(logId);
-
-        // 2. 是否答全由程序数要点决定，不完全相信模型给的 type
-        JudgedType type = recount(state, topic, judgement);
-        studentMsg.setJudgedType(type.name());
-        messageMapper.updateById(studentMsg);
-
-        // 3. 规则决定下一步，生成消息
-        DialogueRules.Decision decision = rules.onJudged(state, type);
-        apply(session, state, topic, decision, type, modelReply);
-        return view(session.getId());
+        return turn(sessionId, text.trim(), text.trim(), null);
     }
 
-    /** 学生点"我卡住了"：不调模型，直接给预写提示或讲解 */
+    /** 学生点"我卡住了"：也调模型，回复才能接上刚才的对话；是否算进展不看模型 */
     @Transactional
     public DialogueView stuck(Long sessionId) {
-        DialogueSession session = requireOpen(sessionId);
-        DialogueTopicState state = currentState(session);
-        TopicView topic = topicService.get(state.getTopicId());
-        save(session.getId(), state.getTopicIdx(), "STUDENT", "（我卡住了）", null);
-        apply(session, state, topic, rules.onStuck(state), null, null);
-        return view(session.getId());
+        return turn(sessionId, "（我卡住了）", "我卡住了，想不出来", JudgedType.WANT_ANSWER);
     }
 
     /** 暂停后继续 */
@@ -194,81 +150,264 @@ public class DialogueService {
 
     // ===================== 一轮里的各个步骤 =====================
 
+    /**
+     * 一轮的顺序：存学生消息 → 调模型 → 程序重新数要点 → 规则决定下一步 → 生成消息。
+     *
+     * @param shown      存进对话、显示给学生的文字
+     * @param promptText 传给模型的学生这一句
+     * @param forced     不为空时类型由程序定（点"我卡住了"），不看模型判的
+     */
+    private DialogueView turn(Long sessionId, String shown, String promptText, JudgedType forced) {
+        DialogueSession session = requireOpen(sessionId);
+        DialogueTopicState state = currentState(session);
+        TopicView topic = topicService.get(state.getTopicId());
+
+        DialogueMessage studentMsg = save(session.getId(), state.getTopicIdx(), "STUDENT", shown, null);
+
+        // 每次调用（成功或失败）都由 AiCallLogService 记一条日志：token、耗时、费用
+        Judgement judgement = null;
+        Long logId = null;
+        try {
+            AiCallLogService.Logged logged = callLog.call(AiCallLogService.TASK_DIALOGUE_TURN, turnTemplate.name(),
+                    new ChatRequest(List.of(ChatMessage.user(buildPrompt(session, state, topic, promptText))),
+                            // maxTokens 4096：Gemini 3 先"思考"，思考的 token 也算在上限里；
+                            // 设 1024 时实测回复会被截断成半个 JSON
+                            0.2, 4096, true));
+            logId = logged.logId();
+            studentMsg.setAiCallId(logId);
+            ChatResult result = logged.result();
+            judgement = parser.parse(result.content());
+            log.info("对话判断：type={} hit={} 耗时 {} ms", judgement.type(), judgement.hitPoints(), result.latencyMs());
+        } catch (AiCallException e) {
+            log.warn("对话调用模型失败，走兜底：{}", e.getMessage());
+            if (logId != null) {
+                callLog.markCheck(logId, false, e.getMessage());   // 调用成功但格式不对
+            }
+        }
+
+        // 模型失败不是学生的错：不算没进展，给当前级别的预写提示，学生可以再说一次
+        if (judgement == null && forced == null) {
+            messageMapper.updateById(studentMsg);
+            aiSay(session, state.getTopicIdx(), fallbackHint(state, topic), "TEMPLATE");
+            return view(session.getId());
+        }
+
+        Counted counted = judgement == null ? new Counted(forced, false) : recount(state, topic, judgement, forced);
+        if (judgement != null && !blank(judgement.misconception())) {
+            state.setMisconception(judgement.misconception());
+        }
+        String modelReply = judgement == null ? null : checkedReply(judgement.reply(), state, topic, logId);
+        studentMsg.setJudgedType(counted.type().name());
+        messageMapper.updateById(studentMsg);
+
+        DialogueRules.Decision decision = DialogueTopicState.TRANSFER.equals(state.getPhase())
+                ? rules.onTransfer(state, counted.type(), counted.type() == JudgedType.CORRECT, hasTransfer(topic))
+                : rules.onAnswer(state, counted.type(), counted.newPoint(), uncovered(state, topic).size());
+        apply(session, state, topic, decision, modelReply);
+        return view(session.getId());
+    }
+
+    /** 这一轮数完要点的结果 */
+    private record Counted(JudgedType type, boolean newPoint) {
+    }
+
     private String buildPrompt(DialogueSession session, DialogueTopicState state, TopicView topic, String text) {
-        List<String> points = topic.keyPoints();
+        boolean checking = usingTransferPoints(state, topic);
+        List<String> points = checking ? topic.transferPoints() : topic.keyPoints();
         String keyPoints = IntStream.range(0, points.size())
                 .mapToObj(i -> (i + 1) + ". " + points.get(i))
                 .collect(Collectors.joining("\n"));
         String source = (topic.sourceRef() == null ? "" : topic.sourceRef() + "：")
                 + (topic.sourceText() == null ? "" : topic.sourceText());
-        Set<Integer> before = hits(state);
-        int attempts = state.getWrongCount() + state.getStuckCount() + state.getIrrelevantCount();
+        Set<Integer> before = parse(checking ? state.getTransferHitPoints() : state.getHitPoints());
+        Set<Integer> given = checking ? Set.of() : parse(state.getGivenPoints());
 
         // Map.ofEntries：超过 10 个键值对时用它（Map.of 最多 10 个）
         return turnTemplate.render(Map.ofEntries(
                 Map.entry("topic_title", topic.title()),
-                Map.entry("question", topic.question()),
+                Map.entry("question", checking ? topic.transferQuestion() : topic.question()),
                 Map.entry("key_points", keyPoints),
                 Map.entry("source", source.isBlank() ? "（无）" : source),
-                Map.entry("attempts", String.valueOf(attempts)),
-                Map.entry("hints_used", String.valueOf(state.getHintLevel() + 1)),
                 Map.entry("hit_before", before.isEmpty() ? "无" : join(before)),
-                Map.entry("instruction", "如果没答全，给出一个更具体的提示，但不要说出要点原文。"),
-                Map.entry("recent", recent(session.getId())),
+                Map.entry("given", given.isEmpty() ? "无" : join(given)),
+                Map.entry("irrelevant", String.valueOf(state.getIrrelevantCount())),
+                Map.entry("misconception", blank(state.getMisconception()) ? "无" : state.getMisconception()),
+                Map.entry("instruction", instruction(state, topic)),
+                Map.entry("recent", recent(session.getId(), state.getTopicIdx())),
                 Map.entry("student_text", text)));
     }
 
-    /** 把这一句答到的要点并入之前的，按总数重新确定 type */
-    private JudgedType recount(DialogueTopicState state, TopicView topic, Judgement j) {
-        int n = topic.keyPoints().size();
-        Set<Integer> all = hits(state);
-        List<Integer> valid = j.hitPoints().stream().filter(i -> i >= 1 && i <= n).toList();
-        all.addAll(valid);
-        state.setHitPoints(all.isEmpty() ? null : join(all));
+    /** 程序告诉模型这一轮该怎么提示：级别由程序定，模型只负责写成接得上对话的话 */
+    private String instruction(DialogueTopicState state, TopicView topic) {
+        if (DialogueTopicState.TRANSFER.equals(state.getPhase())) {
+            return hasTransfer(topic)
+                    ? "这是换了情境的变式题，学生刚看过原题的要点。没答全时提示他把原题的思路用到这个情境里，不说出变式要点。"
+                    : "学生要用自己的话说一遍原题的答案。只请他说出来，不补充内容。";
+        }
+        String next = switch (Math.min(state.getHintLevel() + 1, DialogueRules.MAX_HINT_LEVEL)) {
+            case 0 -> "只指出思考方向";
+            case 1 -> "缩小范围，针对学生的错误想法反问";
+            default -> "拆成一个很小、很容易回答的问题";
+        };
+        return "如果学生这一句答到了新要点，肯定后针对还缺的要点追问；如果没有新要点，提示要" + next + "。";
+    }
+
+    /** 把这一句新答到的要点并入之前的，按总数重新确定 type。已经告诉学生的要点，照抄不算 */
+    private Counted recount(DialogueTopicState state, TopicView topic, Judgement j, JudgedType forced) {
+        if (forced != null) {
+            return new Counted(forced, false);
+        }
+        boolean checking = usingTransferPoints(state, topic);
+        int n = (checking ? topic.transferPoints() : topic.keyPoints()).size();
+        Set<Integer> all = parse(checking ? state.getTransferHitPoints() : state.getHitPoints());
+        Set<Integer> given = checking ? Set.of() : parse(state.getGivenPoints());
+        List<Integer> fresh = j.hitPoints().stream().distinct()
+                .filter(i -> i >= 1 && i <= n && !all.contains(i) && !given.contains(i)).toList();
+        all.addAll(fresh);
+        if (checking) {
+            state.setTransferHitPoints(joinOrNull(all));
+        } else {
+            state.setHitPoints(joinOrNull(all));
+        }
 
         JudgedType type = j.type();
-        if (type == JudgedType.CORRECT || type == JudgedType.PARTIAL || type == JudgedType.WRONG) {
+        boolean answering = type == JudgedType.CORRECT || type == JudgedType.PARTIAL || type == JudgedType.WRONG;
+        // 闲聊里带答案也按作答算，模型判成离题也一样
+        if (answering || !fresh.isEmpty()) {
             if (all.size() == n) {
-                return JudgedType.CORRECT;
-            }
-            if (type == JudgedType.CORRECT || !valid.isEmpty()) {
-                return JudgedType.PARTIAL;
+                type = JudgedType.CORRECT;
+            } else if (type == JudgedType.CORRECT || !fresh.isEmpty()) {
+                type = JudgedType.PARTIAL;
             }
         }
-        return type;
+        return new Counted(type, !fresh.isEmpty());
+    }
+
+    /** 回复为空、太长或泄露要点就不用，返回 null；结果记进调用日志 */
+    private String checkedReply(String reply, DialogueTopicState state, TopicView topic, Long logId) {
+        String problem = !usable(reply) ? "回复为空或超过 " + MAX_REPLY_CHARS + " 字"
+                : leaks(reply, state, topic) ? "回复包含未答到的要点原文" : null;
+        callLog.markCheck(logId, problem == null, problem);
+        return problem == null ? reply : null;
+    }
+
+    /** 泄露检查：去掉空格和标点后，回复里有没有还没答到、也还没给出的要点原文。换个说法抓不到 */
+    private boolean leaks(String reply, DialogueTopicState state, TopicView topic) {
+        boolean checking = usingTransferPoints(state, topic);
+        List<String> points = checking ? topic.transferPoints() : topic.keyPoints();
+        Set<Integer> covered = parse(checking ? state.getTransferHitPoints() : state.getHitPoints());
+        if (!checking) {
+            covered.addAll(parse(state.getGivenPoints()));
+        }
+        String text = normalize(reply);
+        return IntStream.range(0, points.size())
+                .filter(i -> !covered.contains(i + 1))
+                .anyMatch(i -> text.contains(normalize(points.get(i))));
+    }
+
+    private String normalize(String s) {
+        return s.replaceAll("[\\s\\p{P}\\p{S}]", "");
     }
 
     /** 按规则的决定生成 AI 消息、更新状态、必要时换话题或结束 */
     private void apply(DialogueSession session, DialogueTopicState state, TopicView topic,
-                       DialogueRules.Decision d, JudgedType type, String modelReply) {
+                       DialogueRules.Decision d, String modelReply) {
         int idx = state.getTopicIdx();
         switch (d.action()) {
             case HINT -> {
-                // 要答案时也用预写提示：最容易泄露的场景，不让模型自由发挥
-                if (modelReply != null && type != JudgedType.WANT_ANSWER) {
+                if (modelReply != null) {
                     aiSay(session, idx, modelReply, "MODEL");
                 } else {
-                    // 卡住时用 hintLevel 指向的那条；答错兜底时按错误次数取
-                    int level = type == null || type == JudgedType.WANT_ANSWER
-                            ? state.getHintLevel() : state.getWrongCount() - 1;
-                    aiSay(session, idx, "提示：" + prewrittenHint(topic, level), "TEMPLATE");
+                    aiSay(session, idx, fallbackHint(state, topic), "TEMPLATE");
                 }
             }
             case CONTINUE -> {
-                String text = type == JudgedType.OFF_TOPIC
-                        ? "这个问题课件里没有涉及，我们先回到刚才的问题：\n" + topic.question()
-                        : "我们先回到这个问题：\n" + (blank(topic.simpleQuestion()) ? topic.question() : topic.simpleQuestion());
-                aiSay(session, idx, text, "TEMPLATE");
+                if (modelReply != null) {
+                    aiSay(session, idx, modelReply, "MODEL");
+                } else {
+                    aiSay(session, idx, "我们先回到这个问题：\n" + currentQuestion(state, topic), "TEMPLATE");
+                }
+            }
+            case GIVE_POINT -> givePoint(session, state, topic);
+            case START_TRANSFER -> {
+                rules.startTransfer(state);
+                aiSay(session, idx, transferIntro(topic), "RULE");
             }
             case NEXT_TOPIC -> aiSay(session, idx, modelReply != null ? modelReply : "回答正确！", modelReply != null ? "MODEL" : "RULE");
-            case REVEAL -> aiSay(session, idx, "我们一起来看：\n" + topic.revealText() + sourceSuffix(topic), "TEMPLATE");
-            case SKIP -> aiSay(session, idx, "这个问题我们先看讲解：\n" + topic.revealText() + sourceSuffix(topic), "TEMPLATE");
+            case REVEAL -> aiSay(session, idx, revealMessage(topic, d), "TEMPLATE");
+            case END_WITHHELD -> aiSay(session, idx, "这道题我们先到这里。"
+                    + (blank(topic.sourceRef()) ? "" : "建议回看" + topic.sourceRef() + "，")
+                    + "想好后可以重新开始对话再试一次。", "RULE");
+            case SKIP -> aiSay(session, idx, "这个话题我们先跳过，想好后可以重新开始对话再试一次。", "RULE");
         }
         stateMapper.updateById(state);
 
         if (d.result() != null) {
             moveOn(session, d.action());
         }
+    }
+
+    /** 给一条还缺的要点，用老师的原文，不调模型。都给完了就接着出变式题 */
+    private void givePoint(DialogueSession session, DialogueTopicState state, TopicView topic) {
+        List<Integer> missing = uncovered(state, topic);
+        int point = missing.get(0);
+        Set<Integer> given = parse(state.getGivenPoints());
+        given.add(point);
+        state.setGivenPoints(join(given));
+
+        List<String> points = topic.keyPoints();
+        String said = parse(state.getHitPoints()).stream().map(i -> points.get(i - 1)).collect(Collectors.joining("；"));
+        String text = (said.isEmpty() ? "" : "你已经说对了：" + said + "。\n")
+                + "这里告诉你一条：" + points.get(point - 1) + "。\n";
+        if (missing.size() > 1) {
+            text += "结合这一条，你能接着说说还缺什么吗？";
+        } else {
+            rules.startTransfer(state);
+            text += transferIntro(topic);
+        }
+        aiSay(session, state.getTopicIdx(), text, "TEMPLATE");
+    }
+
+    /** 还没答到、也还没给出的要点序号 */
+    private List<Integer> uncovered(DialogueTopicState state, TopicView topic) {
+        Set<Integer> covered = parse(state.getHitPoints());
+        covered.addAll(parse(state.getGivenPoints()));
+        return IntStream.rangeClosed(1, topic.keyPoints().size()).filter(i -> !covered.contains(i)).boxed().toList();
+    }
+
+    private String transferIntro(TopicView topic) {
+        return hasTransfer(topic)
+                ? "换个情境试试，答完就给你看完整讲解：\n" + topic.transferQuestion()
+                : "看完整讲解之前，请先用自己的话说一遍这道题的答案，说错也没关系。";
+    }
+
+    /** 完整答案只在这里出现：学生已经作答过变式题，或用自己的话说过一遍 */
+    private String revealMessage(TopicView topic, DialogueRules.Decision d) {
+        boolean applied = d.result() == TopicResult.REVEALED_APPLIED;
+        String head = applied ? "答得对，这个思路你已经会用了。\n" : "";
+        String transfer = hasTransfer(topic) && !applied ? "变式题的参考答案：" + topic.transferReveal() + "\n" : "";
+        return head + transfer + "完整讲解：\n" + topic.revealText() + sourceSuffix(topic);
+    }
+
+    private String fallbackHint(DialogueTopicState state, TopicView topic) {
+        return DialogueTopicState.TRANSFER.equals(state.getPhase())
+                ? "提示：想想刚才的要点，放到这个新情境里分别对应什么？"
+                : "提示：" + prewrittenHint(topic, state.getHintLevel());
+    }
+
+    private String currentQuestion(DialogueTopicState state, TopicView topic) {
+        if (usingTransferPoints(state, topic)) {
+            return topic.transferQuestion();
+        }
+        return blank(topic.simpleQuestion()) ? topic.question() : topic.simpleQuestion();
+    }
+
+    private boolean hasTransfer(TopicView topic) {
+        return !blank(topic.transferQuestion()) && !topic.transferPoints().isEmpty();
+    }
+
+    private boolean usingTransferPoints(DialogueTopicState state, TopicView topic) {
+        return DialogueTopicState.TRANSFER.equals(state.getPhase()) && hasTransfer(topic);
     }
 
     /** 话题结束：进入下一个话题、暂停或整段结束 */
@@ -307,7 +446,9 @@ public class DialogueService {
 
         List<DialogueView.TopicProgress> progress = new ArrayList<>();
         for (int i = 0; i < states.size(); i++) {
-            progress.add(new DialogueView.TopicProgress(topics.get(i).title(), states.get(i).getResult()));
+            DialogueTopicState st = states.get(i);
+            progress.add(new DialogueView.TopicProgress(topics.get(i).title(), st.getResult(),
+                    st.getResult() == null && DialogueTopicState.TRANSFER.equals(st.getPhase())));
         }
         List<DialogueView.MessageView> messages = messageMapper.selectList(new LambdaQueryWrapper<DialogueMessage>()
                         .eq(DialogueMessage::getSessionId, sessionId)
@@ -336,7 +477,8 @@ public class DialogueService {
             switch (TopicResult.valueOf(r)) {
                 case SELF_CORRECT -> good.add(t.title() + "（自己答对）");
                 case HINT_CORRECT -> good.add(t.title() + "（提示后答对）");
-                case REVEALED -> improve.add(t.title() + (blank(t.sourceRef()) ? "" : "，建议复习" + t.sourceRef()));
+                case REVEALED_APPLIED -> improve.add(t.title() + "（讲解后会用）");
+                case REVEALED -> improve.add(t.title() + "（讲解后仍不会）" + (blank(t.sourceRef()) ? "" : "，建议复习" + t.sourceRef()));
                 case SKIPPED_IRRELEVANT -> skipped.add(t.title());
             }
         }
@@ -372,10 +514,11 @@ public class DialogueService {
         return states(session.getId()).get(session.getCurrentIdx());
     }
 
-    /** 最近几条消息，拼成"学生：… / AI：…"给模型看上下文 */
-    private String recent(Long sessionId) {
+    /** 这个话题最近几条消息，拼成"学生：… / AI：…"给模型看上下文；不混入其他话题 */
+    private String recent(Long sessionId, int topicIdx) {
         List<DialogueMessage> list = new ArrayList<>(messageMapper.selectList(new LambdaQueryWrapper<DialogueMessage>()
                 .eq(DialogueMessage::getSessionId, sessionId)
+                .eq(DialogueMessage::getTopicIdx, topicIdx)
                 .orderByDesc(DialogueMessage::getId)
                 .last("LIMIT " + RECENT_MESSAGES)));
         Collections.reverse(list);
@@ -411,13 +554,17 @@ public class DialogueService {
         return reply != null && !reply.isBlank() && reply.length() <= MAX_REPLY_CHARS;
     }
 
-    private Set<Integer> hits(DialogueTopicState s) {
+    private Set<Integer> parse(String points) {
         // TreeSet：自动去重并按大小排序
         Set<Integer> set = new TreeSet<>();
-        if (!blank(s.getHitPoints())) {
-            Arrays.stream(s.getHitPoints().split(",")).map(String::trim).map(Integer::valueOf).forEach(set::add);
+        if (!blank(points)) {
+            Arrays.stream(points.split(",")).map(String::trim).map(Integer::valueOf).forEach(set::add);
         }
         return set;
+    }
+
+    private String joinOrNull(Set<Integer> set) {
+        return set.isEmpty() ? null : join(set);
     }
 
     private String join(Set<Integer> set) {

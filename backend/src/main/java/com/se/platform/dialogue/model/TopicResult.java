@@ -4,10 +4,12 @@ package com.se.platform.dialogue.model;
 public enum TopicResult {
     /** 没错过、没卡住，自己答对 */
     SELF_CORRECT,
-    /** 提示后答对 */
+    /** 追问或提示后答对 */
     HINT_CORRECT,
-    /** 错两次或卡住两次，看了讲解 */
+    /** 被给过要点，变式题答全 */
+    REVEALED_APPLIED,
+    /** 被给过要点，变式题没答全或一直不答；没有变式题的话题也算这个 */
     REVEALED,
-    /** 答非所问两次，跳过 */
+    /** 答非所问或一直不作答，跳过 */
     SKIPPED_IRRELEVANT
 }

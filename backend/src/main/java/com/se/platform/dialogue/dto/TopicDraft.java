@@ -12,6 +12,9 @@ public record TopicDraft(
         List<String> keyPoints,
         String simpleQuestion,
         List<String> hints,
+        String transferQuestion,
+        List<String> transferPoints,
+        String transferReveal,
         String model,
         long latencyMs) {
 }

@@ -117,6 +117,7 @@ public class ProfileService {
         Double independence = topics.isEmpty() ? null : round(topics.stream().mapToDouble(t -> switch (t.result()) {
             case "SELF_CORRECT" -> 1.0;
             case "HINT_CORRECT" -> 0.6;
+            case "REVEALED_APPLIED" -> 0.4;
             case "REVEALED" -> 0.2;
             default -> 0.0;
         }).average().orElse(0));

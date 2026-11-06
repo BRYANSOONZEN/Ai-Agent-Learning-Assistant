@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** 把模型返回的 {"type": ..., "hit_points": [...], "reply": ...} 变成 Judgement；格式不对就抛 AiCallException */
+/** 把模型返回的 {"type": ..., "hit_points": [...], "misconception": ..., "reply": ...} 变成 Judgement；格式不对就抛 AiCallException */
 @Component
 public class JudgementParser {
 
@@ -31,7 +31,7 @@ public class JudgementParser {
         try {
             type = JudgedType.valueOf(json.path("type").asText("").trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new AiCallException("格式不对：type 不在 6 种之内");
+            throw new AiCallException("格式不对：type 不在 7 种之内");
         }
         List<Integer> hits = new ArrayList<>();
         for (JsonNode n : json.path("hit_points")) {
@@ -39,7 +39,7 @@ public class JudgementParser {
                 hits.add(n.asInt());
             }
         }
-        return new Judgement(type, hits, json.path("reply").asText("").trim());
+        return new Judgement(type, hits, json.path("misconception").asText("").trim(), json.path("reply").asText("").trim());
     }
 
     /** 有的模型会把 JSON 包在 ```json ... ``` 里 */

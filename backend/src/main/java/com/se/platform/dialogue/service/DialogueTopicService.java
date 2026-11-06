@@ -106,6 +106,21 @@ public class DialogueTopicService {
         topic.setSourceText(req.sourceText());
         topic.setCreatedByAi(Boolean.TRUE.equals(req.createdByAi()));
         topic.setKnowledgePointId(req.knowledgePointId());
+        copyTransfer(req, topic);
+    }
+
+    /** 变式题三项要么都填，要么都不填：只有题没有要点就没法判 */
+    private void copyTransfer(TopicSaveRequest req, DialogueTopic topic) {
+        String question = req.transferQuestion() == null ? "" : req.transferQuestion().trim();
+        String reveal = req.transferReveal() == null ? "" : req.transferReveal().trim();
+        List<String> points = clean(req.transferPoints());
+        boolean none = question.isEmpty() && reveal.isEmpty() && points.isEmpty();
+        if (!none && (question.isEmpty() || reveal.isEmpty() || points.isEmpty())) {
+            throw BusinessException.badRequest("变式题、变式要点、变式参考答案要一起填");
+        }
+        topic.setTransferQuestion(question);
+        topic.setTransferPoints(toJson(points));
+        topic.setTransferReveal(reveal);
     }
 
     /** 去掉空白项；null 当成空列表 */
@@ -119,7 +134,8 @@ public class DialogueTopicService {
     private TopicView toView(DialogueTopic t) {
         return new TopicView(t.getId(), t.getItemId(), t.getKnowledgePointId(), t.getSortOrder(), t.getTitle(), t.getQuestion(), t.getSimpleQuestion(),
                 fromJson(t.getKeyPoints()), fromJson(t.getHints()), t.getRevealText(), t.getSourceRef(),
-                t.getSourceText(), t.getCreatedByAi(), t.getEnabled(), t.getCreatedAt());
+                t.getSourceText(), t.getCreatedByAi(), t.getEnabled(), t.getCreatedAt(),
+                t.getTransferQuestion(), fromJson(t.getTransferPoints()), t.getTransferReveal());
     }
 
     private String toJson(List<String> list) {

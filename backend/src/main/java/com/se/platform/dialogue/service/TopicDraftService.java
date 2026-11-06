@@ -19,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 老师填了情境问题和参考答案后，让 AI 拆出要点、简单问法和两级提示。
+ * 老师填了情境问题和参考答案后，让 AI 拆出要点、简单问法、三级提示和变式题。
  * 结果只是草稿，老师修改确认后才通过 DialogueTopicService 保存。
  */
 @Slf4j
@@ -31,7 +31,7 @@ public class TopicDraftService {
 
     private final AiCallLogService callLog;
     private final ObjectMapper objectMapper;
-    private final PromptTemplate template = PromptTemplate.load("topic_draft_v1");
+    private final PromptTemplate template = PromptTemplate.load("topic_draft_v2");
 
     public TopicDraftService(AiCallLogService callLog, ObjectMapper objectMapper) {
         this.callLog = callLog;
@@ -90,7 +90,9 @@ public class TopicDraftService {
         if (keyPoints.isEmpty() || title.isEmpty()) {
             throw new BusinessException(AI_UNAVAILABLE, "AI 返回的内容缺少话题名或要点，请再试一次");
         }
-        return new TopicDraft(title, keyPoints, simpleQuestion, hints, result.model(), result.latencyMs());
+        return new TopicDraft(title, keyPoints, simpleQuestion, hints,
+                json.path("transfer_question").asText("").trim(), textList(json.path("transfer_points")),
+                json.path("transfer_reveal").asText("").trim(), result.model(), result.latencyMs());
     }
 
     /** 有的模型即使要求只输出 JSON，也会包一层 ```json ... ```，这里去掉 */

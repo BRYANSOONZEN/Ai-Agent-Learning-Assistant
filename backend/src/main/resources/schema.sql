@@ -185,10 +185,13 @@ CREATE TABLE dialogue_topic (
     question        TEXT         NOT NULL,              -- 情境问题
     simple_question TEXT,                               -- 答非所问时换用的简单问法
     key_points      TEXT         NOT NULL,              -- JSON 数组：要点，如 ["越过边界的 0","边界上的 1"]
-    hints           TEXT,                               -- JSON 数组：预写提示 L0、L1
+    hints           TEXT,                               -- JSON 数组：预写提示 L1、L2、L3，模型失败时才用
     reveal_text     TEXT         NOT NULL,              -- 讲解原文（老师的参考答案）
     source_ref      VARCHAR(100),                       -- 出处，如"课件第 13 页"
     source_text     TEXT,                               -- 依据的原理句原文
+    transfer_question TEXT,                             -- 变式题：换情境考同一个知识点，旧话题可以为空
+    transfer_points TEXT,                               -- JSON 数组：变式题的要点
+    transfer_reveal TEXT,                               -- 变式题的参考答案
     created_by_ai   TINYINT(1)   NOT NULL DEFAULT 0,    -- 要点等内容是否由 AI 起草
     enabled         TINYINT(1)   NOT NULL DEFAULT 1,    -- 是否启用
     created_at      DATETIME,
@@ -228,9 +231,17 @@ CREATE TABLE dialogue_topic_state (
     wrong_count      INT         NOT NULL DEFAULT 0,            -- 答错 / 部分对的次数
     stuck_count      INT         NOT NULL DEFAULT 0,            -- 点"我卡住了"或直接要答案的次数
     irrelevant_count INT         NOT NULL DEFAULT 0,            -- 答非所问的次数
-    hint_level       INT         NOT NULL DEFAULT -1,           -- 已给到第几级预写提示，-1 = 还没给
+    hint_level       INT         NOT NULL DEFAULT -1,           -- 已给到第几级提示（0、1、2 = L1、L2、L3），-1 = 还没给
     hit_points       VARCHAR(100),                              -- 已经答到的要点序号，如 "1,2"
-    result           VARCHAR(20),                               -- SELF_CORRECT / HINT_CORRECT / REVEALED / SKIPPED_IRRELEVANT
+    result           VARCHAR(20),                               -- SELF_CORRECT / HINT_CORRECT / REVEALED_APPLIED / REVEALED / SKIPPED_IRRELEVANT
+    phase            VARCHAR(16) NOT NULL DEFAULT 'ANSWER',         -- ANSWER 作答 / TRANSFER 变式检验
+    turn_count       INT         NOT NULL DEFAULT 0,            -- 当前阶段走了几轮，到上限就往下走
+    answer_count     INT         NOT NULL DEFAULT 0,            -- 真正作答过几次，没作答过的拿不到答案
+    refuse_count     INT         NOT NULL DEFAULT 0,            -- 不作答只要答案的次数，进入变式时清零
+    given_points     VARCHAR(100),                              -- 程序已告诉学生的要点序号，不算学生答到
+    transfer_hit_points VARCHAR(100),                           -- 变式题已答到的要点序号
+    transfer_tries   INT         NOT NULL DEFAULT 0,            -- 变式题作答了几次
+    misconception    VARCHAR(500),                              -- 模型最近发现的错误想法，不算进展
     PRIMARY KEY (id),
     CONSTRAINT uk_topic_state UNIQUE (session_id, topic_idx)
 );

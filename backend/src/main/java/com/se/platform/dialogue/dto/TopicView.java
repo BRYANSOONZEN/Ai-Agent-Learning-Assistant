@@ -19,5 +19,8 @@ public record TopicView(
         String sourceText,
         Boolean createdByAi,
         Boolean enabled,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        String transferQuestion,
+        List<String> transferPoints,
+        String transferReveal) {
 }

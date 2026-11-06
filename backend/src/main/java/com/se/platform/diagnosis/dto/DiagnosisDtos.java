@@ -42,7 +42,7 @@ public final class DiagnosisDtos {
                                  Long practiceItemId) {
     }
 
-    /** AI 对话里一个话题的结果：SELF_CORRECT / HINT_CORRECT / REVEALED / SKIPPED_IRRELEVANT */
+    /** AI 对话里一个话题的结果：SELF_CORRECT / HINT_CORRECT / REVEALED_APPLIED / REVEALED / SKIPPED_IRRELEVANT */
     public record TopicOutcome(String topicTitle, String itemTitle, String result, int wrongCount, int stuckCount,
                                LocalDateTime time) {
     }

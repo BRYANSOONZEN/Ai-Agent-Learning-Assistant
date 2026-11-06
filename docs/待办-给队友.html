@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学习平台待办清单</title>
+<style>
+/* 布局：一列清单，每项 = 名称 + 现状 + 要想清楚的问题 */
+:root {
+  --bg: #f4f6f4; --surface: #ffffff; --ink: #1d2a2a; --muted: #566464; --line: #d7dfdc; --accent: #0f6b62;
+  --font: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141b1b; --surface: #1c2525; --ink: #e6eeec; --muted: #a3b2af; --line: #33403f; --accent: #63c7b8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141b1b; --surface: #1c2525; --ink: #e6eeec; --muted: #a3b2af; --line: #33403f; --accent: #63c7b8; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 var(--font); }
+main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 32px; }
+h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.3; text-wrap: balance; }
+h2 { margin: 0 0 12px; font-size: 20px; color: var(--accent); }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; }
+.lead { color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 12px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+.who { color: var(--muted); font-size: 13px; }
+.now { color: var(--muted); font-size: 15px; }
+ul { margin: 0; padding-left: 20px; }
+code { font-size: 14px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>学习平台待办清单</h1>
+  <p class="lead">给组员看的，每项列了现状和要先想清楚的问题。负责人是 team-split.md 里原来的分工，可以再调整。这份清单是查代码整理的，没有逐项运行；作业原文 M1–M10 不在仓库里，请再对照一次。</p>
+</header>
+
+<section>
+  <h2>必做</h2>
+  <div class="list">
+    <article class="item">
+      <div class="head"><h3>老师改判（M10）</h3><span class="who">孙正</span></div>
+      <p class="now">没做，计划已写好：docs/计划-老师改判.md</p>
+      <ul>
+        <li>改判后发现干预不该存在，已经开始的干预要不要能取消？</li>
+        <li>话题结果多了"讲解后会用"，老师能改成这个结果吗？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>错因提醒（M10 看板）</h3><span class="who">陈允滔（页面）、孙正（统计）</span></div>
+      <p class="now">没做。规则：同一错因达到全班 30% 且至少 5 人时提醒</p>
+      <ul>
+        <li>错因从哪来：选择题错项、简答判定，还是 AI 对话？</li>
+        <li>提醒之后老师能做什么？全班干预已决定不做，这里是否只提醒？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>简答判定（M5）</h3><span class="who">孙正</span></div>
+      <p class="now">只做了一部分</p>
+      <ul>
+        <li>错因分哪几类？模型拿不准时怎么处理？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>课件拆分（M1–M4）</h3><span class="who">陈允滔</span></div>
+      <p class="now">只做了一部分。要做到上传课件、拆原理句和例题、老师确认、带出处引用</p>
+      <ul>
+        <li>拆错了老师怎么改？课件改版后，已确认的内容怎么办？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>后端登录</h3><span class="who">登录负责人</span></div>
+      <p class="now">现在是前端模拟登录，后端用演示身份</p>
+      <ul>
+        <li>账号怎么来：预置还是导入？</li>
+        <li>学生调老师接口要被拒绝，这部分测试登录做好后要补。</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>评测 T1–T5 和 P 系列</h3><span class="who">孙正、彭子隽、陈允滔</span></div>
+      <p class="now">没做。AI 对话规则刚改过，预期行为要按新规则写</p>
+      <ul>
+        <li>要答案类的评测，通过标准是什么？换了说法的泄露怎么算？</li>
+        <li>T5 模拟学生的"无作答"类型，现在应该全程看不到答案，要单独统计吗？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>CI</h3><span class="who">陈允滔</span></div>
+      <p class="now">没做，仓库里没有流水线配置</p>
+      <ul>
+        <li>每次推送跑后端测试和前端 lint。API key 不能进 CI，测试继续用 FakeAiClient。</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>选做</h2>
+  <div class="list">
+    <article class="item">
+      <div class="head"><h3>E1 5E 学习智能体</h3><span class="who">彭子隽</span></div>
+      <p class="now">第一版刚做好，还没提交：提示 L1–L3、泄露检查、讲解后变式题都有了</p>
+      <ul>
+        <li>直接答对的学生不走"拓展"，这样算走完 5E 吗？要不要所有人都做变式题？</li>
+      </ul>
+    </article>
+    <article class="item">
+      <div class="head"><h3>E4 重点难点</h3><span class="who">孙正</span></div>
+      <p class="now">只有个人掌握度，还缺蒙对型、粗心型识别和班级难点</p>
+      <ul>
+        <li>蒙对和粗心用什么数据判断？作答时长、对话结果和答题结果矛盾，都算吗？</li>
+        <li>班级难点和错因提醒能不能合成一个页面？</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>AI 对话新版要一起决定的</h2>
+  <div class="list">
+    <article class="item">
+      <h3>"太难了"算不算要答案？</h3>
+      <p class="now">现在算。从没作答的学生累计 3 次就跳过，可能太严。</p>
+    </article>
+    <article class="item">
+      <h3>跳过能不能躲开预警？</h3>
+      <p class="now">现在能。连说两次"哈哈"就跳过，跳过的话题不计入概念层，不会触发 B 预警。</p>
+    </article>
+    <article class="item">
+      <h3>题目问"为什么"，要不要检查原因？</h3>
+      <p class="now">现在只数要点。学生只答"2, 3, 4"也算答全，要点要不要把原因写进去？</p>
+    </article>
+    <article class="item">
+      <h3>换了说法的泄露怎么办？</h3>
+      <p class="now">程序只能抓到要点原文。实测模型会说"在边界上、外侧、内侧各取一个值"，要不要再加一层检查？</p>
+    </article>
+  </div>
+</section>
+</main>
+</body>
+</html>

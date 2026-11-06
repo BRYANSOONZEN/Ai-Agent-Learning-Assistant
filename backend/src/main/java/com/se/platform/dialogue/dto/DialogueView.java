@@ -17,8 +17,8 @@ public record DialogueView(
         List<MessageView> messages,
         Summary summary) {
 
-    /** 一个话题的进度。result 为 null 表示还没结束 */
-    public record TopicProgress(String title, String result) {
+    /** 一个话题的进度。result 为 null 表示还没结束；transfer = 正在做变式检验 */
+    public record TopicProgress(String title, String result, boolean transfer) {
     }
 
     /** 一条消息。role：STUDENT / AI；source：MODEL / TEMPLATE / RULE */

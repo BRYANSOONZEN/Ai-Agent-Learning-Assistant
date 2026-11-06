@@ -18,6 +18,7 @@ export const percent = (m) => (m == null ? '-' : Math.round(m * 100) + '%')
 export const TOPIC_RESULTS = {
   SELF_CORRECT: { label: '自己答出', cls: 'good' },
   HINT_CORRECT: { label: '提示后答出', cls: 'medium' },
-  REVEALED: { label: '看了讲解', cls: 'weak' },
+  REVEALED_APPLIED: { label: '讲解后会用', cls: 'medium' },
+  REVEALED: { label: '讲解后仍不会', cls: 'weak' },
   SKIPPED_IRRELEVANT: { label: '跳过', cls: 'none' },
 }

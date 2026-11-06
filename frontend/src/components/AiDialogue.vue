@@ -39,7 +39,8 @@ const listEl = ref(null)
 const resultLabels = {
   SELF_CORRECT: { text: '自己答对', type: 'success' },
   HINT_CORRECT: { text: '提示后答对', type: 'success' },
-  REVEALED: { text: '看了讲解', type: 'warning' },
+  REVEALED_APPLIED: { text: '讲解后会用', type: 'warning' },
+  REVEALED: { text: '讲解后仍不会', type: 'danger' },
   SKIPPED_IRRELEVANT: { text: '已跳过', type: 'info' },
 }
 
@@ -140,7 +141,7 @@ onMounted(async () => {
         <li v-for="t in opening?.topicTitles || []" :key="t">{{ t }}</li>
       </ol>
       <p class="muted">
-        用自己的话回答就好，不需要很完整。答错了 AI 会给提示；实在想不出来，可以点"我卡住了"。
+        用自己的话回答就好，不需要很完整，说错也没关系。AI 会一步步提示，不会直接给答案；想不出来可以点"我卡住了"。
       </p>
       <el-button
         type="primary"
@@ -172,7 +173,7 @@ onMounted(async () => {
             {{ resultLabels[t.result].text }}
           </el-tag>
           <el-tag v-else-if="i === dialogue.currentIdx && status !== 'FINISHED'" size="small">
-            进行中
+            {{ t.transfer ? '换个情境试试' : '进行中' }}
           </el-tag>
         </div>
       </aside>
@@ -184,7 +185,7 @@ onMounted(async () => {
             <span class="agent-avatar">✦</span>
             <div>
               <strong>AI 学习助手</strong>
-              <small>先引导，再讲解 · 不直接给答案</small>
+              <small>先自己想，再看讲解 · 不直接给答案</small>
             </div>
           </div>
           <span class="live" :class="{ off: status !== 'OPEN' }">
@@ -216,7 +217,7 @@ onMounted(async () => {
             <button type="button" class="hint-button" :disabled="!canTalk" @click="stuck">
               <span>✦</span> 我卡住了，给点提示
             </button>
-            <span class="hint-note">答错了 AI 会一步步提示，实在不会再看讲解</span>
+            <span class="hint-note">答错了 AI 会一步步提示；试过变式题后才显示完整讲解</span>
           </div>
           <div class="composer">
             <textarea

@@ -85,7 +85,7 @@ class TeacherTopicControllerTest {
                 .andExpect(jsonPath("$.data.totals.calls").value(1))
                 .andExpect(jsonPath("$.data.totals.inputTokens").value(100))
                 .andExpect(jsonPath("$.data.records[0].task").value("TOPIC_DRAFT"))
-                .andExpect(jsonPath("$.data.records[0].promptVersion").value("topic_draft_v1"))
+                .andExpect(jsonPath("$.data.records[0].promptVersion").value("topic_draft_v2"))
                 .andExpect(jsonPath("$.data.records[0].outputTokens").value(50))
                 .andExpect(jsonPath("$.data.records[0].success").value(true))
                 .andExpect(jsonPath("$.data.records[0].passedCheck").value(true));

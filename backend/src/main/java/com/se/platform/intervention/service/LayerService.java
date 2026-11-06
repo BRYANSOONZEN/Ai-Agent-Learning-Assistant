@@ -79,7 +79,8 @@ public class LayerService {
                 continue; // 这次对话没聊到这个知识点（或都被跳过），看更早的一次
             }
             String state = states.stream().anyMatch(st -> "REVEALED".equals(st.getResult())) ? BAD
-                    : states.stream().anyMatch(st -> "HINT_CORRECT".equals(st.getResult())) ? FAIR : GOOD;
+                    : states.stream().anyMatch(st -> "HINT_CORRECT".equals(st.getResult())
+                            || "REVEALED_APPLIED".equals(st.getResult())) ? FAIR : GOOD;
             List<TopicEvidence> topics = states.stream().map(st -> new TopicEvidence(titles.get(st.getTopicId()),
                     st.getResult(), st.getWrongCount(), st.getStuckCount())).toList();
             return new Concept(state, s.getId(), s.getUpdatedAt(), topics);
