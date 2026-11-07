@@ -1,11 +1,13 @@
 <script setup>
 // Card containing one ECharts chart. Pass an ECharts `option`; the shared theme is applied.
+// `plain` drops the card and title, for a chart that sits inside a section with its own heading.
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { CHART_THEME } from '@/styles/chart-theme'
 
 const props = defineProps({
-  title: { type: String, required: true },
+  title: { type: String, default: '' },
+  plain: { type: Boolean, default: false },
   option: { type: Object, required: true },
   height: { type: String, default: '320px' },
 })
@@ -34,8 +36,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-card">
-    <div class="chart-title">{{ title }}</div>
+  <div :class="{ 'app-card': !plain }">
+    <div v-if="title" class="chart-title">{{ title }}</div>
     <div ref="el" :style="{ height }" />
   </div>
 </template>

@@ -103,6 +103,48 @@ const quizOption = computed(() => {
   }
 })
 
+// ECharts pulls a missing value to the centre, which reads as 0%, so only dimensions with data are plotted
+const plotted = computed(() => profile.value.dimensions.filter((d) => d.value != null))
+const unplotted = computed(() => profile.value.dimensions.filter((d) => d.value == null))
+
+const radarOption = computed(() => {
+  const dims = plotted.value
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: () => dims.map((d) => `${d.label}：<b>${percent(d.value)}</b>`).join('<br/>'),
+    },
+    radar: {
+      center: ['50%', '52%'],
+      // narrower on a phone so the side labels stay inside the canvas
+      radius: window.innerWidth < 600 ? '50%' : '64%',
+      axisNameGap: 8,
+      splitNumber: 4,
+      indicator: dims.map((d) => ({ name: d.label, max: 1 })),
+      axisName: {
+        formatter: (name) => `{name|${name}}\n{value|${percent(dims.find((d) => d.label === name).value)}}`,
+        rich: {
+          name: { color: '#4a5a6c', fontSize: 12, lineHeight: 18, align: 'center' },
+          value: { color: '#1f2d3d', fontSize: 13, fontWeight: 700, lineHeight: 18, align: 'center' },
+        },
+      },
+      axisLine: { lineStyle: { color: '#dce5ed' } },
+      splitLine: { lineStyle: { color: '#edf1f5' } },
+      splitArea: { show: false },
+    },
+    series: [
+      {
+        type: 'radar',
+        symbolSize: 8,
+        lineStyle: { width: 2, color: PRIMARY },
+        itemStyle: { color: PRIMARY, borderColor: '#fff', borderWidth: 2 },
+        areaStyle: { color: PRIMARY, opacity: 0.14 },
+        data: [{ value: dims.map((d) => d.value), name: '六个维度' }],
+      },
+    ],
+  }
+})
+
 async function load() {
   loading.value = true
   try {
@@ -166,7 +208,7 @@ onMounted(load)
         </div>
       </section>
 
-      <!-- six dimensions: each a magnitude 0..100%, same hue; "数据不足" instead of a made-up number -->
+      <!-- six dimensions: the radar shows the shape, the list beside it gives each number and its reason -->
       <section class="app-card dims">
         <div class="sw-heading dims-head">
           <div>
@@ -177,13 +219,21 @@ onMounted(load)
             知识点详情在学情诊断<el-icon><Right /></el-icon>
           </router-link>
         </div>
-        <div v-for="d in profile.dimensions" :key="d.key" class="dim" :class="{ missing: d.value == null }">
-          <span class="dim-label">{{ d.label }}</span>
-          <span class="dim-track">
-            <span v-if="d.value != null" class="dim-fill" :style="{ width: Math.max(d.value * 100, 2) + '%' }" />
-          </span>
-          <span class="dim-value">{{ d.value == null ? '数据不足' : percent(d.value) }}</span>
-          <span class="dim-reason">{{ d.reason }}</span>
+        <div class="dims-body">
+          <div>
+            <ChartCard v-if="plotted.length >= 3" plain :option="radarOption" height="340px" />
+            <p v-else class="empty-note radar-empty">有数据的维度不足 3 个，多学几次就能画出图。</p>
+            <p v-if="plotted.length >= 3 && unplotted.length" class="radar-note">
+              {{ unplotted.map((d) => d.label).join('、') }}还没有数据，图上没有画。
+            </p>
+          </div>
+          <div class="dim-list">
+            <div v-for="d in profile.dimensions" :key="d.key" class="dim" :class="{ missing: d.value == null }">
+              <span class="dim-label">{{ d.label }}</span>
+              <span class="dim-value">{{ d.value == null ? '数据不足' : percent(d.value) }}</span>
+              <span class="dim-reason">{{ d.reason }}</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -284,34 +334,33 @@ onMounted(load)
 .dims-head {
   margin-bottom: 8px;
 }
+.dims-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 24px;
+}
+.radar-note {
+  margin: 4px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.radar-empty {
+  text-align: center;
+}
 .dim {
   display: grid;
-  grid-template-columns: 72px minmax(160px, 1fr) 70px minmax(0, 1.4fr);
-  align-items: center;
-  gap: 18px;
-  padding: 12px 0;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 0;
   border-top: 1px solid var(--el-border-color-lighter);
 }
-.dims-head + .dim {
+.dim:first-child {
   border-top: 0;
 }
 .dim-label {
   font-weight: 600;
-}
-.dim-track {
-  position: relative;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--el-fill-color);
-}
-.missing .dim-track {
-  background: repeating-linear-gradient(135deg, var(--el-fill-color) 0 4px, transparent 4px 8px);
-}
-.dim-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 4px;
-  background: var(--app-primary);
 }
 .dim-value {
   text-align: right;
@@ -324,6 +373,7 @@ onMounted(load)
   font-size: 12px;
 }
 .dim-reason {
+  grid-column: 1 / -1;
   color: var(--app-text-secondary);
   font-size: 13px;
   line-height: 1.5;
@@ -345,11 +395,8 @@ onMounted(load)
   .charts {
     grid-template-columns: 1fr;
   }
-  .dim {
-    grid-template-columns: 72px 1fr 70px;
-  }
-  .dim-reason {
-    grid-column: 1 / -1;
+  .dims-body {
+    grid-template-columns: 1fr;
   }
 }
 </style>
