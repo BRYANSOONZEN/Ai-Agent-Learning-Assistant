@@ -92,10 +92,14 @@ class DialogueFlowTest {
         return fake.requests().get(fake.requests().size() - 1).messages().get(0).content();
     }
 
-    /** 一直答错，走到变式题：3 级提示 + 3 条要点 */
+    /** 话题 1 一直答错，走到变式题：3 级提示 + 4 条要点 */
     private void wrongUntilTransfer() throws Exception {
+        wrongTimes(7);
+    }
+
+    private void wrongTimes(int n) throws Exception {
         fake.reply(WRONG);
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < n; i++) {
             say("50");
         }
     }
@@ -114,15 +118,20 @@ class DialogueFlowTest {
         say("0").andExpect(jsonPath("$.data.currentIdx").value(0));
         assertThat(everything()).doesNotContain(REVEAL_1);
 
-        // 模型说 correct 但只有 1 条 → 程序不信；三条齐了才算
-        fake.reply("{\"type\":\"partial\",\"hit_points\":[3],\"reply\":\"三个值齐了。\"}");
-        say("2").andExpect(jsonPath("$.data.currentIdx").value(1))
+        // 只给取值没说原因：还差原因这一条，不能结束
+        fake.reply("{\"type\":\"partial\",\"hit_points\":[3],\"reply\":\"三个值齐了，为什么要测这里？\"}");
+        say("2").andExpect(jsonPath("$.data.currentIdx").value(0))
+                .andExpect(jsonPath("$.data.topics[0].result").doesNotExist());
+
+        // 四条齐了才算
+        fake.reply("{\"type\":\"partial\",\"hit_points\":[4],\"reply\":\"对。\"}");
+        say("边界附近容易出错").andExpect(jsonPath("$.data.currentIdx").value(1))
                 .andExpect(jsonPath("$.data.topics[0].result").value("HINT_CORRECT"))
                 .andExpect(jsonPath("$.data.messages[-1].content", containsString("为什么要测边界附近")));
         assertThat(everything()).doesNotContain(REVEAL_1);
 
         mockMvc.perform(get("/api/ai/logs"))
-                .andExpect(jsonPath("$.data.records[0].promptVersion").value("dialogue_turn_v2"));
+                .andExpect(jsonPath("$.data.records[0].promptVersion").value("dialogue_turn_v3"));
     }
 
     @Test
@@ -150,12 +159,13 @@ class DialogueFlowTest {
         say("越过下边界的 0").andExpect(jsonPath("$.data.messages[-1].content", containsString("这里告诉你一条：正好在边界上的 1")));
 
         fake.reply(WRONG);
+        say("50").andExpect(jsonPath("$.data.messages[-1].content", containsString("这里告诉你一条：边界内侧的 2")));
         say("50").andExpect(jsonPath("$.data.messages[-1].content", containsString("某图书馆")))
                 .andExpect(jsonPath("$.data.topics[0].transfer").value(true));
         assertThat(everything()).doesNotContain(REVEAL_1);
 
         // 变式答全 → 讲解后会用，这时才显示完整讲解
-        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
+        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}");
         say("2、3、4").andExpect(jsonPath("$.data.topics[0].result").value("REVEALED_APPLIED"));
         assertThat(everything()).contains(REVEAL_1);
         assertThat(lastPrompt()).contains("某图书馆").contains("越过下边界的 2");
@@ -189,9 +199,41 @@ class DialogueFlowTest {
         fake.reply(WANT);
         say("告诉我答案").andExpect(jsonPath("$.data.messages[-1].content").value("先说说你的想法。"))
                 .andExpect(jsonPath("$.data.messages[-1].source").value("MODEL"));
-        stuck();
+        say("告诉我吧");
         say("直接说吧").andExpect(jsonPath("$.data.topics[0].result").value("SKIPPED_IRRELEVANT"));
         assertThat(everything()).doesNotContain(REVEAL_1);
+    }
+
+    @Test
+    void struggling_isEncouraged_doesNotSkip_untilTurnLimit() throws Exception {
+        start();
+        fake.reply("{\"type\":\"struggling\",\"hit_points\":[],\"reply\":\"没关系，先想想最少能买几件？\"}");
+        say("太难了").andExpect(jsonPath("$.data.messages[-1].content").value("没关系，先想想最少能买几件？"));
+        stuck();
+        say("我不会");
+        say("还是不会").andExpect(jsonPath("$.data.topics[0].result").doesNotExist())
+                .andExpect(jsonPath("$.data.messages[-1].source").value("MODEL"));
+        assertThat(lastPrompt()).contains("拆成一个很小");
+        assertThat(everything()).doesNotContain("这里告诉你一条").doesNotContain(REVEAL_1);
+
+        // 一直不作答：到轮数上限（8 轮）才跳过，仍然不给答案
+        for (int i = 0; i < 3; i++) {
+            stuck();
+        }
+        stuck().andExpect(jsonPath("$.data.topics[0].result").value("SKIPPED_IRRELEVANT"));
+        assertThat(everything()).doesNotContain(REVEAL_1);
+    }
+
+    @Test
+    void struggling_afterAttempt_raisesHintLevel() throws Exception {
+        start();
+        fake.reply(WRONG);
+        say("50");
+        fake.reply("{\"type\":\"struggling\",\"hit_points\":[],\"reply\":\"别急，再想想边界上呢？\"}");
+        say("好难").andExpect(jsonPath("$.data.messages[-1].content").value("别急，再想想边界上呢？"));
+        fake.reply(WRONG);
+        say("50");
+        assertThat(lastPrompt()).contains("拆成一个很小");
     }
 
     @Test
@@ -271,7 +313,7 @@ class DialogueFlowTest {
     @Test
     void promptOnlyHasCurrentTopic() throws Exception {
         start();
-        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
+        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}");
         say("第一个话题的特别回答");
         fake.reply(WRONG);
         say("第二个话题");
@@ -292,9 +334,9 @@ class DialogueFlowTest {
     void wholeDialogue_summaryShowsNewResults() throws Exception {
         start();
         wrongUntilTransfer();
-        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
+        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}");
         say("2、3、4");
-        wrongUntilTransfer();
+        wrongTimes(6); // 话题 2 只有 3 条要点
         say("不知道");
         say("还是不知道")
                 .andExpect(jsonPath("$.data.status").value("FINISHED"))

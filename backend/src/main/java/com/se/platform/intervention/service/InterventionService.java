@@ -296,7 +296,8 @@ public class InterventionService {
         String dialogue = switch (concept.state()) {
             case LayerService.GOOD -> "对话里自己答出";
             case LayerService.FAIR -> "对话里提示后答出";
-            case LayerService.BAD -> "对话里讲不出来（系统讲解）";
+            case LayerService.BAD -> concept.topics().stream().anyMatch(t -> "SKIPPED_IRRELEVANT".equals(t.result()))
+                    ? "对话里跳过了话题，没有作答" : "对话里讲解后仍不会";
             default -> "还没做对话";
         };
         return switch (type) {

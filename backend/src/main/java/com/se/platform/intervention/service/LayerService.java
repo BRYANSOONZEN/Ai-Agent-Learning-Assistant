@@ -20,8 +20,9 @@ import org.springframework.stereotype.Service;
 /**
  * 两层状态（docs/计划-干预A和B.md 第 1 节）：一个学生在一个知识点上
  * <ul>
- *   <li>概念层：AI 对话里考这个知识点的话题，看最近一次已结束的对话 —— 全部自己答出 good，有提示后答出 fair，
- *       有系统讲解 bad，没做过 none。答非所问被跳过的话题不算（那是态度，不是理解）</li>
+ *   <li>概念层：AI 对话里考这个知识点的话题，看最近一次已结束或暂停的对话 —— 全部自己答出 good，有提示后答出 fair，
+ *       有"讲解后仍不会"或跳过 bad，没做过 none。一次对话里全部跳过时，优先看更早的真实作答；
+ *       没有更早的作答才算 bad，这样跳过躲不开预警，也不会盖掉之前答对的结果</li>
  *   <li>应用层：练习题的掌握度 —— 作答不到 3 次 none（少于 3 次时掌握度被公式压低，不可信），≥ 0.6 good，否则 bad</li>
  * </ul>
  */
@@ -33,6 +34,7 @@ public class LayerService {
     public static final String BAD = "bad";
     public static final String NONE = "none";
 
+    private static final String SKIPPED = "SKIPPED_IRRELEVANT";
     static final int MIN_ATTEMPTS = 3;
     static final double PASS = 0.6;
 
@@ -64,28 +66,35 @@ public class LayerService {
         }
         List<DialogueSession> sessions = sessionMapper.selectList(new LambdaQueryWrapper<DialogueSession>()
                 .eq(DialogueSession::getStudentId, studentId)
-                .eq(DialogueSession::getStatus, DialogueSession.FINISHED)
+                .in(DialogueSession::getStatus, DialogueSession.FINISHED, DialogueSession.PAUSED)
                 .gt(after != null, DialogueSession::getCreatedAt, after)
                 .orderByDesc(DialogueSession::getUpdatedAt)
                 .orderByDesc(DialogueSession::getId));
+        Concept onlySkipped = null;
         for (DialogueSession s : sessions) {
             List<DialogueTopicState> states = stateMapper.selectList(new LambdaQueryWrapper<DialogueTopicState>()
                             .eq(DialogueTopicState::getSessionId, s.getId())
                             .in(DialogueTopicState::getTopicId, titles.keySet())
                             .orderByAsc(DialogueTopicState::getTopicIdx))
-                    .stream().filter(st -> st.getResult() != null && !"SKIPPED_IRRELEVANT".equals(st.getResult()))
-                    .toList();
+                    .stream().filter(st -> st.getResult() != null).toList();
             if (states.isEmpty()) {
-                continue; // 这次对话没聊到这个知识点（或都被跳过），看更早的一次
+                continue; // 这次对话没聊到这个知识点，看更早的一次
             }
-            String state = states.stream().anyMatch(st -> "REVEALED".equals(st.getResult())) ? BAD
+            String state = states.stream().anyMatch(st -> "REVEALED".equals(st.getResult())
+                            || SKIPPED.equals(st.getResult())) ? BAD
                     : states.stream().anyMatch(st -> "HINT_CORRECT".equals(st.getResult())
                             || "REVEALED_APPLIED".equals(st.getResult())) ? FAIR : GOOD;
             List<TopicEvidence> topics = states.stream().map(st -> new TopicEvidence(titles.get(st.getTopicId()),
                     st.getResult(), st.getWrongCount(), st.getStuckCount())).toList();
-            return new Concept(state, s.getId(), s.getUpdatedAt(), topics);
+            Concept concept = new Concept(state, s.getId(), s.getUpdatedAt(), topics);
+            if (states.stream().anyMatch(st -> !SKIPPED.equals(st.getResult()))) {
+                return concept;
+            }
+            if (onlySkipped == null) {
+                onlySkipped = concept; // 全部跳过：先记下，再看更早有没有真实作答
+            }
         }
-        return none;
+        return onlySkipped != null ? onlySkipped : none;
     }
 
     /** 应用层：mastery 表那一行（可能为空）和状态 */

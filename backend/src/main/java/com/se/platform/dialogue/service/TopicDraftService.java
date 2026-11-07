@@ -31,7 +31,7 @@ public class TopicDraftService {
 
     private final AiCallLogService callLog;
     private final ObjectMapper objectMapper;
-    private final PromptTemplate template = PromptTemplate.load("topic_draft_v2");
+    private final PromptTemplate template = PromptTemplate.load("topic_draft_v3");
 
     public TopicDraftService(AiCallLogService callLog, ObjectMapper objectMapper) {
         this.callLog = callLog;

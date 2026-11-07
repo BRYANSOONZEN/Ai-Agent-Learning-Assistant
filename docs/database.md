@@ -442,3 +442,4 @@ erDiagram
 | 2026-10-30 | v0.5 | 学生画像先不建 `student_profile` / `profile_tag`：打开页面时用 `learning_event`、`answer_record`、`mastery`、对话结果现算 | A |
 | 2026-10-30 | v0.6 | 实现 `recommendation`（首版只推题，`target_type = exercise`；加唯一约束 student_id + target_type + target_id）；`exercise.item_id` 为空表示题库题，只给推荐用；`answer_record.item_id` 为空表示在推荐页做的题 | A |
 | 2026-11-03 | v0.7 | 实现 `alert`、`intervention`（按两层判断 A / B / AB，字段见 4.4）；`recommendation` 加 `source`、`intervention_id`；`dialogue_topic` 加 `knowledge_point_id`（话题考哪个知识点，概念层） | A |
+| 2026-11-07 | v0.8 | 对话重新设计：`dialogue_topic` 加 `transfer_question`、`transfer_points`、`transfer_reveal`；`dialogue_topic_state.result` 增加 `REVEALED_APPLIED`；`dialogue_message.judged_type` 增加 `STRUGGLING`、`CLARIFY` | A |

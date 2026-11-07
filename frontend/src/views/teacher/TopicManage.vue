@@ -280,7 +280,7 @@ onMounted(async () => {
                 placeholder="例：某网上商城规定每单购买数量为 1 到 99 件。测试下限时，你会挑哪几个数量来测？"
               />
             </el-form-item>
-            <el-form-item label="参考答案（也作为错两次后的讲解原文）" required>
+            <el-form-item label="参考答案（也作为学生答完变式题后的讲解原文）" required>
               <el-input
                 v-model="form.answer"
                 type="textarea"

@@ -2,6 +2,7 @@
 
 > 适用版本：新版规划（老师 7 步、学生 6 个模块）。
 > 首版只实现**学生侧的 AI 对话**：章节对话和错题讲解，共用一套代码。老师侧的 AI 起草（片段分类、话题起草、概要起草、题目配知识点）先用手动录入代替，第二阶段再接。
+> **2026-11-07 更新：** 对话规则已改成"不直接给解"，现行规则见下面的规则表和 `docs/计划-AI对话重新设计.md`。标了"第一版"的章节和提示词 v1 的内容只作历史记录；现行提示词是 `dialogue_turn_v3`、`topic_draft_v3`。
 > 技术栈：Spring Boot 3.5 + Java 21 + MyBatis-Plus，不另起 Python 服务。
 
 ---
@@ -273,7 +274,7 @@ hit_points 填学生这句话答到的要点编号（从 1 开始）。
 
 ```java
 public record Judgement(JudgedType type, List<Integer> hitPoints, String reply) {}
-public enum JudgedType { CORRECT, PARTIAL, WRONG, IRRELEVANT, WANT_ANSWER, OFF_TOPIC }
+public enum JudgedType { CORRECT, PARTIAL, WRONG, IRRELEVANT, WANT_ANSWER, STRUGGLING, OFF_TOPIC, CLARIFY }
 ```
 
 `JudgementParser`：用 Jackson 解析；字段缺失或 type 不在 6 种之内，抛 `AiCallException("格式不对")`。
@@ -294,22 +295,27 @@ public enum JudgedType { CORRECT, PARTIAL, WRONG, IRRELEVANT, WANT_ANSWER, OFF_T
 输入：当前话题状态 + 本轮事件（学生发言的判断结果，或"我卡住了"）＋ 规则参数。
 输出：下一步动作 `NextAction`，以及要更新的状态。
 
-| 事件 | 条件 | 动作 | 话题结果 |
+| 这一句 | 条件 | 系统做什么 | 话题结果 |
 |---|---|---|---|
-| CORRECT | 之前没错过、没卡住、没用提示 | NEXT_TOPIC | SELF_CORRECT |
-| CORRECT | 其他 | NEXT_TOPIC | HINT_CORRECT |
-| PARTIAL / WRONG | 错误次数 +1 后 < 2 | HINT（显示模型的 reply） | — |
-| PARTIAL / WRONG | 错误次数 +1 后 ≥ 2 | REVEAL（显示老师的讲解原文） | REVEALED |
-| 我卡住了 / WANT_ANSWER | 卡住次数 +1 后 < 2 | HINT（显示下一条预写提示） | — |
-| 我卡住了 / WANT_ANSWER | 卡住次数 +1 后 ≥ 2 | REVEAL | REVEALED |
-| IRRELEVANT | 无关次数 +1 后 < 2 | CONTINUE（显示"我们先回到这个问题"＋简单问法） | — |
-| IRRELEVANT | 无关次数 +1 后 ≥ 2 | SKIP（显示讲解原文，进入下一话题） | SKIPPED_IRRELEVANT |
-| SKIP 之后 | 连续无关话题 ≥ 2 | PAUSE | — |
-| OFF_TOPIC | — | CONTINUE（显示"课件里没有这部分内容"＋重复问题） | — |
-| 任何 NEXT_TOPIC / REVEAL / SKIP | 已是最后一个话题 | FINISH | — |
-| REVIEW 的话题结束 | 有变式题 | 先出变式题，答完再 NEXT_TOPIC | 另记 variant_correct |
+| correct | 要点全齐，之前没错、没卡住、没用提示 | 模型一句肯定，进入下一个话题 | SELF_CORRECT 自己答对 |
+| correct | 要点全齐，其他情况 | 模型一句肯定，进入下一个话题 | HINT_CORRECT 提示后答对 |
+| wrong / partial | 有新要点 | 模型肯定并追问，不升级 | — |
+| wrong / partial | 没有新要点 | 升一级提示（L1→L2→L3），L3 之后一次给一条要点；要点都有了就出变式题 | — |
+| want_answer | 作答过 | 同上：升一级，L3 之后给要点 | — |
+| want_answer | 从没作答 | 模型提示，请学生先试；累计 3 次跳过，不给答案 | 第 3 次 SKIPPED_IRRELEVANT |
+| struggling（说不会、太难，或点"我卡住了"） | 作答过 | 同上：升一级，L3 之后给要点 | — |
+| struggling | 从没作答 | 模型鼓励并提示，最多到 L3，不给要点，不累计跳过 | — |
+| irrelevant | 第 1 次 | 模型接话并提醒回到问题 | — |
+| irrelevant | 第 2 次 | 跳过，不给答案 | SKIPPED_IRRELEVANT |
+| clarify / off_topic | 不计次 | 模型解释题意，或说明资料里没有 | — |
+| 到 8 轮上限 | 作答过进入变式；没作答过跳过 | 都不显示答案 | 没作答过 SKIPPED_IRRELEVANT |
+| 变式题作答 | 答全 | 显示完整讲解 | REVEALED_APPLIED 讲解后会用 |
+| 变式题作答 | 第 2 次仍没答全 | 显示变式答案和完整讲解 | REVEALED 讲解后仍不会 |
+| 变式阶段 want_answer / irrelevant | 累计 3 次 | 结束，不显示答案 | REVEALED |
+| 变式阶段 struggling | 不累计 | 继续提示，到 8 轮上限结束 | — |
+| 跳过之后 | 连续跳过 2 个话题（且不是最后一个） | 暂停，等学生点"继续对话" | — |
 
-规则参数（2 次、2 次、2 次）放在配置里，老师可以按章节修改。
+规则参数是 `DialogueRules` 里的常量，现在还不能按章节修改。
 
 **验证**：`DialogueRulesTest` 把上表每一行写成一个测试用例。这一步完全不需要 API。
 

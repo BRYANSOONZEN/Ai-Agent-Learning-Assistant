@@ -85,7 +85,7 @@ class TeacherTopicControllerTest {
                 .andExpect(jsonPath("$.data.totals.calls").value(1))
                 .andExpect(jsonPath("$.data.totals.inputTokens").value(100))
                 .andExpect(jsonPath("$.data.records[0].task").value("TOPIC_DRAFT"))
-                .andExpect(jsonPath("$.data.records[0].promptVersion").value("topic_draft_v2"))
+                .andExpect(jsonPath("$.data.records[0].promptVersion").value("topic_draft_v3"))
                 .andExpect(jsonPath("$.data.records[0].outputTokens").value(50))
                 .andExpect(jsonPath("$.data.records[0].success").value(true))
                 .andExpect(jsonPath("$.data.records[0].passedCheck").value(true));
@@ -136,7 +136,7 @@ class TeacherTopicControllerTest {
         mockMvc.perform(get("/api/teacher/topics"))
                 .andExpect(jsonPath("$.data", hasSize(2)))
                 .andExpect(jsonPath("$.data[0].title").value("下边界取哪些值"))
-                .andExpect(jsonPath("$.data[0].keyPoints", hasSize(3)));
+                .andExpect(jsonPath("$.data[0].keyPoints", hasSize(4)));
     }
 
     @Test

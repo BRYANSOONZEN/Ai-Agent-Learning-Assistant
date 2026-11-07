@@ -1,5 +1,6 @@
 package com.se.platform.intervention;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -18,6 +19,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -46,6 +48,9 @@ class InterventionControllerTest {
 
     @Autowired
     private FakeAiClient fake;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private ResultActions board() throws Exception {
         return mockMvc.perform(get("/api/interventions/board").param("courseId", "1"));
@@ -155,7 +160,7 @@ class InterventionControllerTest {
         String started = mockMvc.perform(as(8, post("/api/dialogue/sessions")).param("chapterId", "1")
                 .param("itemId", "3")).andReturn().getResponse().getContentAsString();
         int sessionId = JsonPath.read(started, "$.data.sessionId");
-        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
+        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}");
         say(8, sessionId, "0、1、2");
         fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
         say(8, sessionId, "边界条件容易写错，只有边界附近能发现，中间值发现不了")
@@ -185,7 +190,7 @@ class InterventionControllerTest {
         String started = mockMvc.perform(as(11, post("/api/dialogue/sessions")).param("chapterId", "1")
                 .param("itemId", "3")).andReturn().getResponse().getContentAsString();
         int sessionId = JsonPath.read(started, "$.data.sessionId");
-        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
+        fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}");
         say(11, sessionId, "0、1、2");
         fake.reply("{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}");
         say(11, sessionId, "边界条件容易写错");
@@ -236,6 +241,133 @@ class InterventionControllerTest {
                         .content("{\"approve\": true, \"exerciseIds\": [3], \"note\": \"先把第 3 题做对\"}"))
                 .andExpect(jsonPath("$.data.exercises[*].exerciseId", Matchers.contains(3)))
                 .andExpect(jsonPath("$.data.note").value("先把第 3 题做对"));
+    }
+
+    private static final String WRONG = "{\"type\":\"wrong\",\"hit_points\":[],\"reply\":\"再想想。\"}";
+    private static final String TOPIC1_ALL = "{\"type\":\"correct\",\"hit_points\":[1,2,3,4],\"reply\":\"对。\"}";
+    private static final String TOPIC2_ALL = "{\"type\":\"correct\",\"hit_points\":[1,2,3],\"reply\":\"对。\"}";
+    private static final String HAHA = "{\"type\":\"irrelevant\",\"hit_points\":[],\"reply\":\"回到题目吧。\"}";
+
+    private int startDialogue(long studentId) throws Exception {
+        String started = mockMvc.perform(as(studentId, post("/api/dialogue/sessions")).param("chapterId", "1")
+                .param("itemId", "3")).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(started, "$.data.sessionId");
+    }
+
+    /** 话题 1 一直答错走到变式题（3 级提示 + 4 条要点） */
+    private void topic1WrongUntilTransfer(long studentId, int sessionId) throws Exception {
+        fake.reply(WRONG);
+        for (int i = 0; i < 7; i++) {
+            say(studentId, sessionId, "50");
+        }
+    }
+
+    /** 跳过当前话题：连说两次"哈哈" */
+    private void skipTopic(long studentId, int sessionId) throws Exception {
+        fake.reply(HAHA);
+        say(studentId, sessionId, "哈哈");
+        say(studentId, sessionId, "嘿嘿");
+    }
+
+    private List<String> alertTypes(int studentId) throws Exception {
+        return JsonPath.read(board().andReturn().getResponse().getContentAsString(),
+                "$.data.alerts[?(@.studentId == " + studentId + ")].type");
+    }
+
+    private void readChapter(long studentId) throws Exception {
+        mockMvc.perform(as(studentId, post("/api/learn/events")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\":\"view_item\",\"itemId\":1,\"durationSec\":120}"));
+    }
+
+    @Test
+    void revealedApplied_doesNotRaiseB() throws Exception {
+        int sessionId = startDialogue(9);
+        topic1WrongUntilTransfer(9, sessionId);
+        fake.reply(TOPIC1_ALL);
+        say(9, sessionId, "2、3、4").andExpect(jsonPath("$.data.topics[0].result").value("REVEALED_APPLIED"));
+        fake.reply(TOPIC2_ALL);
+        say(9, sessionId, "边界条件容易写错").andExpect(jsonPath("$.data.status").value("FINISHED"));
+
+        assertThat(alertTypes(9)).isEmpty();
+    }
+
+    @Test
+    void revealedStillWrong_raisesB() throws Exception {
+        int sessionId = startDialogue(9);
+        topic1WrongUntilTransfer(9, sessionId);
+        say(9, sessionId, "不知道");
+        say(9, sessionId, "选 5").andExpect(jsonPath("$.data.topics[0].result").value("REVEALED"));
+        fake.reply(TOPIC2_ALL);
+        say(9, sessionId, "边界条件容易写错");
+
+        assertThat(alertTypes(9)).containsExactly("B");
+    }
+
+    @Test
+    void skippingWithoutEarlierAnswers_raisesB_andEvidenceSaysSkipped() throws Exception {
+        int sessionId = startDialogue(5);
+        skipTopic(5, sessionId);
+        skipTopic(5, sessionId);
+
+        String body = board().andReturn().getResponse().getContentAsString();
+        assertThat(alertTypes(5)).containsExactly("B", "B");
+        List<String> results = JsonPath.read(body, "$.data.alerts[?(@.studentId == 5)].evidence.topics[0].result");
+        assertThat(results).containsOnly("SKIPPED_IRRELEVANT");
+        List<String> messages = JsonPath.read(body, "$.data.alerts[?(@.studentId == 5)].message");
+        assertThat(messages).allMatch(m -> m.contains("跳过了话题"));
+    }
+
+    @Test
+    void skippingAfterGoodAnswers_keepsEarlierResult_noAlert() throws Exception {
+        int sessionId = startDialogue(9); // 学生05 之前的对话自己答出
+        skipTopic(9, sessionId);
+        skipTopic(9, sessionId);
+
+        assertThat(alertTypes(9)).isEmpty();
+    }
+
+    @Test
+    void pausedAfterSkips_stillRaisesB() throws Exception {
+        // 3 个话题时，连续跳过 2 个就暂停，对话不会结束
+        jdbc.update("INSERT INTO dialogue_topic (chapter_id, item_id, knowledge_point_id, sort_order, title, question, "
+                + "key_points, reveal_text) VALUES (1, 3, 2, 2, '第三个话题', '问题', '[\"要点\"]', '讲解')");
+        int sessionId = startDialogue(5);
+        skipTopic(5, sessionId);
+        fake.reply(HAHA);
+        say(5, sessionId, "哈哈");
+        say(5, sessionId, "嘿嘿").andExpect(jsonPath("$.data.status").value("PAUSED"));
+
+        assertThat(alertTypes(5)).containsExactly("B", "B");
+    }
+
+    @Test
+    void reviewB_redoEndsRevealedApplied_isEffective() throws Exception {
+        approve(suggestionOf(board().andReturn().getResponse().getContentAsString(), 8));
+        readChapter(8);
+
+        int sessionId = startDialogue(8);
+        topic1WrongUntilTransfer(8, sessionId);
+        fake.reply(TOPIC1_ALL);
+        say(8, sessionId, "2、3、4");
+        fake.reply(TOPIC2_ALL);
+        say(8, sessionId, "边界条件容易写错");
+
+        board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].afterValue").value("fair"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].effective").value(true));
+    }
+
+    @Test
+    void reviewB_redoBySkipping_isNotEffective() throws Exception {
+        approve(suggestionOf(board().andReturn().getResponse().getContentAsString(), 8));
+        readChapter(8);
+
+        int sessionId = startDialogue(8);
+        skipTopic(8, sessionId);
+        skipTopic(8, sessionId);
+
+        board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].status").value("done"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].afterValue").value("bad"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].effective").value(false));
     }
 
     private ResultActions say(long studentId, int sessionId, String text) throws Exception {

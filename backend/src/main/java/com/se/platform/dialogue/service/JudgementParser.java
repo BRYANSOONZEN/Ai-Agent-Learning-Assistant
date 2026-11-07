@@ -31,7 +31,7 @@ public class JudgementParser {
         try {
             type = JudgedType.valueOf(json.path("type").asText("").trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new AiCallException("格式不对：type 不在 7 种之内");
+            throw new AiCallException("格式不对：type 不在 8 种之内");
         }
         List<Integer> hits = new ArrayList<>();
         for (JsonNode n : json.path("hit_points")) {

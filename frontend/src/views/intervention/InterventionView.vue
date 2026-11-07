@@ -181,7 +181,7 @@ onMounted(async () => {
                 <ul v-if="active.evidence.topics.length" class="facts">
                   <li v-for="t in active.evidence.topics" :key="t.title">
                     <span>{{ t.title }}</span>
-                    <span class="sw-tag" :class="t.result === 'REVEALED' ? 'red' : 'teal'">
+                    <span class="sw-tag" :class="['REVEALED', 'SKIPPED_IRRELEVANT'].includes(t.result) ? 'red' : 'teal'">
                       {{ TOPIC_RESULTS[t.result]?.label || t.result }}
                     </span>
                     <small>答错 {{ t.wrongCount }} 次，卡住 {{ t.stuckCount }} 次</small>

@@ -37,7 +37,7 @@ public class DialogueRules {
     }
 
     /**
-     * 作答阶段：学生发了一句话，或点了"我卡住了"（type = WANT_ANSWER）。
+     * 作答阶段：学生发了一句话，或点了"我卡住了"（type = STRUGGLING）。
      *
      * @param newPoint  这一句答到了之前没答到的要点
      * @param uncovered 这一句之后，还有几条要点既没答到也没给出
@@ -61,6 +61,10 @@ public class DialogueRules {
             case WANT_ANSWER -> {
                 s.setStuckCount(s.getStuckCount() + 1);
                 yield s.getAnswerCount() > 0 ? escalate(s) : refuse(s);
+            }
+            case STRUGGLING -> {
+                s.setStuckCount(s.getStuckCount() + 1);
+                yield s.getAnswerCount() > 0 ? escalate(s) : encourage(s);
             }
             case IRRELEVANT -> {
                 s.setIrrelevantCount(s.getIrrelevantCount() + 1);
@@ -107,6 +111,10 @@ public class DialogueRules {
                 }
                 yield new Decision(type == JudgedType.WANT_ANSWER ? NextAction.HINT : NextAction.CONTINUE, null);
             }
+            case STRUGGLING -> {
+                s.setStuckCount(s.getStuckCount() + 1);
+                yield new Decision(NextAction.HINT, null);
+            }
             case OFF_TOPIC, CLARIFY -> new Decision(NextAction.CONTINUE, null);
         };
         if (d.result() != null || s.getTurnCount() < MAX_TURNS) {
@@ -141,9 +149,11 @@ public class DialogueRules {
     /** 从没作答就要答案：给提示、不给答案，累计到上限就跳过 */
     private Decision refuse(DialogueTopicState s) {
         s.setRefuseCount(s.getRefuseCount() + 1);
-        if (s.getRefuseCount() >= MAX_REFUSE) {
-            return finish(s, NextAction.SKIP, TopicResult.SKIPPED_IRRELEVANT);
-        }
+        return s.getRefuseCount() >= MAX_REFUSE ? finish(s, NextAction.SKIP, TopicResult.SKIPPED_IRRELEVANT) : encourage(s);
+    }
+
+    /** 从没作答但说不会：提示升到 L3 为止，不给要点，也不累计跳过；到轮数上限才跳过 */
+    private Decision encourage(DialogueTopicState s) {
         s.setHintLevel(Math.min(s.getHintLevel() + 1, MAX_HINT_LEVEL));
         return new Decision(NextAction.HINT, null);
     }

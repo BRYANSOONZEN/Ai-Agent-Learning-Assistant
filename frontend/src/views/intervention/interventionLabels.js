@@ -4,14 +4,14 @@
  */
 export const ALERT_TYPES = {
   A: { label: 'A 应用问题', short: '应用', tag: 'orange', hint: '对话讲得出，换个情境做题就错' },
-  B: { label: 'B 概念问题', short: '概念', tag: 'purple', hint: '题做得对，对话里讲不出道理' },
+  B: { label: 'B 概念问题', short: '概念', tag: 'purple', hint: '对话里没讲出道理，或跳过了不作答' },
   AB: { label: 'A + B 两层都不好', short: '两层', tag: 'red', hint: '概念没懂，题也做不对：先补概念再练习' },
 }
 
 export const CONCEPT = {
   good: { label: '自己答出', tag: 'teal' },
   fair: { label: '提示后答出', tag: 'teal' },
-  bad: { label: '讲不出来（系统讲解）', tag: 'red' },
+  bad: { label: '讲解后仍不会或跳过', tag: 'red' },
   none: { label: '还没做对话', tag: 'gray' },
 }
 

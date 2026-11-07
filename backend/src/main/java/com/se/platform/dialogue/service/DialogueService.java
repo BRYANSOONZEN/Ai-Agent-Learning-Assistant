@@ -58,7 +58,7 @@ public class DialogueService {
     private final AiCallLogService callLog;
     private final JudgementParser parser;
     private final DialogueRules rules;
-    private final PromptTemplate turnTemplate = PromptTemplate.load("dialogue_turn_v2");
+    private final PromptTemplate turnTemplate = PromptTemplate.load("dialogue_turn_v3");
 
     public DialogueService(DialogueTopicService topicService, DialogueSessionMapper sessionMapper,
                            DialogueTopicStateMapper stateMapper, DialogueMessageMapper messageMapper,
@@ -125,7 +125,7 @@ public class DialogueService {
     /** 学生点"我卡住了"：也调模型，回复才能接上刚才的对话；是否算进展不看模型 */
     @Transactional
     public DialogueView stuck(Long sessionId) {
-        return turn(sessionId, "（我卡住了）", "我卡住了，想不出来", JudgedType.WANT_ANSWER);
+        return turn(sessionId, "（我卡住了）", "我卡住了，想不出来", JudgedType.STRUGGLING);
     }
 
     /** 暂停后继续 */

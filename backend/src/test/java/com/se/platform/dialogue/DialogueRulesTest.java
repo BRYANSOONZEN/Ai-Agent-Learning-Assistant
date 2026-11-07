@@ -96,6 +96,42 @@ class DialogueRulesTest {
     }
 
     @Test
+    void struggling_neverAttempted_raisesHintToL3_noPoints_noSkip() {
+        for (int i = 0; i < 5; i++) {
+            Decision d = rules.onAnswer(s, JudgedType.STRUGGLING, false, 3);
+            assertThat(d.action()).isEqualTo(NextAction.HINT);
+            assertThat(d.result()).isNull();
+        }
+        assertThat(s.getHintLevel()).isEqualTo(DialogueRules.MAX_HINT_LEVEL);
+        assertThat(s.getRefuseCount()).isZero();
+    }
+
+    @Test
+    void struggling_neverAttempted_skipsOnlyAtTurnLimit() {
+        for (int i = 0; i < DialogueRules.MAX_TURNS - 1; i++) {
+            rules.onAnswer(s, JudgedType.STRUGGLING, false, 3);
+        }
+        assertThat(rules.onAnswer(s, JudgedType.STRUGGLING, false, 3).action()).isEqualTo(NextAction.SKIP);
+    }
+
+    @Test
+    void struggling_afterAttempt_escalatesToPoints() {
+        wrong(3);
+        rules.onAnswer(s, JudgedType.STRUGGLING, false, 3);
+        rules.onAnswer(s, JudgedType.STRUGGLING, false, 3);
+        assertThat(rules.onAnswer(s, JudgedType.STRUGGLING, false, 3).action()).isEqualTo(NextAction.GIVE_POINT);
+    }
+
+    @Test
+    void transfer_struggling_keepsHinting_doesNotCountAsRefusal() {
+        rules.startTransfer(s);
+        for (int i = 0; i < DialogueRules.MAX_REFUSE; i++) {
+            assertThat(rules.onTransfer(s, JudgedType.STRUGGLING, false, true).action()).isEqualTo(NextAction.HINT);
+        }
+        assertThat(s.getRefuseCount()).isZero();
+    }
+
+    @Test
     void irrelevantOnce_continues_twice_skips() {
         assertThat(rules.onAnswer(s, JudgedType.IRRELEVANT, false, 3).action()).isEqualTo(NextAction.CONTINUE);
         Decision d = rules.onAnswer(s, JudgedType.IRRELEVANT, false, 3);
