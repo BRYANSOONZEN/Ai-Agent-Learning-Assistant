@@ -6,13 +6,14 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
- * 演示身份（临时）：登录还没做，"当前学生"默认是 5 号（学生01）。
- * 请求头带 X-Demo-Student-Id 时改用那个学生，方便在浏览器里演示不同学生（如干预）。
- * 后端登录做好后，改成从登录信息里取当前用户，删掉这个类。
+ * 演示身份：只在关掉登录检查时用（platform.auth.enabled=false，单元测试默认关掉）。
+ * 正常运行时当前用户来自令牌，见 {@link CurrentUser}。
+ * 测试里"当前学生"默认是 5 号（学生01），请求头带 X-Demo-Student-Id 时改用那个学生；"当前老师"是 2 号（李老师）。
  */
 public final class DemoIdentity {
 
     public static final long DEFAULT_STUDENT_ID = 5L;
+    public static final long DEFAULT_TEACHER_ID = 2L;
     public static final String HEADER = "X-Demo-Student-Id";
 
     private DemoIdentity() {

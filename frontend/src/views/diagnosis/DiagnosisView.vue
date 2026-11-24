@@ -10,7 +10,7 @@ import CourseDiagnosis from './CourseDiagnosis.vue'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
-const isTeacher = computed(() => ['teacher', 'admin'].includes(userStore.role))
+const isTeacher = computed(() => userStore.role === 'teacher')
 </script>
 
 <template>

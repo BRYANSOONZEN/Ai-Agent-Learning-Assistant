@@ -22,6 +22,11 @@ export function reviewIntervention(id, data) {
   return request.post(`/interventions/${id}/review`, data)
 }
 
+// POST /api/interventions/{id}/revoke: take back one that is running (mostly the automatic ones)
+export function revokeIntervention(id) {
+  return request.post(`/interventions/${id}/revoke`)
+}
+
 // PUT /api/alerts/{id} { status: 'ignored' }
 export function ignoreAlert(id) {
   return request.put(`/alerts/${id}`, { status: 'ignored' })
@@ -30,4 +35,9 @@ export function ignoreAlert(id) {
 // GET /api/interventions/mine -> { running: [...], done: [...] }
 export function getMyAssignments() {
   return request.get('/interventions/mine')
+}
+
+// PUT /api/interventions/{id}/due { dueAt: 'yyyy-MM-dd HH:mm:ss' } -> change the deadline of a running intervention
+export function changeInterventionDue(id, dueAt) {
+  return request.put(`/interventions/${id}/due`, { dueAt })
 }

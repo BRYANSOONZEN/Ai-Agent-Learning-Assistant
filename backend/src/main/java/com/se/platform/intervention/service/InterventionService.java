@@ -20,8 +20,10 @@ import com.se.platform.course.mapper.ExerciseMapper;
 import com.se.platform.course.mapper.KnowledgePointMapper;
 import com.se.platform.course.service.CourseService;
 import com.se.platform.course.service.ExerciseService;
+import com.se.platform.diagnosis.dto.DiagnosisDtos.ClassPoint;
 import com.se.platform.diagnosis.entity.Mastery;
 import com.se.platform.diagnosis.mapper.MasteryMapper;
+import com.se.platform.diagnosis.service.DiagnosisService;
 import com.se.platform.dialogue.entity.DialogueSession;
 import com.se.platform.dialogue.mapper.DialogueSessionMapper;
 import com.se.platform.intervention.dto.InterventionDtos.AlertView;
@@ -30,6 +32,7 @@ import com.se.platform.intervention.dto.InterventionDtos.AssignedDialogue;
 import com.se.platform.intervention.dto.InterventionDtos.AssignedExercise;
 import com.se.platform.intervention.dto.InterventionDtos.AssignedItem;
 import com.se.platform.intervention.dto.InterventionDtos.Board;
+import com.se.platform.intervention.dto.InterventionDtos.ClassAlert;
 import com.se.platform.intervention.dto.InterventionDtos.Counts;
 import com.se.platform.intervention.dto.InterventionDtos.Evidence;
 import com.se.platform.intervention.dto.InterventionDtos.InterventionView;
@@ -59,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,6 +75,10 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>看效果：读取时检查学生做完没有，做完记下前后数据和是否有效</li>
  * </ol>
  * 建议和留言都用模板生成，不调 AI。
+ *
+ * <p>新方向（docs/计划-个人学习助手.md 第 11 节）：A、B、AB 扫描出来后都<b>自动执行</b>，老师事后可以撤回、改期限
+ * （2026-11-22 起 AB 也自动，之前 AB 要老师审核）。老师主要看<b>全班预警</b>：某知识点薄弱的人太多。
+ * 配置 platform.intervention.auto-approve=false 可以回到"全部由老师审核"。
  */
 @Service
 public class InterventionService {
@@ -80,6 +88,22 @@ public class InterventionService {
     /** 主要误解至少出现几次才算"错因明确" */
     static final int MIN_MISCONCEPTION = 2;
     static final double HIGH_LEVEL_BELOW = 0.4;
+    /** 全班预警：薄弱人数 / 练过人数超过这个比例 */
+    static final double CLASS_WEAK_RATIO = 0.3;
+    /** 全班预警：练过的人少于这个数，比例不可信，不报 */
+    static final int CLASS_MIN_PRACTICED = 5;
+    /** 老师指定的期限最长几天 */
+    static final int MAX_DUE_DAYS = 60;
+
+    /**
+     * 扫描会新建预警。老师端打开干预页时 board 和 open-count 两个请求会同时到，学生端也会扫描自己；
+     * 同时扫描会把同一条预警建两次。控制器调用扫描相关的方法时都先锁住它，一次只扫一个。
+     * 锁要加在控制器里（事务外面），这样前一次的事务提交之后，下一次才开始读。
+     */
+    public static final Object SCAN_LOCK = new Object();
+
+    /** A、B 是否自动执行；默认是 */
+    private boolean autoApprove = true;
 
     private final AlertMapper alertMapper;
     private final InterventionMapper interventionMapper;
@@ -97,6 +121,7 @@ public class InterventionService {
     private final CourseService courseService;
     private final CourseMapper courseMapper;
     private final ExerciseService exerciseService;
+    private final DiagnosisService diagnosisService;
     private final ObjectMapper objectMapper;
 
     public InterventionService(AlertMapper alertMapper, InterventionMapper interventionMapper,
@@ -107,7 +132,7 @@ public class InterventionService {
                                ChapterItemMapper itemMapper, RecommendationMapper recommendationMapper,
                                DialogueSessionMapper sessionMapper, CourseService courseService,
                                CourseMapper courseMapper, ExerciseService exerciseService,
-                               ObjectMapper objectMapper) {
+                               DiagnosisService diagnosisService, ObjectMapper objectMapper) {
         this.alertMapper = alertMapper;
         this.interventionMapper = interventionMapper;
         this.layerService = layerService;
@@ -124,7 +149,22 @@ public class InterventionService {
         this.courseService = courseService;
         this.courseMapper = courseMapper;
         this.exerciseService = exerciseService;
+        this.diagnosisService = diagnosisService;
         this.objectMapper = objectMapper;
+    }
+
+    /** 干预的默认期限：开始执行后几天内做完。application.yml：platform.intervention.due-days，不写就是 7 */
+    private int dueDays = 7;
+
+    @Value("${platform.intervention.due-days:7}")
+    public void setDueDays(int dueDays) {
+        this.dueDays = dueDays;
+    }
+
+    /** application.yml：platform.intervention.auto-approve，不写就是 true */
+    @Value("${platform.intervention.auto-approve:true}")
+    public void setAutoApprove(boolean autoApprove) {
+        this.autoApprove = autoApprove;
     }
 
     // ------------------------------------------------------------------ 老师：总览
@@ -150,15 +190,40 @@ public class InterventionService {
                         .thenComparing(Alert::getId))
                 .map(a -> alertView(a, pendingByAlert.get(a.getId()))).toList();
         List<InterventionView> interventions = all.stream()
-                .filter(iv -> Intervention.APPROVED.equals(iv.getStatus()) || Intervention.DONE.equals(iv.getStatus()))
+                .filter(iv -> Intervention.APPROVED.equals(iv.getStatus()) || Intervention.DONE.equals(iv.getStatus())
+                        || Intervention.REVOKED.equals(iv.getStatus()))
                 .map(iv -> view(iv, true)).toList();
         int effective = (int) all.stream().filter(iv -> Boolean.TRUE.equals(iv.getEffective())).count();
         int ineffective = (int) all.stream().filter(iv -> Boolean.FALSE.equals(iv.getEffective())).count();
         Counts counts = new Counts(alerts.size(),
                 (int) all.stream().filter(iv -> Intervention.APPROVED.equals(iv.getStatus())).count(),
                 (int) all.stream().filter(iv -> Intervention.DONE.equals(iv.getStatus())).count(),
-                effective, ineffective);
-        return new Board(courseId, course.getName(), counts, alerts, interventions);
+                effective, ineffective,
+                (int) all.stream().filter(InterventionService::overdue).count());
+        return new Board(courseId, course.getName(), counts, classAlerts(courseId), alerts, interventions);
+    }
+
+    /**
+     * 全班预警：直接用学情诊断页已经算好的全班统计（每个知识点练过几人、薄弱几人、最常见误解），
+     * 练过的人够多、薄弱比例超过阈值就报。不存表，每次打开时现算。
+     */
+    public List<ClassAlert> classAlerts(Long courseId) {
+        List<ClassAlert> list = new ArrayList<>();
+        for (ClassPoint p : diagnosisService.course(courseId).points()) {
+            if (p.practicedStudents() < CLASS_MIN_PRACTICED) {
+                continue;
+            }
+            double ratio = (double) p.weakStudents() / p.practicedStudents();
+            if (ratio <= CLASS_WEAK_RATIO) {
+                continue;
+            }
+            var top = p.misconceptions().isEmpty() ? null : p.misconceptions().get(0);
+            list.add(new ClassAlert(p.knowledgePointId(), p.name(), p.chapterTitle(), p.weakStudents(),
+                    p.practicedStudents(), Math.round(ratio * 100) / 100.0,
+                    top == null ? null : top.note(), top == null ? 0 : top.count()));
+        }
+        list.sort(Comparator.comparingDouble(ClassAlert::ratio).reversed());
+        return list;
     }
 
     /** 侧边栏数字：当前老师所有课程里待处理的预警（先扫描，数据量小时很快） */
@@ -171,7 +236,8 @@ public class InterventionService {
             return 0;
         }
         courseIds.forEach(this::scan);
-        return Math.toIntExact(alertMapper.selectCount(new LambdaQueryWrapper<Alert>()
+        int classAlerts = courseIds.stream().mapToInt(id -> classAlerts(id).size()).sum();
+        return classAlerts + Math.toIntExact(alertMapper.selectCount(new LambdaQueryWrapper<Alert>()
                 .in(Alert::getCourseId, courseIds)
                 .eq(Alert::getStatus, Alert.OPEN)));
     }
@@ -197,13 +263,35 @@ public class InterventionService {
                 .forEach(s -> students.add(s.getStudentId()));
 
         for (Long studentId : students.stream().sorted().toList()) {
-            for (KnowledgePoint kp : kps) {
-                Concept concept = layerService.concept(studentId, kp.getId(), null);
-                Application app = layerService.application(studentId, kp.getId());
-                String type = LayerService.classify(concept.state(), app.state());
-                if (type != null && !blocked(studentId, kp.getId(), concept, app)) {
-                    raise(courseId, studentId, kp, type, concept, app);
-                }
+            scanOne(courseId, studentId, kps);
+        }
+    }
+
+    /**
+     * 学生端也扫描自己：干预自动执行之后，不能等老师打开干预页才推给学生。
+     * 学生打开个人学习助手或"老师布置"时调用，只扫这个学生在已发布课程里的知识点。
+     */
+    @Transactional
+    public void scanStudent(long studentId) {
+        List<Long> courseIds = courseMapper.selectList(new LambdaQueryWrapper<Course>()
+                        .eq(Course::getStatus, "published"))
+                .stream().map(Course::getId).toList();
+        for (Long courseId : courseIds) {
+            List<KnowledgePoint> kps = kpMapper.selectList(new LambdaQueryWrapper<KnowledgePoint>()
+                    .eq(KnowledgePoint::getCourseId, courseId)
+                    .orderByAsc(KnowledgePoint::getSortOrder)
+                    .orderByAsc(KnowledgePoint::getId));
+            scanOne(courseId, studentId, kps);
+        }
+    }
+
+    private void scanOne(Long courseId, long studentId, List<KnowledgePoint> kps) {
+        for (KnowledgePoint kp : kps) {
+            Concept concept = layerService.concept(studentId, kp.getId(), null);
+            Application app = layerService.application(studentId, kp.getId());
+            String type = LayerService.classify(concept.state(), app.state());
+            if (type != null && !blocked(studentId, kp.getId(), concept, app)) {
+                raise(courseId, studentId, kp, type, concept, app);
             }
         }
     }
@@ -276,6 +364,34 @@ public class InterventionService {
         iv.setSource("system");
         iv.setStatus(Intervention.PENDING);
         interventionMapper.insert(iv);
+
+        // A、B、AB 都直接执行，不等老师审核；老师事后可以撤回、改期限。
+        // 要做练习的（A、AB）如果这个知识点下没有题可布置，留给老师处理
+        boolean canRun = Alert.B.equals(type) || !split(iv.getExerciseIds()).isEmpty();
+        if (autoApprove && canRun) {
+            start(iv, alert, null, null);
+        }
+    }
+
+    /**
+     * 开始执行一条干预：老师审核通过时调用，系统自动执行时也调用（reviewerId 为空 = 系统自动）。
+     * 记下开始时间和干预前的数据，A 的题写进学生的推荐表，预警标为已处理。
+     */
+    private void start(Intervention iv, Alert alert, Long reviewerId, LocalDateTime dueAt) {
+        LocalDateTime now = LocalDateTime.now();
+        iv.setStatus(Intervention.APPROVED);
+        iv.setReviewerId(reviewerId);
+        iv.setReviewedAt(now);
+        // 期限：老师审核时指定的，或者默认开始后 dueDays 天（到当天 23:59）
+        iv.setDueAt(dueAt != null ? dueAt : now.plusDays(dueDays).withHour(23).withMinute(59).withSecond(0).withNano(0));
+        iv.setBeforeValue(Intervention.REVIEW.equals(iv.getType())
+                ? layerService.concept(iv.getStudentId(), iv.getKnowledgePointId(), null).state()
+                : masteryText(iv.getStudentId(), iv.getKnowledgePointId()));
+        interventionMapper.updateById(iv);
+        if (Intervention.PRACTICE.equals(iv.getType())) {
+            assign(iv);
+        }
+        closeAlert(alert, Alert.HANDLED);
     }
 
     private boolean hadIneffective(long studentId, long kpId) {
@@ -346,7 +462,7 @@ public class InterventionService {
      * 主要误解：每道题只看最近一次作答，答错时所选选项的误解说明，出现最多的一个；
      * 少于 2 次不算"错因明确"，返回 null
      */
-    String mainMisconception(long studentId, long kpId) {
+    public String mainMisconception(long studentId, long kpId) {
         Map<Long, Exercise> exercises = kpExercises(kpId);
         Map<String, Integer> counts = new LinkedHashMap<>();
         latestAnswers(studentId, exercises.keySet()).values().stream()
@@ -373,6 +489,7 @@ public class InterventionService {
         Map<Long, AnswerRecord> latest = latestAnswers(studentId, exercises.keySet());
         return exercises.values().stream()
                 .filter(e -> published.contains(e.getChapterId()))
+                .filter(Exercise::recommendable)
                 .filter(e -> latest.get(e.getId()) == null || !Boolean.TRUE.equals(latest.get(e.getId()).getIsCorrect()))
                 .sorted(Comparator.comparingInt((Exercise e) -> {
                             if (misconception != null && notes(e).contains(misconception)) {
@@ -480,18 +597,67 @@ public class InterventionService {
             }
             iv.setNote(req.note().trim());
         }
-        iv.setStatus(Intervention.APPROVED);
-        iv.setReviewerId(courseService.currentTeacherId());
-        iv.setReviewedAt(LocalDateTime.now());
-        iv.setBeforeValue(Intervention.REVIEW.equals(iv.getType())
-                ? layerService.concept(iv.getStudentId(), iv.getKnowledgePointId(), null).state()
-                : masteryText(iv.getStudentId(), iv.getKnowledgePointId()));
-        interventionMapper.updateById(iv);
-        if (Intervention.PRACTICE.equals(iv.getType())) {
-            assign(iv);
-        }
-        closeAlert(alert, Alert.HANDLED);
+        start(iv, alert, courseService.currentTeacherId(), checkDue(req.dueAt()));
         return view(iv, true);
+    }
+
+    /** 执行中的干预改期限（延期或提前）。只能改执行中的，期限要晚于现在 */
+    @Transactional
+    public InterventionView changeDue(Long id, LocalDateTime dueAt) {
+        Intervention iv = requireOwned(id);
+        if (!Intervention.APPROVED.equals(iv.getStatus())) {
+            throw BusinessException.conflict("只能修改执行中的干预的期限");
+        }
+        if (dueAt == null) {
+            throw BusinessException.badRequest("请选择新的期限");
+        }
+        iv.setDueAt(checkDue(dueAt));
+        interventionMapper.updateById(iv);
+        return view(iv, true);
+    }
+
+    /** 老师指定的期限：要晚于现在，最长 60 天；秒数抹掉。null = 用默认 */
+    private static LocalDateTime checkDue(LocalDateTime dueAt) {
+        if (dueAt == null) {
+            return null;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (!dueAt.isAfter(now)) {
+            throw BusinessException.badRequest("期限要晚于现在");
+        }
+        if (dueAt.isAfter(now.plusDays(MAX_DUE_DAYS))) {
+            throw BusinessException.badRequest("期限最长 " + MAX_DUE_DAYS + " 天");
+        }
+        return dueAt.withSecond(0).withNano(0);
+    }
+
+    /**
+     * 老师撤回一条执行中的干预（主要用于系统自动执行的）。
+     * 学生那边"老师布置"里不再显示；还没做的题交回系统推荐，之后照常按薄弱知识点推。
+     */
+    @Transactional
+    public InterventionView revoke(Long id) {
+        Intervention iv = requireOwned(id);
+        if (!Intervention.APPROVED.equals(iv.getStatus())) {
+            throw BusinessException.conflict("只能撤回执行中的干预");
+        }
+        iv.setStatus(Intervention.REVOKED);
+        iv.setCompletedAt(LocalDateTime.now());
+        interventionMapper.updateById(iv);
+        returnToSystem(iv);
+        return view(iv, true);
+    }
+
+    /** 这条干预布置的、还没做的题，改回系统推荐 */
+    private void returnToSystem(Intervention iv) {
+        recommendationMapper.selectList(new LambdaQueryWrapper<Recommendation>()
+                        .eq(Recommendation::getInterventionId, iv.getId())
+                        .eq(Recommendation::getStatus, Recommendation.NEW))
+                .forEach(r -> {
+                    r.setSource(Recommendation.SYSTEM);
+                    r.setReason("上次做错了");
+                    recommendationMapper.updateById(r);
+                });
     }
 
     /** 忽略预警：这次不管，它的系统建议一起驳回 */
@@ -547,7 +713,8 @@ public class InterventionService {
                 r.setTargetId(exerciseId);
             }
             r.setKnowledgePointId(iv.getKnowledgePointId());
-            r.setReason("老师布置");
+            // 系统自动执行的（没有审核人）不能说成“老师布置”
+            r.setReason(iv.getReviewerId() == null ? "系统根据你的情况布置" : "老师布置");
             r.setStatus(Recommendation.NEW);
             r.setSource(Recommendation.TEACHER);
             r.setInterventionId(iv.getId());
@@ -608,14 +775,7 @@ public class InterventionService {
         iv.setCompletedAt(LocalDateTime.now());
         interventionMapper.updateById(iv);
         // 没做对的题还给系统推荐，之后照常按薄弱知识点推
-        recommendationMapper.selectList(new LambdaQueryWrapper<Recommendation>()
-                        .eq(Recommendation::getInterventionId, iv.getId())
-                        .eq(Recommendation::getStatus, Recommendation.NEW))
-                .forEach(r -> {
-                    r.setSource(Recommendation.SYSTEM);
-                    r.setReason("上次做错了");
-                    recommendationMapper.updateById(r);
-                });
+        returnToSystem(iv);
     }
 
     /** 每道题在 since 之后都至少交过一次（不要求做对，否则做不对就永远结束不了） */
@@ -751,8 +911,23 @@ public class InterventionService {
         return new InterventionView(iv.getId(), iv.getAlertId(), iv.getStudentId(),
                 courseMapper.findUserName(iv.getStudentId()), iv.getKnowledgePointId(),
                 kp == null ? null : kp.getName(), iv.getType(), iv.getStep() == null ? 1 : iv.getStep(),
-                iv.getNote(), iv.getSource(), iv.getStatus(), exercises, items, dialogue, iv.getBeforeValue(),
-                iv.getAfterValue(), iv.getEffective(), iv.getReviewedAt(), iv.getCompletedAt());
+                iv.getNote(), iv.getSource(), iv.getStatus(),
+                iv.getReviewedAt() != null && iv.getReviewerId() == null,   // 开始执行了但没有审核人 = 系统自动
+                exercises, items, dialogue, iv.getBeforeValue(),
+                iv.getAfterValue(), iv.getEffective(), iv.getReviewedAt(), iv.getCompletedAt(),
+                iv.getDueAt(), overdue(iv), late(iv));
+    }
+
+    /** 执行中、已经过了期限 */
+    static boolean overdue(Intervention iv) {
+        return Intervention.APPROVED.equals(iv.getStatus()) && iv.getDueAt() != null
+                && LocalDateTime.now().isAfter(iv.getDueAt());
+    }
+
+    /** 已完成，但完成时间晚于期限 */
+    static boolean late(Intervention iv) {
+        return Intervention.DONE.equals(iv.getStatus()) && iv.getDueAt() != null && iv.getCompletedAt() != null
+                && iv.getCompletedAt().isAfter(iv.getDueAt());
     }
 
     // ------------------------------------------------------------------ 小工具

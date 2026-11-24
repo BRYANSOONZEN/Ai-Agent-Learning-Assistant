@@ -29,6 +29,13 @@ public class ChapterItem {
 
     private Integer sortOrder;
 
+    /** 截止时间，只有练习和 AI 对话可以设；null = 不限时。去掉截止时间要能改回 null，所以设成 ALWAYS */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime dueAt;
+
+    /** 过了截止时间还能不能补做：true 能（记为迟交）/ false 不能 */
+    private Boolean allowLate;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

@@ -1,4 +1,5 @@
 <script setup>
+import { withToken } from '@/api/request'
 /*
  * Student page: learn one course, laid out like Studywise's 学习与提问 page.
  * Top: where we are, then the open chapter as a stage rail (intro + items, done ones in teal).
@@ -6,15 +7,22 @@
  *   with 上一项 / 下一项 at the bottom.
  * Right: a progress ring for the course, then the outline — published chapters, each opening into its
  *   items in learning order (the same structure the teacher built in CourseBuilder).
+ * Items unlock in order: item k+1 opens once item k is finished (the first item of a chapter is always open).
+ *   Video: watched ≥ 90% (VideoPlayer). Document: 30 s of reading + 我已读完 (ReadingTimer). The server checks too.
  * What is open lives in the URL (?chapter=1&view=item:2), so a refresh keeps it.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AiDialogue from '@/components/AiDialogue.vue'
+import FeynmanChat from '@/components/FeynmanChat.vue'
 import LearnQuiz from './LearnQuiz.vue'
-import { getLearnCourse, logEvent } from '@/api/learn'
+import ReadingTimer from './ReadingTimer.vue'
+import VideoPlayer from './VideoPlayer.vue'
+import { getChapterKpMap, getFeynman, getLearnCourse, logEvent } from '@/api/learn'
+import KpCircles from '@/components/KpCircles.vue'
 import { itemType } from '@/views/teacher/courseModules'
 import { markDone, saveLast, syncDone } from './learnProgress'
+import { dueInfo, fmtDue } from '@/utils/deadline'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,6 +51,25 @@ const item = computed(() =>
   view.value.startsWith('item:') ? chapter.value?.items.find((it) => 'item:' + it.id === view.value) : null,
 )
 
+// deadline of the open item (exercise / AI dialogue only), as this student sees it
+const due = computed(() =>
+  item.value?.dueAt ? dueInfo(item.value.dueAt, item.value.allowLate, done.value.includes(item.value.id)) : null,
+)
+const ALERT = { done: 'info', overdue: 'warning', soon: 'warning', later: 'info' }
+
+// server progress of videos / documents: itemId -> { ranges, lastPosition, readSec, completed, ... }
+const progressMap = computed(() => data.value?.progress || {})
+
+// locked = not the first item of its chapter, the item before it is not finished, and it is not finished itself
+// (the same rule as the server's CompletionService, so finishing an item unlocks the next one at once)
+function lockedBy(ch, it) {
+  const i = ch?.items.indexOf(it) ?? -1
+  if (i <= 0) return null
+  const prev = ch.items[i - 1]
+  return !done.value.includes(prev.id) && !done.value.includes(it.id) ? prev : null
+}
+const lockPrev = computed(() => (item.value ? lockedBy(chapter.value, item.value) : null))
+
 const chapterNo = computed(() => chapters.value.indexOf(chapter.value) + 1)
 const chapterDone = computed(() => (chapter.value?.items || []).filter((it) => done.value.includes(it.id)).length)
 
@@ -57,13 +84,54 @@ const rail = computed(() => {
       title: it.title,
       kind: itemType(it.type)?.label,
       done: done.value.includes(it.id),
+      locked: !!lockedBy(ch, it),
     })),
   ]
 })
 
-function open(ch, v = 'intro') {
-  router.replace({ query: { chapter: ch.id, view: v } })
+function open(ch, v = 'intro', extra = {}) {
+  router.replace({ query: { chapter: ch.id, view: v, ...extra } })
   window.scrollTo({ top: 0 })
+}
+
+// 知识点地图 (only what the teacher confirmed): clicking a time opens that video there
+const kpMap = ref(null)
+watch(
+  () => chapter.value?.id,
+  async (id) => {
+    kpMap.value = null
+    if (!id) return
+    try {
+      kpMap.value = await getChapterKpMap(id)
+    } catch {
+      /* no map: the chapter page works without it */
+    }
+  },
+  { immediate: true },
+)
+function jumpTo({ itemId, startSec }) {
+  open(chapter.value, 'item:' + itemId, startSec != null ? { t: startSec } : {})
+}
+// an AI 对话 item uses the 费曼对话 (explain to 小林) when the teacher has set one up; otherwise the old dialogue
+const feynmanOn = ref(null) // null = still checking
+watch(
+  () => item.value,
+  async (it) => {
+    feynmanOn.value = null
+    if (it?.type !== 'dialogue') return
+    try {
+      feynmanOn.value = (await getFeynman(it.id)).enabled
+    } catch {
+      feynmanOn.value = false
+    }
+  },
+  { immediate: true },
+)
+
+// the circles grey out shortcuts to items the student has not unlocked yet
+function itemLocked(itemId) {
+  const it = chapter.value?.items.find((x) => x.id === itemId)
+  return !!(it && lockedBy(chapter.value, it))
 }
 
 // every stop in learning order across the course: each chapter's intro, then its items
@@ -94,8 +162,9 @@ function toggle(ch) {
 
 // ---------- progress ----------
 
-function finish(it) {
-  done.value = markDone(courseId.value, it.id)
+// videos and documents are judged finished by the server (log = false); exercises / dialogues log it here
+function finish(it, log = true) {
+  done.value = markDone(courseId.value, it.id, log)
 }
 
 // remember where the student is, for "接着上次学习" on 首页
@@ -113,11 +182,7 @@ watch([chapter, view, progress], () => {
   })
 })
 
-// reading a document counts as finished as soon as it is opened; videos when they end;
-// exercises when submitted; AI dialogue when all topics are done
-watch(item, (it) => {
-  if (it?.type === 'document') finish(it)
-})
+// finished: video watched ≥ 90%, document read 30 s + 我已读完, exercise submitted, AI dialogue all topics done
 
 // ---------- study time (学习记录): how long each item stays open while the tab is visible ----------
 
@@ -156,7 +221,6 @@ async function load() {
   try {
     data.value = await getLearnCourse(courseId.value)
     done.value = syncDone(courseId.value, data.value.doneItemIds)
-    if (item.value?.type === 'document') finish(item.value)
   } catch {
     router.replace({ name: 'courses' }) // not published or not found: the error is already shown
   } finally {
@@ -197,6 +261,7 @@ onMounted(load)
             >
               <span class="stage-circle">
                 <el-icon v-if="s.done && s.v !== view"><Check /></el-icon>
+                <el-icon v-else-if="s.locked && s.v !== view"><Lock /></el-icon>
                 <template v-else>{{ String(i + 1).padStart(2, '0') }}</template>
               </span>
               <span class="stage-text">
@@ -219,6 +284,10 @@ onMounted(load)
             <template v-if="view === 'intro'">
               <h3>{{ chapter.title }}</h3>
               <p class="pre">{{ chapter.intro || '（老师没有写章节介绍）' }}</p>
+              <template v-if="kpMap?.rows.length">
+                <h4 class="sub">本章 {{ kpMap.rows.length }} 个知识点</h4>
+                <KpCircles :map="kpMap" :is-locked="itemLocked" @jump="jumpTo" />
+              </template>
               <h4 class="sub">本章内容</h4>
               <ol class="path">
                 <li v-for="(it, i) in chapter.items" :key="it.id" @click="open(chapter, 'item:' + it.id)">
@@ -227,7 +296,17 @@ onMounted(load)
                     <strong>{{ it.title }}</strong>
                     <small>{{ itemType(it.type)?.label }}</small>
                   </span>
-                  <span class="sw-tag" :class="done.includes(it.id) ? 'teal' : 'gray'">
+                  <span
+                    v-if="it.dueAt && !done.includes(it.id)"
+                    class="sw-tag"
+                    :class="dueInfo(it.dueAt, it.allowLate).tone"
+                  >
+                    {{ dueInfo(it.dueAt, it.allowLate).text }}
+                  </span>
+                  <span v-if="lockedBy(chapter, it)" class="sw-tag gray">
+                    <el-icon><Lock /></el-icon>未解锁
+                  </span>
+                  <span v-else class="sw-tag" :class="done.includes(it.id) ? 'teal' : 'gray'">
                     {{ done.includes(it.id) ? '已学完' : '未学' }}
                   </span>
                 </li>
@@ -236,17 +315,40 @@ onMounted(load)
 
             <template v-else-if="item">
               <h3>{{ item.title }}</h3>
+              <el-alert
+                v-if="due"
+                :type="due.blocked ? 'error' : ALERT[due.state]"
+                :closable="false"
+                show-icon
+                class="due-alert"
+                :title="
+                  due.state === 'done'
+                    ? `截止时间 ${fmtDue(item.dueAt)}，你已经完成了`
+                    : due.state === 'overdue'
+                      ? `截止时间 ${fmtDue(item.dueAt)} 已过。${due.blocked ? '老师设置了过期后不能再交。' : '还可以补做，会记为迟交。'}`
+                      : `截止时间 ${fmtDue(item.dueAt)}，${due.text}`
+                "
+              />
               <p v-if="item.description && item.type !== 'document'" class="pre lead">{{ item.description }}</p>
 
-              <!-- video -->
-              <template v-if="item.type === 'video'">
-                <video
+              <!-- locked: the item before it is not finished yet -->
+              <div v-if="lockPrev" class="locked">
+                <el-icon :size="34"><Lock /></el-icon>
+                <strong>这一项还没解锁</strong>
+                <p>先完成上一项：《{{ lockPrev.title }}》</p>
+                <el-button type="primary" @click="open(chapter, 'item:' + lockPrev.id)">去完成</el-button>
+              </div>
+
+              <!-- video: watched ≥ 90% = finished -->
+              <template v-else-if="item.type === 'video'">
+                <VideoPlayer
                   v-if="item.material"
                   :key="item.id"
-                  :src="item.material.url"
-                  controls
-                  class="player"
-                  @ended="finish(item)"
+                  :item-id="item.id"
+                  :src="withToken(item.material.url)"
+                  :progress="progressMap[item.id]"
+                  :start-at="route.query.t != null ? Number(route.query.t) : null"
+                  @completed="finish(item, false)"
                 />
                 <el-empty v-else description="老师还没有上传视频" />
               </template>
@@ -258,27 +360,38 @@ onMounted(load)
                   <iframe
                     v-if="['pdf', 'text'].includes(fileKind(item.material))"
                     :key="item.id"
-                    :src="item.material.url"
+                    :src="withToken(item.material.url)"
                     class="doc-frame"
                     :title="item.material.originalName"
                   />
                   <img
                     v-else-if="fileKind(item.material) === 'image'"
-                    :src="item.material.url"
+                    :src="withToken(item.material.url)"
                     :alt="item.title"
                     class="doc-image"
                   />
                   <div class="file">
                     <el-icon><Document /></el-icon>
-                    <el-link :href="item.material.url" target="_blank" type="primary">
+                    <el-link :href="withToken(item.material.url)" target="_blank" type="primary">
                       {{ item.material.originalName }}
                     </el-link>
                     <span class="muted">在新窗口打开</span>
                   </div>
                 </template>
+                <!-- read ≥ 30 s, then 我已读完 = finished -->
+                <ReadingTimer
+                  :key="item.id"
+                  :item-id="item.id"
+                  :progress="progressMap[item.id]"
+                  @completed="finish(item, false)"
+                />
               </template>
 
               <!-- exercise -->
+              <el-empty
+                v-else-if="item.type === 'exercise' && due?.blocked"
+                description="已经过了截止时间，这次练习不能再交了"
+              />
               <LearnQuiz
                 v-else-if="item.type === 'exercise'"
                 :key="item.id"
@@ -287,8 +400,14 @@ onMounted(load)
               />
 
               <!-- AI dialogue: the same component as the AI 巩固对话 page, only this item's topics -->
+              <FeynmanChat
+                v-else-if="item.type === 'dialogue' && feynmanOn"
+                :key="'f' + item.id"
+                :item-id="item.id"
+                @finished="finish(item, false)"
+              />
               <AiDialogue
-                v-else-if="item.type === 'dialogue'"
+                v-else-if="item.type === 'dialogue' && feynmanOn === false"
                 :key="item.id"
                 :chapter-id="chapter.id"
                 :item-id="item.id"
@@ -369,6 +488,7 @@ onMounted(load)
                   <el-icon class="item-icon"><component :is="itemType(it.type)?.icon" /></el-icon>
                   <span class="item-label">{{ it.title }}</span>
                   <el-icon v-if="done.includes(it.id)" class="item-state ok"><CircleCheckFilled /></el-icon>
+                  <el-icon v-else-if="lockedBy(ch, it)" class="item-state lock"><Lock /></el-icon>
                   <span v-else class="item-state" />
                 </li>
               </ul>
@@ -612,11 +732,21 @@ onMounted(load)
   font-size: 10px;
   font-weight: 700;
 }
-.player {
-  width: 100%;
-  max-height: 520px;
+.locked {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 36px 16px;
+  border: 1px dashed var(--el-border-color);
   border-radius: 10px;
-  background: #000;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+.locked strong {
+  color: var(--el-text-color-primary);
+}
+.locked p {
+  margin: 0 0 6px;
 }
 .reading {
   max-width: 760px;
@@ -824,6 +954,11 @@ onMounted(load)
   border: 1.5px solid #d3dce5;
   border-radius: 50%;
 }
+.item-state.lock {
+  border: 0;
+  color: #a3adb8;
+  font-size: 13px;
+}
 .item-state.ok {
   border: 0;
   color: #54b9a5;
@@ -840,5 +975,8 @@ onMounted(load)
   .intro {
     flex-wrap: wrap;
   }
+}
+.due-alert {
+  margin: 4px 0 14px;
 }
 </style>

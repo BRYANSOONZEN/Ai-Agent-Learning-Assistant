@@ -6,23 +6,23 @@
 
 -- ---------------------------------------------------------------------
 -- 用户：插入顺序决定 id —— 1 管理员，2～4 教师，5～14 学生
--- password_hash 暂时是占位符，登录功能完成后替换成真正的 BCrypt 哈希（现在这些账号还不能登录）
+-- 演示账号的密码都是 demo123（只用于课程演示）。password_hash 是它的 BCrypt 哈希，数据库不存明文
 -- ---------------------------------------------------------------------
 INSERT INTO `user` (username, password_hash, name, role, created_at, updated_at) VALUES
-('admin',     'PENDING_LOGIN_FEATURE', '管理员', 'admin',   NOW(), NOW()),
-('teacher01', 'PENDING_LOGIN_FEATURE', '李老师', 'teacher', NOW(), NOW()),
-('teacher02', 'PENDING_LOGIN_FEATURE', '王老师', 'teacher', NOW(), NOW()),
-('teacher03', 'PENDING_LOGIN_FEATURE', '赵老师', 'teacher', NOW(), NOW()),
-('2023001',   'PENDING_LOGIN_FEATURE', '学生01', 'student', NOW(), NOW()),
-('2023002',   'PENDING_LOGIN_FEATURE', '学生02', 'student', NOW(), NOW()),
-('2023003',   'PENDING_LOGIN_FEATURE', '学生03', 'student', NOW(), NOW()),
-('2023004',   'PENDING_LOGIN_FEATURE', '学生04', 'student', NOW(), NOW()),
-('2023005',   'PENDING_LOGIN_FEATURE', '学生05', 'student', NOW(), NOW()),
-('2023006',   'PENDING_LOGIN_FEATURE', '学生06', 'student', NOW(), NOW()),
-('2023007',   'PENDING_LOGIN_FEATURE', '学生07', 'student', NOW(), NOW()),
-('2023008',   'PENDING_LOGIN_FEATURE', '学生08', 'student', NOW(), NOW()),
-('2023009',   'PENDING_LOGIN_FEATURE', '学生09', 'student', NOW(), NOW()),
-('2023010',   'PENDING_LOGIN_FEATURE', '学生10', 'student', NOW(), NOW());
+('admin',     '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '管理员', 'admin',   NOW(), NOW()),
+('teacher01', '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '李老师', 'teacher', NOW(), NOW()),
+('teacher02', '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '王老师', 'teacher', NOW(), NOW()),
+('teacher03', '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '赵老师', 'teacher', NOW(), NOW()),
+('2023001',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生01', 'student', NOW(), NOW()),
+('2023002',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生02', 'student', NOW(), NOW()),
+('2023003',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生03', 'student', NOW(), NOW()),
+('2023004',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生04', 'student', NOW(), NOW()),
+('2023005',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生05', 'student', NOW(), NOW()),
+('2023006',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生06', 'student', NOW(), NOW()),
+('2023007',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生07', 'student', NOW(), NOW()),
+('2023008',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生08', 'student', NOW(), NOW()),
+('2023009',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生09', 'student', NOW(), NOW()),
+('2023010',   '$2a$10$n2SfQAXxzDUKRYxmVgEfROC2fRmZ1xDI0OlopNzW/w64OhiqAjddW', '学生10', 'student', NOW(), NOW());
 
 -- ---------------------------------------------------------------------
 -- 课程：第 1 门是首版要做的「软件测试」（docs/proposal.md：软件测试单元）
@@ -64,6 +64,10 @@ INSERT INTO chapter_item (course_id, chapter_id, type, title, description, sort_
 3. 例：数量范围 1～99，下边界取 0、1、2，上边界取 98、99、100。', 0, NOW(), NOW()),
 (1, 1, 'exercise', '练习：边界值小测', '两道单选，做完再看结果。', 1, NOW(), NOW()),
 (1, 1, 'dialogue', 'AI 对话：订单数量怎么测', '学完后和 AI 聊一聊，检查自己是不是真的懂了。', 2, NOW(), NOW());
+
+-- 截止时间（演示）：练习 2 天后截止；AI 对话昨天已截止，但允许补做（学生01 还没做对话，会看到"已过期，可补做"）
+UPDATE chapter_item SET due_at = TIMESTAMPADD(DAY, 2, NOW()), allow_late = 1 WHERE id = 2;
+UPDATE chapter_item SET due_at = TIMESTAMPADD(DAY, -1, NOW()), allow_late = 1 WHERE id = 3;
 
 INSERT INTO exercise (course_id, chapter_id, item_id, type, stem, options, answer, analysis, option_notes, difficulty, sort_order, created_by, created_at, updated_at) VALUES
 (1, 1, 2, 'single_choice', '报名年龄要求为 18～60 岁。测试下边界时，下面哪组取值最合适？',

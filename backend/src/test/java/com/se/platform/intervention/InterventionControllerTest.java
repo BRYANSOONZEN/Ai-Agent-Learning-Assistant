@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import com.se.platform.ai.client.FakeAiClient;
 import com.se.platform.common.DemoIdentity;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 干预 A、B（docs/计划-干预A和B.md）。演示数据：学生03（id 7）→ A，学生04（8）→ B，学生07（11）→ AB；
  * 学生01、02、05、06 不报警。学生端用请求头 X-Demo-Student-Id 切换演示学生。
  */
-@SpringBootTest
+@SpringBootTest(properties = "platform.intervention.auto-approve=false")
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class InterventionControllerTest {
@@ -137,7 +139,7 @@ class InterventionControllerTest {
                 .andExpect(jsonPath("$.data.counts.effective").value(1))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].status").value("done"))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].beforeValue").value("0.22"))
-                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].afterValue").value("0.70"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].afterValue").value("0.60")) // 扣掉蒙对的部分后（g = 0.25）
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].effective").value(true));
         mockMvc.perform(as(7, get("/api/interventions/mine")))
                 .andExpect(jsonPath("$.data.running.length()").value(0))
@@ -374,5 +376,67 @@ class InterventionControllerTest {
         return mockMvc.perform(as(studentId, post("/api/dialogue/sessions/" + sessionId + "/messages"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\": \"" + text + "\"}"));
+    }
+
+    // ------------------------------------------------------------------ 期限
+
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /** 默认期限：开始执行后第 7 天的 23:59；学生首页的截止提醒里能看到 */
+    @Test
+    void defaultDue_sevenDays_andStudentSeesIt() throws Exception {
+        approve(suggestionOf(board().andReturn().getResponse().getContentAsString(), 7));
+        String due = LocalDateTime.now().plusDays(7).withHour(23).withMinute(59).withSecond(0).format(FMT);
+        board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].dueAt").value(Matchers.contains(due)))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].overdue").value(Matchers.contains(false)))
+                .andExpect(jsonPath("$.data.counts.overdue").value(0));
+        mockMvc.perform(as(7, get("/api/learn/deadlines")))
+                .andExpect(jsonPath("$.data[?(@.kind == 'intervention')].dueAt").value(Matchers.contains(due)))
+                .andExpect(jsonPath("$.data[?(@.kind == 'intervention')].state").value(Matchers.contains("later")))
+                .andExpect(jsonPath("$.data[?(@.kind == 'intervention')].title",
+                        Matchers.contains(Matchers.containsString("变式练习"))));
+    }
+
+    /** 老师审核时指定期限；过了期限算逾期（不拦着做），延期后恢复；逾期后做完记为迟完成 */
+    @Test
+    void teacherSetsDue_overdueThenExtended_lateCompletion() throws Exception {
+        int id = suggestionOf(board().andReturn().getResponse().getContentAsString(), 7);
+        String past = LocalDateTime.now().minusHours(1).format(FMT);
+        mockMvc.perform(post("/api/interventions/" + id + "/review").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approve\": true, \"dueAt\": \"" + past + "\"}"))
+                .andExpect(jsonPath("$.code").value(400));
+        String tomorrow = LocalDateTime.now().plusDays(1).withSecond(0).format(FMT);
+        mockMvc.perform(post("/api/interventions/" + id + "/review").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approve\": true, \"dueAt\": \"" + tomorrow + "\"}"))
+                .andExpect(jsonPath("$.data.dueAt").value(tomorrow));
+        mockMvc.perform(as(7, get("/api/learn/deadlines")))
+                .andExpect(jsonPath("$.data[?(@.kind == 'intervention')].state").value(Matchers.contains("soon")));
+
+        // 过了期限：老师那边算逾期 1 条，学生那边标已过期
+        jdbc.update("UPDATE intervention SET due_at = ? WHERE id = ?", LocalDateTime.now().minusHours(2), id);
+        board().andExpect(jsonPath("$.data.counts.overdue").value(1))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].overdue").value(Matchers.contains(true)));
+        mockMvc.perform(as(7, get("/api/learn/deadlines")))
+                .andExpect(jsonPath("$.data[?(@.kind == 'intervention')].state").value(Matchers.contains("overdue")));
+
+        // 延期：期限要晚于现在；改完不再逾期
+        mockMvc.perform(put("/api/interventions/" + id + "/due").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dueAt\": \"" + past + "\"}"))
+                .andExpect(jsonPath("$.code").value(400));
+        mockMvc.perform(put("/api/interventions/" + id + "/due").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dueAt\": \"" + tomorrow + "\"}"))
+                .andExpect(jsonPath("$.data.overdue").value(false));
+
+        // 再改成过期，学生补做完：完成了，记为迟完成；完成后不能再改期限
+        jdbc.update("UPDATE intervention SET due_at = ? WHERE id = ?", LocalDateTime.now().minusHours(2), id);
+        mockMvc.perform(as(7, post("/api/recommendations/practice")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":{\"1\":\"A\",\"3\":\"A\",\"5\":\"B\"}}"))
+                .andExpect(jsonPath("$.data.correct").value(3));
+        board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].status").value(Matchers.contains("done")))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].late").value(Matchers.contains(true)))
+                .andExpect(jsonPath("$.data.counts.overdue").value(0));
+        mockMvc.perform(put("/api/interventions/" + id + "/due").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dueAt\": \"" + tomorrow + "\"}"))
+                .andExpect(jsonPath("$.code").value(409));
     }
 }

@@ -24,6 +24,17 @@ public class AiCallLogService {
     public static final String TASK_TOPIC_DRAFT = "TOPIC_DRAFT";
     /** 任务名：学生对话的一轮 */
     public static final String TASK_DIALOGUE_TURN = "DIALOGUE_TURN";
+    /** 任务名：从一章的资料识别知识点 */
+    public static final String TASK_KP_EXTRACT = "KP_EXTRACT";
+    /** 任务名：费曼对话——老师端起草、学生每一句的判断、结束时的总评 */
+    public static final String TASK_FEYNMAN_DRAFT = "FEYNMAN_DRAFT";
+    public static final String TASK_FEYNMAN_TURN = "FEYNMAN_TURN";
+    public static final String TASK_FEYNMAN_FINAL = "FEYNMAN_FINAL";
+    /** 练习：按知识点生成题目、不看答案做一遍（检查歧义）、识别老师上传的题、判简答 */
+    public static final String TASK_EXERCISE_GEN = "EXERCISE_GEN";
+    public static final String TASK_EXERCISE_SOLVE = "EXERCISE_SOLVE";
+    public static final String TASK_EXERCISE_IMPORT = "EXERCISE_IMPORT";
+    public static final String TASK_SHORT_JUDGE = "SHORT_JUDGE";
 
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
 
@@ -113,7 +124,7 @@ public class AiCallLogService {
     }
 
     /** 费用 = 输入 token × 输入单价 ÷ 100 万 + 输出 token × 输出单价 ÷ 100 万，保留 6 位小数 */
-    BigDecimal cost(int inputTokens, int outputTokens) {
+    public BigDecimal cost(int inputTokens, int outputTokens) {
         return props.getPriceInputPerMillion().multiply(BigDecimal.valueOf(inputTokens))
                 .add(props.getPriceOutputPerMillion().multiply(BigDecimal.valueOf(outputTokens)))
                 .divide(MILLION, 6, RoundingMode.HALF_UP);

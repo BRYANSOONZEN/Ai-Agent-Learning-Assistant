@@ -157,6 +157,9 @@ public class RecommendService {
 
         List<Candidate> list = new ArrayList<>();
         for (Exercise e : exercises) {
+            if (!e.recommendable()) {
+                continue; // 草稿题学生看不到；简答要大模型判，推荐页只放客观题
+            }
             Recommendation r = mine.get(e.getId());
             if (!published.contains(e.getChapterId())
                     || r != null && !Recommendation.NEW.equals(r.getStatus())

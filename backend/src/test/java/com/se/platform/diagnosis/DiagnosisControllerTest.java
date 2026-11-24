@@ -62,11 +62,12 @@ class DiagnosisControllerTest {
 
     @Test
     void submittingUpdatesMastery() throws Exception {
-        // 再全对一次：知识点 1 从 0.3704（薄弱）升到 (0.64×0 + 0.8 + 1) / 2.44 = 0.7377（一般）
+        // 再全对一次：正确率 p = (0.64×0 + 0.8 + 1) / 2.44 = 0.7377；都是 4 选 1，蒙对概率 g = 0.25
+        // 掌握度 = (0.7377 − 0.25) / 0.75 = 0.6503（一般）。before 是交卷前存的旧值 0.3704
         mockMvc.perform(post("/api/learn/items/2/submit").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"answers\": {\"1\": \"A\", \"2\": \"B\"}}"))
                 .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].before").value(0.3704))
-                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].after").value(0.7377))
+                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].after").value(0.6503))
                 .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].level").value("medium"));
 
         mockMvc.perform(get("/api/diagnosis/me")).andExpect(jsonPath("$.data.summary.weak").value(0));

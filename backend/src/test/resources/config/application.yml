@@ -1,0 +1,15 @@
+# 只在单元测试里生效（Spring 会额外读 classpath:/config/application.yml，优先级高于主配置）。
+# 大部分测试测的是业务逻辑，关掉登录检查，当前用户用演示身份（老师 2 号、学生 5 号，见 CurrentUser）。
+# 登录和权限本身由 AuthSecurityTest 打开检查来测。
+spring:
+  # 单元测试仍然用内存库：每个测试都从干净的演示数据开始
+  datasource:
+    url: jdbc:h2:mem:platform;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1
+platform:
+  db:
+    keep-data: false
+  auth:
+    enabled: false
+  # 资料 → 知识点：测试里不开后台线程，上传后直接在当前线程处理完，方便检查结果
+  material:
+    async: false

@@ -3,6 +3,7 @@ package com.se.platform.course.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.se.platform.common.BusinessException;
+import com.se.platform.common.CurrentUser;
 import com.se.platform.common.PageResult;
 import com.se.platform.course.dto.CourseSaveRequest;
 import com.se.platform.course.dto.CourseView;
@@ -19,9 +20,6 @@ import org.springframework.stereotype.Service;
 /** 课程的增删改查 */
 @Service
 public class CourseService {
-
-    /** 登录功能还没做，当前老师先固定为 2 号用户（李老师），见 currentTeacherId */
-    private static final long DEFAULT_TEACHER_ID = 2L;
 
     /** 老师建课时可选的模块（key → 中文名），顺序就是建课页标签的顺序。章节介绍和预览发布每门课都有，不在这里 */
     public static final Map<String, String> MODULES = new LinkedHashMap<>();
@@ -42,12 +40,9 @@ public class CourseService {
         this.chapterMapper = chapterMapper;
     }
 
-    /**
-     * 当前登录的老师。登录功能做好后，只改这里：从 token 里取用户 id。
-     * 现在固定为 2 号用户（李老师），和前端模拟登录的老师一致。
-     */
+    /** 当前登录的老师：从令牌里取（见 CurrentUser） */
     public long currentTeacherId() {
-        return DEFAULT_TEACHER_ID;
+        return CurrentUser.teacherId();
     }
 
     /** 分页列表，按名称模糊搜索，新的在前（全部课程，学生端浏览用） */

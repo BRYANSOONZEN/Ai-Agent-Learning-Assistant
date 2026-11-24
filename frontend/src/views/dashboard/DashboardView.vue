@@ -12,7 +12,8 @@ import TeacherCourses from './TeacherCourses.vue'
 import { useUserStore } from '@/stores/user'
 import { layoutChildren } from '@/router'
 import StatCard from '@/components/StatCard.vue'
-import { getLearnCourse, getLearnCourses, getRecords } from '@/api/learn'
+import { getLearnCourse, getLearnCourses, getMyDeadlines, getRecords } from '@/api/learn'
+import { dueInfo, fmtDue } from '@/utils/deadline'
 import { getMyDiagnosis } from '@/api/diagnosis'
 import { getRecommendations } from '@/api/recommend'
 import { itemType } from '@/views/teacher/courseModules'
@@ -20,7 +21,7 @@ import { courseProgress, lastPosition, syncDone, totalDone } from '@/views/learn
 
 const router = useRouter()
 const userStore = useUserStore()
-const isTeacher = computed(() => ['teacher', 'admin'].includes(userStore.role))
+const isTeacher = computed(() => userStore.role === 'teacher')
 
 const greeting = (() => {
   const h = new Date().getHours()
@@ -36,6 +37,15 @@ const steps = ref([]) // the chapter the student was in: intro + items, each { v
 const records = ref(null)
 const diagnosis = ref(null)
 const recommended = ref([]) // up to 3 questions from 学习推荐
+const deadlines = ref([]) // exercises / AI dialogues with a deadline, not done yet (overdue first, then by date)
+// remind: overdue + due within REMIND_DAYS; the rest are only counted
+const urgent = computed(() => deadlines.value.filter((d) => d.state !== 'later'))
+const laterCount = computed(() => deadlines.value.length - urgent.value.length)
+// item -> that item in the course; teacher-assigned task -> 学习推荐 (where 老师布置 lives)
+const deadlineLink = (d) =>
+  d.kind === 'intervention'
+    ? { name: 'recommend' }
+    : { name: 'course-detail', params: { id: d.courseId }, query: { chapter: d.chapterId, view: 'item:' + d.itemId } }
 
 const today = new Date()
   .toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
@@ -119,7 +129,13 @@ onMounted(async () => {
     courseTotal.value = data.total
     await loadPath()
     // the rest is extra: one failing must not blank the page
-    const [r, d, rec] = await Promise.allSettled([getRecords(), getMyDiagnosis(), getRecommendations()])
+    const [r, d, rec, dl] = await Promise.allSettled([
+      getRecords(),
+      getMyDiagnosis(),
+      getRecommendations(),
+      getMyDeadlines(),
+    ])
+    if (dl.status === 'fulfilled') deadlines.value = dl.value
     if (r.status === 'fulfilled') records.value = r.value
     if (d.status === 'fulfilled') diagnosis.value = d.value
     if (rec.status === 'fulfilled') {
@@ -191,6 +207,34 @@ onMounted(async () => {
         :value="diagnosis ? String(diagnosis.summary.weak).padStart(2, '0') : '-'"
         :hint="diagnosis?.summary.weak ? '去补一补' : ''"
       />
+    </section>
+
+    <!-- deadlines: only shown when something is overdue or due soon -->
+    <section v-if="urgent.length" class="app-card deadline-card">
+      <div class="sw-heading">
+        <div>
+          <span class="sw-eyebrow">DEADLINES</span>
+          <h3>快到期的任务</h3>
+        </div>
+        <span class="muted">{{ laterCount ? `另外还有 ${laterCount} 项，离截止还早` : '截止前 3 天开始提醒' }}</span>
+      </div>
+      <ul class="deadlines">
+        <li v-for="d in urgent" :key="d.kind + (d.itemId || d.interventionId)">
+          <router-link :to="deadlineLink(d)" class="deadline-row">
+            <span class="sw-icon sm" :class="d.state === 'overdue' ? 'tone-orange' : 'tone-blue'">
+              <el-icon :size="14">
+                <component :is="d.kind === 'intervention' ? 'Aim' : itemType(d.type)?.icon || 'EditPen'" />
+              </el-icon>
+            </span>
+            <span class="deadline-main">
+              <strong>{{ d.title }}</strong>
+              <small v-if="d.kind === 'intervention'">在「学习推荐」里完成 · 期限 {{ fmtDue(d.dueAt) }}</small>
+              <small v-else>{{ d.courseName }} · {{ d.chapterTitle }} · 截止 {{ fmtDue(d.dueAt) }}</small>
+            </span>
+            <span class="sw-tag" :class="dueInfo(d.dueAt, d.allowLate).tone">{{ dueInfo(d.dueAt, d.allowLate).text }}</span>
+          </router-link>
+        </li>
+      </ul>
     </section>
 
     <section class="two-cols">
@@ -323,6 +367,38 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.deadlines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.deadline-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.deadline-row:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+.deadline-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.deadline-main small {
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .home {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

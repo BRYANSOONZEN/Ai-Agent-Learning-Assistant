@@ -22,6 +22,8 @@ public class Intervention {
     public static final String APPROVED = "approved";
     public static final String REJECTED = "rejected";
     public static final String DONE = "done";
+    /** 系统自动执行后，老师撤回 */
+    public static final String REVOKED = "revoked";
 
     private Long id;
     private Long alertId;
@@ -45,6 +47,8 @@ public class Intervention {
     private Long reviewerId;
     private LocalDateTime reviewedAt;
     private LocalDateTime step2At;
+    /** 期限：开始执行时定（默认 7 天后），老师审核时可改、执行中可延期 */
+    private LocalDateTime dueAt;
     private LocalDateTime completedAt;
 
     @TableField(fill = FieldFill.INSERT)

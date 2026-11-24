@@ -19,3 +19,4 @@ application-local.yml
 
 # Local archives
 *.zip
+tools/material_kp/.cache/

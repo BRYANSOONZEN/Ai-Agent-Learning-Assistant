@@ -5,7 +5,7 @@
  * Each point card says why (mastery, the misconception from the last wrong answer), what to re-read first,
  * then the questions. A question is answered right here, one at a time: it is graded, recorded as
  * 「推荐练习」 and mastery is recomputed. Right answers and 换一道 are not recommended again.
- * Above the list: 老师布置 (TeacherAssigned), what the teacher assigned in an intervention.
+ * Above the list: 给你布置的任务 (TeacherAssigned), interventions from the teacher or started by the system.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -31,10 +31,10 @@ const total = computed(() => (data.value?.points || []).reduce((n, p) => n + p.e
 const answeredSome = computed(() => Object.keys(results).length > 0)
 const headline = computed(() => {
   const d = data.value
-  if (teacherTasks.value && !total.value) return '先完成老师布置的内容'
+  if (teacherTasks.value && !total.value) return '先完成给你布置的任务'
   if (!d.weakCount) return '没有薄弱的知识点，暂时不用补'
   // every weak point is under an intervention: the teacher's plan (老师布置) replaces the list
-  if (!d.points.length) return '先完成老师布置的内容'
+  if (!d.points.length) return '先完成给你布置的任务'
   const first = d.points[0]
   if (!total.value) return `「${first.name}」的题都做完了，先回看内容`
   return d.points.length === 1

@@ -25,7 +25,8 @@ export function getQuestions(itemId) {
 // POST /api/learn/items/{id}/submit { answers: { [questionId]: 'A' } }
 //   -> { total, correct, results: [{ id, stem, options, chosen, answer, correct, analysis, note }] }
 export function submitQuiz(itemId, answers) {
-  return request.post(`/learn/items/${itemId}/submit`, { answers })
+  // short answers are judged twice by the model, so allow more time
+  return request.post(`/learn/items/${itemId}/submit`, { answers }, { timeout: 120000 })
 }
 
 // ---------- 学习记录（backend: RecordController） ----------
@@ -38,4 +39,50 @@ export function logEvent(type, itemId, durationSec) {
 // GET /api/learn/records -> { summary, courses, quizzes, dialogues, timeline }
 export function getRecords() {
   return request.get('/learn/records')
+}
+
+// GET /api/learn/deadlines -> exercises / AI dialogues with a deadline that this student has not done yet,
+// [{ itemId, courseId, courseName, chapterId, chapterTitle, type, title, dueAt, allowLate, state, minutesLeft }]
+export function getMyDeadlines() {
+  return request.get('/learn/deadlines')
+}
+
+// ---------- 视频、文档的学习进度（backend: ProgressController）：学完才解锁下一项 ----------
+
+// POST /api/learn/items/{id}/video-progress { duration, ranges: [[s, e], ...], position }
+//   -> { progress, watchedSec, durationSec, ranges, lastPosition, completed, videoPass }
+// Completion P = Σ(e − s) ÷ duration over merged ranges; P ≥ 90% = finished.
+export function reportVideo(itemId, body) {
+  return request.post(`/learn/items/${itemId}/video-progress`, body)
+}
+
+// POST /api/learn/items/{id}/reading { seconds } — seconds the document page was in front since the last report
+export function reportReading(itemId, seconds) {
+  return request.post(`/learn/items/${itemId}/reading`, { seconds })
+}
+
+// POST /api/learn/items/{id}/finish-reading — the 我已读完 button; refused before 30 seconds of reading
+export function finishReading(itemId) {
+  return request.post(`/learn/items/${itemId}/finish-reading`)
+}
+
+// GET /api/learn/chapters/{id}/kp-map -> the knowledge point map the teacher confirmed (empty rows until then)
+export function getChapterKpMap(chapterId) {
+  return request.get(`/learn/chapters/${chapterId}/kp-map`)
+}
+
+// ---------- 费曼式 AI 对话：讲给小林听 ----------
+
+// GET /api/learn/items/{id}/feynman -> { enabled, kpCount, names } (not enabled: the old dialogue is used)
+export function getFeynman(itemId) {
+  return request.get(`/learn/items/${itemId}/feynman`)
+}
+
+// start, or continue the open one -> { id, status, kpIdx, waitingCheck, kps: [...], messages: [{ role, content, kpIdx }] }
+export function startFeynman(itemId) {
+  return request.post(`/learn/items/${itemId}/feynman/start`)
+}
+
+export function feynmanReply(sessionId, text) {
+  return request.post(`/learn/feynman/${sessionId}/reply`, { text }, { timeout: 120000 })
 }

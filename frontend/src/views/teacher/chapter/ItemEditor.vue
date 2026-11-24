@@ -1,4 +1,5 @@
 <script setup>
+import { withToken } from '@/api/request'
 /*
  * Edit one chapter item. Common part: title + description.
  *   video    — one video file (upload / replace / remove), with a player
@@ -13,6 +14,7 @@ import { updateItem, uploadItemFile, removeItemFile } from '@/api/teacherCourse'
 import ChapterExercises from './ChapterExercises.vue'
 import TopicManage from '../TopicManage.vue'
 import AiDialogue from '@/components/AiDialogue.vue'
+import FeynmanSetup from './FeynmanSetup.vue'
 
 const props = defineProps({
   chapter: { type: Object, required: true },
@@ -20,14 +22,20 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed', 'go'])
 
-const form = reactive({ title: '', description: '' })
+const form = reactive({ title: '', description: '', dueAt: null, allowLate: true })
 const saving = ref(false)
 const uploading = ref(null) // { name, percent } while a file is being sent
-const dialogueTab = ref('topics') // AI 对话 item: 'topics' | 'try'
+const dialogueTab = ref('feynman') // AI 对话 item: 'feynman' | 'topics' | 'try'
 
 watch(
   () => props.item,
-  (it) => Object.assign(form, { title: it.title, description: it.description || '' }),
+  (it) =>
+    Object.assign(form, {
+      title: it.title,
+      description: it.description || '',
+      dueAt: it.dueAt || null,
+      allowLate: it.allowLate !== false,
+    }),
   { immediate: true },
 )
 
@@ -36,9 +44,17 @@ const hasFile = computed(() => props.item.type === 'video' || props.item.type ==
 const ACCEPT = computed(() =>
   isVideo.value ? '.mp4,.webm' : '.pdf,.ppt,.pptx,.doc,.docx,.md,.txt,.png,.jpg,.jpeg',
 )
+// only exercises and AI dialogues are handed in, so only they can have a deadline
+const canDue = computed(() => props.item.type === 'exercise' || props.item.type === 'dialogue')
 const dirty = computed(
-  () => form.title !== props.item.title || form.description !== (props.item.description || ''),
+  () =>
+    form.title !== props.item.title ||
+    form.description !== (props.item.description || '') ||
+    (form.dueAt || null) !== (props.item.dueAt || null) ||
+    form.allowLate !== (props.item.allowLate !== false),
 )
+// can't pick a day that is already over
+const pastDay = (d) => d.getTime() < new Date().setHours(0, 0, 0, 0)
 
 const descLabel = computed(
   () =>
@@ -54,7 +70,7 @@ async function save() {
   if (!form.title.trim()) return ElMessage.warning('标题不能为空')
   saving.value = true
   try {
-    await updateItem(props.item.id, form)
+    await updateItem(props.item.id, { ...form, dueAt: canDue.value ? form.dueAt : null })
     ElMessage.success('已保存')
     emit('changed')
   } finally {
@@ -101,6 +117,29 @@ function size(bytes) {
           :placeholder="item.type === 'document' ? '例：1. 大量错误发生在边界上……' : ''"
         />
       </el-form-item>
+      <div v-if="canDue" class="due">
+        <el-form-item label="截止时间（选填）">
+          <el-date-picker
+            v-model="form.dueAt"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            format="YYYY-MM-DD HH:mm"
+            :default-time="new Date(2000, 0, 1, 23, 59, 0)"
+            :disabled-date="pastDay"
+            placeholder="不设 = 不限时"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item v-if="form.dueAt" label="过了截止时间">
+          <el-radio-group v-model="form.allowLate">
+            <el-radio :value="true">还能补做（记为迟交）</el-radio>
+            <el-radio :value="false">不能再交</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <div v-if="form.dueAt" class="due-hint">
+          截止前 3 天，学生首页会提醒；过了截止时间，你在首页能看到谁还没做。
+        </div>
+      </div>
       <el-button type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</el-button>
     </el-form>
 
@@ -108,10 +147,10 @@ function size(bytes) {
     <section v-if="hasFile" class="block">
       <h3>{{ isVideo ? '视频文件' : '附件' }}</h3>
       <template v-if="item.material">
-        <video v-if="isVideo" :src="item.material.url" controls class="player" />
+        <video v-if="isVideo" :src="withToken(item.material.url)" controls class="player" />
         <div class="file">
           <el-icon><component :is="isVideo ? 'VideoCamera' : 'Document'" /></el-icon>
-          <el-link :href="item.material.url" target="_blank" type="primary">{{ item.material.originalName }}</el-link>
+          <el-link :href="withToken(item.material.url)" target="_blank" type="primary">{{ item.material.originalName }}</el-link>
           <span class="muted">{{ size(item.material.fileSize) }}</span>
           <el-upload :show-file-list="false" :accept="ACCEPT" :http-request="doUpload">
             <el-button link type="primary">替换</el-button>
@@ -141,7 +180,10 @@ function size(bytes) {
 
     <section v-else-if="item.type === 'dialogue'" class="block">
       <el-tabs v-model="dialogueTab">
-        <el-tab-pane :label="`对话话题（${item.topicCount}）`" name="topics">
+        <el-tab-pane label="费曼对话（讲给 AI 同学听）" name="feynman">
+          <FeynmanSetup :item="item" />
+        </el-tab-pane>
+        <el-tab-pane :label="`旧版：对话话题（${item.topicCount}）`" name="topics">
           <TopicManage :chapter-id="chapter.id" :item-id="item.id" embedded @changed="emit('changed')" />
         </el-tab-pane>
         <el-tab-pane label="学生视角试一试" name="try" lazy>
@@ -197,5 +239,17 @@ h3 {
   margin-top: 10px;
   max-width: 480px;
   font-size: 13px;
+}
+.due {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 24px;
+}
+.due-hint {
+  flex-basis: 100%;
+  margin: -6px 0 14px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

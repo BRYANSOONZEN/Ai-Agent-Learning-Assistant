@@ -13,11 +13,14 @@ import { useUserStore } from '@/stores/user'
 import { layoutChildren } from '@/router'
 import { getMyDiagnosis } from '@/api/diagnosis'
 import { getOpenAlertCount } from '@/api/intervention'
+import StudyAssistant from '@/components/StudyAssistant.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const collapsed = ref(false)
+const passwordVisible = ref(false)
 
 const roleLabels = { student: '学生账户', teacher: '教师账户', admin: '管理员' }
 
@@ -130,7 +133,8 @@ function logout() {
           </button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item icon="SwitchButton" @click="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item icon="Lock" @click="passwordVisible = true">修改密码</el-dropdown-item>
+              <el-dropdown-item icon="SwitchButton" divided @click="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -162,6 +166,9 @@ function logout() {
       <main class="page-content">
         <router-view />
       </main>
+      <!-- 个人学习助手：学生才有，点开才出来 -->
+      <StudyAssistant v-if="userStore.role === 'student'" />
+      <ChangePasswordDialog v-model="passwordVisible" />
     </div>
   </div>
 </template>

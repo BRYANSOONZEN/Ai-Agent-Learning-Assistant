@@ -11,20 +11,22 @@ spring:
     import: optional:classpath:application-local.yml
 
   # ---------- 数据库 ----------
-  # 开发阶段用 H2 内存数据库：每次启动都是全新的库，自动执行 schema.sql（建表）和 data.sql（初始数据）。
+  # 开发阶段用 H2 数据库，存成文件（backend/data/platform.mv.db），重启后数据还在：
+  #   第一次启动（没有这个文件）时执行 schema.sql（建表）和 data.sql（演示数据）；之后只补建新加的表，不清空（KeepDataConfig）。
+  #   想回到干净的演示数据：停掉后端，删掉 backend/data 文件夹再启动。单元测试仍然用内存库（src/test/resources/config）。
   # URL 参数说明：
   #   MODE=MySQL               尽量兼容 MySQL 语法，以后切换到 MySQL 不用改 SQL
   #   DATABASE_TO_LOWER=TRUE   表名、列名统一小写，和 MySQL 的习惯一致
   #   NON_KEYWORDS=USER        user 在 H2 里是关键字，不加这个就不能建 user 表
-  #   DB_CLOSE_DELAY=-1        程序运行期间不关闭内存库
+  #   AUTO_SERVER=TRUE         允许同时用 H2 控制台等其他程序打开这个库文件
   datasource:
-    url: jdbc:h2:mem:platform;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:file:./data/platform;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;AUTO_SERVER=TRUE
     username: sa
     password:
     driver-class-name: org.h2.Driver
   sql:
     init:
-      mode: always               # 每次启动执行 classpath 下的 schema.sql / data.sql（有才执行）
+      mode: always               # 交给 KeepDataConfig 决定：库是空的才执行 schema.sql / data.sql
       encoding: UTF-8
 
   # H2 网页控制台：启动后浏览器打开 http://localhost:8080/h2-console 可以直接看表、写 SQL
@@ -52,6 +54,23 @@ mybatis-plus:
       logic-delete-field: deleted    # 逻辑删除：deleteById 实际执行 UPDATE ... SET deleted = 1
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# ---------- 登录 ----------
+platform:
+  db:
+    keep-data: true                # 开发数据库重启后保留数据（见上面 datasource 的说明、KeepDataConfig）
+  auth:
+    enabled: true                 # 每个 /api 接口检查令牌和角色（单元测试里关掉，见 src/test/resources/config/application.yml）
+    # 令牌签名密钥：真实密钥写在 application-local.yml 或环境变量 JWT_SECRET，不写在这里。
+    # 都没有时每次启动随机生成（重启后要重新登录）
+    jwt-secret: ${JWT_SECRET:}
+    token-hours: 24               # 令牌 24 小时有效
+    max-failures: 5               # 同一个用户名连续输错 5 次……
+    lock-minutes: 15              # ……锁 15 分钟
+  deadline:
+    remind-days: 3                # 截止前 3 天开始提醒学生（学生首页「快到期」）
+  intervention:
+    due-days: 7                   # 干预开始执行后默认 7 天内做完（到第 7 天 23:59），老师审核时可改、执行中可延期
 
 # ---------- 大模型（AI 对话等功能用，见 docs/ai-implementation.md 第 3 节第 1 步）----------
 # 对应的 Java 类：com.se.platform.ai.config.LlmProperties（短横线写法 base-url 会自动对应字段 baseUrl）

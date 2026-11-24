@@ -1,5 +1,6 @@
 package com.se.platform.course.service;
 
+import com.se.platform.material.service.MaterialPipeline;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.se.platform.common.BusinessException;
 import com.se.platform.course.dto.ChapterItemSaveRequest;
@@ -14,6 +15,8 @@ import com.se.platform.course.mapper.ExerciseKnowledgePointMapper;
 import com.se.platform.course.mapper.ExerciseMapper;
 import com.se.platform.dialogue.entity.DialogueTopic;
 import com.se.platform.dialogue.mapper.DialogueTopicMapper;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -37,16 +40,19 @@ public class ChapterItemService {
     private final ExerciseMapper exerciseMapper;
     private final ExerciseKnowledgePointMapper linkMapper;
     private final DialogueTopicMapper topicMapper;
+    private final MaterialPipeline pipeline;
 
     public ChapterItemService(ChapterItemMapper itemMapper, ChapterService chapterService,
                               MaterialService materialService, ExerciseMapper exerciseMapper,
-                              ExerciseKnowledgePointMapper linkMapper, DialogueTopicMapper topicMapper) {
+                              ExerciseKnowledgePointMapper linkMapper, DialogueTopicMapper topicMapper,
+                              @org.springframework.context.annotation.Lazy MaterialPipeline pipeline) {
         this.itemMapper = itemMapper;
         this.chapterService = chapterService;
         this.materialService = materialService;
         this.exerciseMapper = exerciseMapper;
         this.linkMapper = linkMapper;
         this.topicMapper = topicMapper;
+        this.pipeline = pipeline;
     }
 
     public List<ChapterItemView> list(Long chapterId) {
@@ -101,6 +107,7 @@ public class ChapterItemService {
         if (old != null) {
             materialService.delete(old);
         }
+        pipeline.onUpload(item.getId());   // 马上排队转文字（资料 → 知识点）
         return toView(item);
     }
 
@@ -110,6 +117,7 @@ public class ChapterItemService {
             materialService.delete(item.getMaterialId());
             item.setMaterialId(null);
             itemMapper.updateById(item);
+            pipeline.onRemoved(item.getId(), item.getChapterId());
         }
         return toView(item);
     }
@@ -130,6 +138,9 @@ public class ChapterItemService {
         }
         topicMapper.delete(new LambdaQueryWrapper<DialogueTopic>().eq(DialogueTopic::getItemId, id));
         itemMapper.deleteById(id);
+        if ("video".equals(item.getType()) || "document".equals(item.getType())) {
+            pipeline.onRemoved(id, item.getChapterId());
+        }
     }
 
     /** 按 ids 的顺序重写 sort_order */
@@ -173,10 +184,31 @@ public class ChapterItemService {
         return item;
     }
 
+    /** 只有练习和 AI 对话是"要学生交的"，可以设截止时间 */
+    public static boolean canHaveDeadline(String type) {
+        return "exercise".equals(type) || "dialogue".equals(type);
+    }
+
     private void copy(ChapterItemSaveRequest req, ChapterItem item) {
         item.setTitle(req.title().trim());
         item.setDescription(req.description());
+        if (req.dueAt() != null && !canHaveDeadline(item.getType())) {
+            throw BusinessException.badRequest("只有练习和 AI 对话可以设截止时间");
+        }
+        item.setDueAt(req.dueAt() == null ? null : req.dueAt().withSecond(0).withNano(0));
+        item.setAllowLate(req.allowLate() == null || req.allowLate());
     }
+
+    /** 过了截止时间、又不允许补做：练习交卷、开始 AI 对话前调用 */
+    public static void requireOpen(ChapterItem item, LocalDateTime now) {
+        if (item.getDueAt() != null && now.isAfter(item.getDueAt()) && Boolean.FALSE.equals(item.getAllowLate())) {
+            throw BusinessException.badRequest("已经过了截止时间（" + DUE_FORMAT.format(item.getDueAt())
+                    + "），老师设置了过期后不能补做");
+        }
+    }
+
+    public static final DateTimeFormatter DUE_FORMAT =
+            DateTimeFormatter.ofPattern("M 月 d 日 HH:mm");
 
     private ChapterItemView toView(ChapterItem i) {
         MaterialView material = i.getMaterialId() == null ? null : materialService.view(i.getMaterialId());
@@ -195,6 +227,6 @@ public class ChapterItemService {
             default -> false;
         };
         return new ChapterItemView(i.getId(), i.getChapterId(), i.getType(), i.getTitle(), i.getDescription(),
-                i.getSortOrder(), material, exercises, topics, ready);
+                i.getSortOrder(), material, exercises, topics, ready, i.getDueAt(), !Boolean.FALSE.equals(i.getAllowLate()));
     }
 }

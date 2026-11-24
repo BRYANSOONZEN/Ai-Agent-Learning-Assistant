@@ -86,6 +86,8 @@ CREATE TABLE chapter_item (
     description TEXT,                                   -- 说明；文档项也可以直接写正文
     material_id BIGINT,                                 -- 视频 / 文档项的文件 → material.id
     sort_order  INT          NOT NULL DEFAULT 0,
+    due_at      DATETIME,                               -- 截止时间（只有练习、AI 对话可以设），NULL = 不限时
+    allow_late  TINYINT(1)   NOT NULL DEFAULT 1,        -- 过了截止时间还能不能补做：1 能（记为迟交）/ 0 不能
     created_at  DATETIME,
     updated_at  DATETIME,
     deleted     TINYINT      NOT NULL DEFAULT 0,
@@ -124,12 +126,24 @@ CREATE TABLE exercise (
     course_id    BIGINT      NOT NULL,
     chapter_id   BIGINT      NOT NULL,
     item_id      BIGINT,                                   -- 属于哪一次练习 → chapter_item.id（type = exercise）
-    type         VARCHAR(16) NOT NULL DEFAULT 'single_choice', -- 首版只有单选
+    -- 题型：single_choice 单选 / two_tier 两段式单选 / multiple 多选 / judge 判断 / fill 填空 / short_answer 简答
+    type         VARCHAR(16) NOT NULL DEFAULT 'single_choice',
+    assess_type  VARCHAR(16) NOT NULL DEFAULT 'concept',   -- 考查类型：concept 概念辨析 / scenario 情境应用 / data 数据分析 / process 流程步骤
+    key_point_no INT,                                      -- 考的是知识点的第几条要点（AI 出题时标），可以为空
     stem         TEXT        NOT NULL,
-    options      TEXT        NOT NULL,                     -- JSON 数组，按顺序对应 A/B/C/D
-    answer       VARCHAR(16) NOT NULL,                     -- 单选：A～F
+    options      TEXT        NOT NULL,                     -- JSON 数组，按顺序对应 A/B/C/D；填空、简答为 []
+    answer       VARCHAR(16) NOT NULL,                     -- 单选、判断、两段式：一个字母；多选：几个字母如 AC；填空、简答：空串
     analysis     TEXT,
     option_notes TEXT,                                     -- JSON 数组，和 options 一一对应
+    reasons      TEXT,                                     -- 两段式：理由选项 JSON 数组
+    reason_answer VARCHAR(4),                              -- 两段式：正确理由的字母
+    reason_notes TEXT,                                     -- 两段式：每个错误理由对应的误解 JSON 数组
+    accepts      TEXT,                                     -- 填空：都算对的说法 JSON 数组
+    reference    TEXT,                                     -- 简答：参考答案
+    key_points   TEXT,                                     -- 简答：判分要点 JSON 数组
+    source       VARCHAR(16) NOT NULL DEFAULT 'manual',    -- manual 老师手写 / upload 老师上传后识别 / ai AI 生成
+    draft        TINYINT(1)  NOT NULL DEFAULT 0,           -- 1 = 草稿（上传或生成后老师还没确认），学生看不到
+    check_note   TEXT,                                     -- 程序检查发现的问题，给老师看
     difficulty   TINYINT     NOT NULL DEFAULT 2,
     sort_order   INT         NOT NULL DEFAULT 0,
     created_by   BIGINT      NOT NULL,
@@ -296,8 +310,14 @@ CREATE TABLE answer_record (
     exercise_id    BIGINT       NOT NULL,
     course_id      BIGINT       NOT NULL,                  -- 冗余，方便按课程统计
     item_id        BIGINT,                                 -- 哪一次练习 → chapter_item.id；同一次交卷的几题 submitted_at 相同
-    answer         VARCHAR(255) NOT NULL,                  -- 学生的答案，没作答存空串
-    is_correct     TINYINT(1)   NOT NULL,
+    answer         VARCHAR(4000) NOT NULL,                 -- 学生的答案，没作答存空串；两段式存 B|C，多选存 AC
+    is_correct     TINYINT(1)   NOT NULL,                  -- 得分 = 1 才算对
+    score          DOUBLE,                                 -- 这题得分 0～1：客观题 0 或 1，简答 = 答到的要点数 / 要点总数
+    guess          DOUBLE,                                 -- 这道题蒙对的概率 g（单选 1/选项数，判断 0.5……）
+    reliability    DOUBLE,                                 -- 可信度权重 r：程序判 1，简答两次一致 0.5，老师确认 1
+    status         VARCHAR(16)  NOT NULL DEFAULT 'graded', -- graded 已判 / pending 简答两次不一致，等老师确认（不算进掌握度）
+    detail         TEXT,                                   -- 简答：每条要点两次判的结果和学生原话（JSON）
+    reviewed_by    BIGINT,                                 -- 简答：哪位老师确认或改判的
     time_spent_sec INT,                                    -- 作答用时（首版不记）
     submitted_at   DATETIME     NOT NULL,
     PRIMARY KEY (id)
@@ -320,6 +340,145 @@ CREATE TABLE learning_event (
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_learning_event_student ON learning_event (student_id, created_at);
+
+-- ---------------------------------------------------------------------
+-- 「记」：视频和文档的学习进度（每人每项一行），用来判断"学完"，学完才解锁下一项
+--   视频：完成度 P = 合并后各段 (e - s) 之和 ÷ 视频总时长，P >= 90% 算学完
+--   文档：累计阅读 >= 30 秒，并且学生自己点了"我已读完"
+-- ---------------------------------------------------------------------
+-- ---------------------------------------------------------------------
+-- 「资料 → 知识点」：老师上传的课件、视频转成文字，再由大模型识别本章知识点（设计见 docs/模块说明/设计方案-费曼式AI对话.md）
+--   流程：上传一份就马上转文字（material_job）→ 老师点“上传完毕” → 资料都处理好就自动识别知识点（chapter_kp_state）
+--         → 知识点草稿（chapter_kp）→ 老师修改、确认 → 学生能看到知识点地图
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS material_job;
+CREATE TABLE material_job (                      -- 每个视频 / 文档项一行：转文字的进度
+    id           BIGINT       NOT NULL AUTO_INCREMENT,
+    item_id      BIGINT       NOT NULL,          -- chapter_item.id
+    chapter_id   BIGINT       NOT NULL,
+    material_id  BIGINT,                         -- 处理的是哪个文件；老师换了文件就重新处理
+    status       VARCHAR(16)  NOT NULL,          -- queued 排队 / processing 处理中 / done 完成 / failed 失败
+    message      VARCHAR(500),                   -- 失败原因，或完成时的简要结果（几页、几张图、几分钟）
+    meta         TEXT,                           -- 处理服务返回的统计（JSON：耗时、图片数、token）
+    started_at   DATETIME,
+    finished_at  DATETIME,
+    created_at   DATETIME     NOT NULL,
+    updated_at   DATETIME     NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_material_job UNIQUE (item_id)
+);
+
+DROP TABLE IF EXISTS material_text;
+CREATE TABLE material_text (                     -- 转出来的文字，一段一行（课件一页、一张图、视频 30～60 秒）
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    item_id     BIGINT       NOT NULL,
+    chapter_id  BIGINT       NOT NULL,
+    seg_key     VARCHAR(20)  NOT NULL,           -- 这份资料里的编号：P4（第 4 页）、P13-图1（第 13 页的图）、01（视频第 1 段）
+    kind        VARCHAR(10)  NOT NULL,           -- pdf / image / video / text（老师直接写在页面上的文字）
+    page        INT,                             -- 课件第几页
+    start_sec   DECIMAL(9,1),                    -- 视频片段从第几秒开始
+    end_sec     DECIMAL(9,1),
+    content     TEXT         NOT NULL,
+    sort_order  INT          NOT NULL,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_material_text_chapter ON material_text (chapter_id, item_id);
+
+DROP TABLE IF EXISTS chapter_kp_state;
+CREATE TABLE chapter_kp_state (                  -- 每章一行：识别知识点走到哪一步
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    chapter_id    BIGINT       NOT NULL,
+    upload_done   TINYINT(1)   NOT NULL DEFAULT 0,  -- 老师点了“上传完毕”
+    status        VARCHAR(16)  NOT NULL,         -- none / waiting 等资料处理完 / recognizing 识别中 / draft 待确认 / confirmed 已确认 / failed
+    message       VARCHAR(500),
+    ai_call_id    BIGINT,                        -- 识别用的那次模型调用 → ai_call_log.id（看 token、费用）
+    recognized_at DATETIME,
+    confirmed_at  DATETIME,
+    created_at    DATETIME     NOT NULL,
+    updated_at    DATETIME     NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_chapter_kp_state UNIQUE (chapter_id)
+);
+
+DROP TABLE IF EXISTS chapter_kp;
+CREATE TABLE chapter_kp (                        -- 识别出的知识点（老师可以改）；确认后同步一份到 knowledge_point 给练习、诊断用
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    chapter_id         BIGINT       NOT NULL,
+    sort_order         INT          NOT NULL,
+    name               VARCHAR(100) NOT NULL,
+    summary            VARCHAR(500),
+    importance         VARCHAR(8),               -- 重点 / 一般
+    key_points         TEXT,                     -- JSON：[{"text": "...", "sources": ["D1-P4", "V1-02"]}]
+    misconceptions     TEXT,                     -- JSON：["...", "..."]
+    sources            TEXT,                     -- JSON：["D1-P4", "V1-02"]，编号见 material_text（D = 第几份文档，V = 第几个视频）
+    edited             TINYINT(1)   NOT NULL DEFAULT 0,  -- 老师改过：重新识别时保留
+    knowledge_point_id BIGINT,                   -- 确认后对应的 knowledge_point.id
+    created_at         DATETIME     NOT NULL,
+    updated_at         DATETIME     NOT NULL,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_chapter_kp_chapter ON chapter_kp (chapter_id, sort_order);
+
+-- ---------------------------------------------------------------------
+-- 费曼式 AI 对话：学生把知识点讲给 AI 扮演的同学“小林”听（规则见 docs/模块说明/设计方案-费曼式AI对话.md 第十二节）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS feynman_setup;
+CREATE TABLE feynman_setup (                     -- 一个 AI 对话项：老师选的知识点（最多 2 个）和大模型起草、老师确认的草稿
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    item_id     BIGINT       NOT NULL,           -- chapter_item.id（type = dialogue）
+    chapter_id  BIGINT       NOT NULL,
+    kp_ids      VARCHAR(100) NOT NULL,           -- chapter_kp.id，逗号分隔，按对话顺序
+    drafts      TEXT,                            -- JSON：每个知识点的草稿（场景、开场白、误解、判断标准、三级提示、考一考小林）
+    status      VARCHAR(16)  NOT NULL,           -- draft 待确认 / confirmed 已确认（学生能用）
+    created_at  DATETIME     NOT NULL,
+    updated_at  DATETIME     NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_feynman_setup UNIQUE (item_id)
+);
+
+DROP TABLE IF EXISTS feynman_session;
+CREATE TABLE feynman_session (                   -- 一个学生的一次对话；进度（每个知识点的要点状态、提示级别、次数）存在 state 里
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    student_id  BIGINT       NOT NULL,
+    item_id     BIGINT       NOT NULL,
+    status      VARCHAR(16)  NOT NULL,           -- open 进行中 / done 完成
+    state       TEXT         NOT NULL,           -- JSON
+    created_at  DATETIME     NOT NULL,
+    updated_at  DATETIME     NOT NULL,
+    PRIMARY KEY (id)
+);
+
+DROP TABLE IF EXISTS feynman_message;
+CREATE TABLE feynman_message (                   -- 对话里的每一句；学生的话附上大模型的判断（存档、老师复核用）
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    session_id  BIGINT       NOT NULL,
+    kp_idx      INT          NOT NULL,           -- 第几个知识点（从 0 开始）
+    role        VARCHAR(10)  NOT NULL,           -- student / ai / system
+    content     TEXT         NOT NULL,
+    judgment    TEXT,                            -- JSON：大模型对学生这一句的判断
+    ai_call_id  BIGINT,
+    created_at  DATETIME     NOT NULL,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_feynman_message_session ON feynman_message (session_id);
+
+DROP TABLE IF EXISTS item_progress;
+CREATE TABLE item_progress (
+    id             BIGINT        NOT NULL AUTO_INCREMENT,
+    student_id     BIGINT        NOT NULL,
+    item_id        BIGINT        NOT NULL,                -- chapter_item.id
+    course_id      BIGINT,
+    duration_sec   DECIMAL(9,1),                          -- 视频总时长（秒，第一次上报时定下，之后不改）
+    watched_ranges VARCHAR(4000),                         -- 视频真正播放过的时间段，合并后的 JSON：[[0,12.5],[14,20]]
+    watched_sec    DECIMAL(9,1)  NOT NULL DEFAULT 0,      -- 上面各段长度之和
+    read_sec       INT           NOT NULL DEFAULT 0,      -- 文档累计阅读秒数（页面在前台才算）
+    last_position  DECIMAL(9,1),                          -- 视频上次播放到哪里，下次接着看
+    completed_at   DATETIME,                              -- 判定学完的时间；空 = 还没学完
+    created_at     DATETIME      NOT NULL,
+    updated_at     DATETIME      NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_item_progress UNIQUE (student_id, item_id)
+);
 
 -- ---------------------------------------------------------------------
 -- 「诊」：知识点掌握度（docs/database.md 4.2，算法见 docs/design.md 5.1）
@@ -400,13 +559,14 @@ CREATE TABLE intervention (
     item_ids           VARCHAR(255),                       -- 要复习的内容项，逗号分隔
     note               VARCHAR(500),                       -- 老师给学生的话
     source             VARCHAR(16)  NOT NULL DEFAULT 'system', -- system 系统建议 / teacher 老师新建
-    status             VARCHAR(16)  NOT NULL DEFAULT 'pending', -- pending 待审核 / approved 执行中 / rejected 已驳回 / done 已完成
+    status             VARCHAR(16)  NOT NULL DEFAULT 'pending', -- pending 待审核 / approved 执行中 / rejected 已驳回 / done 已完成 / revoked 老师撤回
     before_value       VARCHAR(32),
     after_value        VARCHAR(32),
     effective          TINYINT(1),                         -- 完成时判断：1 有效 / 0 无效
     reviewer_id        BIGINT,
     reviewed_at        DATETIME,
     step2_at           DATETIME,                           -- AB 进入第 2 步的时间（之后的作答才算第 2 步的）
+    due_at             DATETIME,                           -- 期限：开始执行时定（默认 7 天后，老师审核时可改、执行中可延期）
     completed_at       DATETIME,
     created_at         DATETIME,
     updated_at         DATETIME,

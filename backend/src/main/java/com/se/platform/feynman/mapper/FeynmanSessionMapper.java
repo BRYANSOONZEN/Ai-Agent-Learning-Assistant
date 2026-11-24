@@ -1,0 +1,9 @@
+package com.se.platform.feynman.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.se.platform.feynman.entity.FeynmanSession;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface FeynmanSessionMapper extends BaseMapper<FeynmanSession> {
+}

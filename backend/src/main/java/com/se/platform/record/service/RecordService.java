@@ -3,7 +3,7 @@ package com.se.platform.record.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.se.platform.common.BusinessException;
-import com.se.platform.common.DemoIdentity;
+import com.se.platform.common.CurrentUser;
 import com.se.platform.course.dto.LearnDtos.QuestionResult;
 import com.se.platform.course.entity.Chapter;
 import com.se.platform.course.entity.ChapterItem;
@@ -68,6 +68,10 @@ public class RecordService {
     private final DialogueSessionMapper sessionMapper;
     private final DialogueMessageMapper messageMapper;
 
+    /** 简答判分明细转 JSON 用（只序列化 record，不需要 Spring 的配置） */
+    private static final com.fasterxml.jackson.databind.ObjectMapper DETAIL =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     public RecordService(AnswerRecordMapper answerMapper, LearningEventMapper eventMapper,
                          ChapterItemMapper itemMapper, ChapterMapper chapterMapper, CourseMapper courseMapper,
                          ExerciseMapper exerciseMapper, DialogueSessionMapper sessionMapper,
@@ -83,7 +87,7 @@ public class RecordService {
     }
 
     public long currentStudentId() {
-        return DemoIdentity.studentId();
+        return CurrentUser.studentId();
     }
 
     // ------------------------------------------------------------------ 写
@@ -104,6 +108,11 @@ public class RecordService {
             a.setItemId(itemId);
             a.setAnswer(r.chosen() == null ? "" : r.chosen());
             a.setIsCorrect(r.correct());
+            a.setScore(r.score());
+            a.setGuess(r.guess());
+            a.setReliability(r.reliability());
+            a.setStatus(r.status());
+            a.setDetail(r.points() == null ? null : DETAIL.valueToTree(r.points()).toString());
             a.setSubmittedAt(now);
             answerMapper.insert(a);
         }
@@ -117,6 +126,11 @@ public class RecordService {
         ChapterItem item = itemMapper.selectById(itemId);
         if (item == null) {
             throw BusinessException.notFound("内容");
+        }
+        // 视频、文档学完由后端判定（ProgressService：视频看到 90%，文档读满 30 秒并点"我已读完"），前端不能直接报
+        if (LearningEvent.FINISH_ITEM.equals(type)
+                && ("video".equals(item.getType()) || "document".equals(item.getType()))) {
+            throw BusinessException.badRequest("视频要看到 90%、文档要读满 30 秒并点\"我已读完\"才算学完");
         }
         LearningEvent e = new LearningEvent();
         e.setStudentId(currentStudentId());

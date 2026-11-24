@@ -12,9 +12,10 @@ import {
   updateKnowledgePoint,
   deleteKnowledgePoint,
 } from '@/api/teacherCourse'
+import KpRecognition from './KpRecognition.vue'
 
 const props = defineProps({ chapter: { type: Object, required: true } })
-const emit = defineEmits(['changed'])
+const emit = defineEmits(['changed', 'go'])
 
 const difficultyLabel = { 1: '易', 2: '中', 3: '难' }
 
@@ -76,13 +77,27 @@ async function remove(row) {
   emit('changed')
 }
 
+// AI 识别的知识点确认后会同步到下面的列表：刷新列表，也让大纲上的数字和标签更新
+function onRecognized() {
+  load()
+  emit('changed')
+}
+
 onMounted(load)
 </script>
 
 <template>
   <div>
+    <!-- AI recognizes knowledge points from the uploaded videos / documents -->
+    <KpRecognition
+      :chapter="chapter"
+      @changed="onRecognized"
+      @go="(v) => emit('go', v)"
+    />
+
+    <h4 class="list-title">练习、诊断用的知识点</h4>
     <div class="bar">
-      <p class="tip">对照资料整理本章的知识点，"说明"里写课件中的原理句。题目和对话话题都挂在知识点上。</p>
+      <p class="tip">AI 识别的知识点确认后会同步到这里；也可以手动添加。"说明"里写课件中的原理句，题目和对话话题都挂在知识点上。</p>
       <el-button type="primary" icon="Plus" @click="openCreate">新建知识点</el-button>
     </div>
 
@@ -142,6 +157,9 @@ onMounted(load)
 </template>
 
 <style scoped>
+.list-title {
+  margin: 8px 0 10px;
+}
 .bar {
   display: flex;
   justify-content: space-between;

@@ -1,6 +1,7 @@
 <script setup>
 /*
- * 老师布置 (top of 学习推荐): interventions the teacher approved for me.
+ * 给你布置的任务 (top of 学习推荐): interventions for me — approved by the teacher, or started automatically
+ * by the system (A / B, docs/计划-个人学习助手.md 第 11 节). Each task says which one.
  *   A 变式练习 — the questions, answered here like the other recommended ones
  *   B 复习 + 重做对话 — links to the reading and to the chapter's AI dialogue
  *   A + B — B first; the questions only show up once the review step is done
@@ -12,6 +13,7 @@ import { ElMessage } from 'element-plus'
 import { getMyAssignments } from '@/api/intervention'
 import { practiceRecommended } from '@/api/recommend'
 import { valueText } from '@/views/intervention/interventionLabels'
+import { dueInfo, fmtDue } from '@/utils/deadline'
 
 const emit = defineEmits(['changed', 'loaded'])
 const router = useRouter()
@@ -66,8 +68,8 @@ onMounted(load)
   <section v-if="data && (data.running.length || data.done.length)" class="assigned app-card">
     <div class="sw-heading">
       <div>
-        <span class="sw-eyebrow">FROM YOUR TEACHER</span>
-        <h3>老师布置</h3>
+        <span class="sw-eyebrow">ASSIGNED TO YOU</span>
+        <h3>给你布置的任务</h3>
       </div>
       <button v-if="Object.keys(results).length" type="button" class="sw-link" @click="refresh">
         <el-icon><Refresh /></el-icon>刷新进度
@@ -77,7 +79,11 @@ onMounted(load)
     <article v-for="iv in data.running" :key="iv.id" class="task">
       <header>
         <b>「{{ iv.knowledgePointName }}」</b>
+        <span class="sw-tag" :class="iv.auto ? 'teal' : 'purple'">{{ iv.auto ? '系统根据你的情况布置' : '老师布置' }}</span>
         <span v-if="iv.type === 'REVIEW_PRACTICE'" class="sw-tag purple">第 {{ iv.step }} / 2 步</span>
+        <span v-if="iv.dueAt" class="sw-tag" :class="iv.overdue ? 'red' : dueInfo(iv.dueAt).tone">
+          {{ iv.overdue ? `期限 ${fmtDue(iv.dueAt)} 已过，尽快补上` : `期限 ${fmtDue(iv.dueAt)}，${dueInfo(iv.dueAt).state === 'soon' ? dueInfo(iv.dueAt).text : '按时完成'}` }}
+        </span>
       </header>
       <blockquote class="note">{{ iv.note }}</blockquote>
 

@@ -1,0 +1,204 @@
+package com.se.platform.feynman;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.se.platform.ai.client.AiClient;
+import com.se.platform.ai.client.FakeAiClient;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+/**
+ * 费曼式对话。第 1 章的 AI 对话项（内容项 3），学生 5 号已经学完前两项（对话已解锁）。
+ * 知识点用测试里插入的一个（2 条要点）；AI 用假的，按顺序返回预设的回复。
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class FeynmanTest {
+
+    @TestConfiguration
+    static class Fakes {
+        @Bean
+        @Primary
+        FakeAiClient fakeAiClient() {
+            return new FakeAiClient();
+        }
+    }
+
+    static final String DRAFT = """
+            {"scene": {"type": "同学请教", "name": "阿哲", "setting": "阿哲要测网店的购买数量", "persona": "实习生", "opening": "每单买 1～99 件，我该测哪些数？"},
+             "misconception_probe": {"misconception": "测中间值最有代表性", "line": "那我只测 50 不就行了？"},
+             "key_points": [
+               {"no": 1, "understood_if": "说出要测边界外的 0", "partial_if": "只说测边界", "L1": "还有吗？", "L2": "有人下单 0 件呢？", "L3": "比 1 小的数要不要测？", "pointer": "课件第 4 页"},
+               {"no": 2, "understood_if": "说出错误常在边界附近", "partial_if": "只说边界重要", "L1": "为什么挑这些？", "L2": "程序员把 ≥1 写成 >1，测 50 能发现吗？", "L3": "错误一般出在哪里？", "pointer": "课件第 5 页"}],
+             "recap": "复述"}""";
+
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private AiClient aiClient;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ObjectMapper json;
+
+    private FakeAiClient fake;
+    private long kpId;
+
+    @BeforeEach
+    void setUp() {
+        fake = (FakeAiClient) aiClient;
+        jdbc.update("""
+                INSERT INTO chapter_kp (chapter_id, sort_order, name, summary, importance, key_points, misconceptions,
+                  sources, edited, created_at, updated_at)
+                VALUES (1, 0, '边界测试值的选取', '边界上、外、内各取值', '重点',
+                  '[{"text":"边界外的值也要测，比如 0","sources":[]},{"text":"错误常发生在边界附近","sources":[]}]',
+                  '["测中间值最有代表性"]', '[]', 0, NOW(), NOW())""");
+        kpId = jdbc.queryForObject("SELECT MAX(id) FROM chapter_kp", Long.class);
+    }
+
+    private String turn(String kind, boolean attempt, String points, boolean fixed, String ack) {
+        return turn(kind, attempt, points, fixed, ack, "");
+    }
+
+    private String turn(String kind, boolean attempt, String points, boolean fixed, String ack, String followup) {
+        return "{\"kind\":\"" + kind + "\",\"attempt\":" + attempt + ",\"points\":" + points
+                + ",\"misconception_fixed\":" + fixed + ",\"ack\":\"" + ack + "\",\"followup\":\"" + followup + "\"}";
+    }
+
+    private ResultActions say(long session, String text) throws Exception {
+        return mockMvc.perform(post("/api/learn/feynman/" + session + "/reply").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(java.util.Map.of("text", text))));
+    }
+
+    private String lastAi(ResultActions r) throws Exception {
+        JsonNode msgs = json.readTree(r.andReturn().getResponse().getContentAsString()).path("data").path("messages");
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            if ("ai".equals(msgs.get(i).path("role").asText())) {
+                return msgs.get(i).path("content").asText();
+            }
+        }
+        return "";
+    }
+
+    @Test
+    void teacherDraftsAtMostTwo_thenConfirms() throws Exception {
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpIds\": [" + kpId + ", " + kpId + ", " + kpId + "]}"))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("最多 2 个")));
+
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpIds\": [" + kpId + "]}"))
+                .andExpect(jsonPath("$.data.status").value("draft"))
+                .andExpect(jsonPath("$.data.drafts[0].draft.scene.opening").value("每单买 1～99 件，我该测哪些数？"))
+                // 程序检查：草稿齐全；L3“比 1 小的数要不要测？”没有照抄要点原文
+                .andExpect(jsonPath("$.data.drafts[0].checks[0].ok").value(true))
+                .andExpect(jsonPath("$.data.drafts[0].checks[3].ok").value(true));
+
+        // 没确认之前学生用不了
+        mockMvc.perform(get("/api/learn/items/3/feynman")).andExpect(jsonPath("$.data.enabled").value(false));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm")).andExpect(jsonPath("$.data.status").value("confirmed"));
+        mockMvc.perform(get("/api/learn/items/3/feynman")).andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.names[0]").value("边界测试值的选取"));
+    }
+
+    @Test
+    void wholeConversation_hintsByLevel_followupAndSupplement() throws Exception {
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kpIds\": [" + kpId + "]}"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
+
+        JsonNode s = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start"))
+                .andReturn().getResponse().getContentAsString()).path("data");
+        long sid = s.path("id").asLong();
+        Assertions.assertEquals("阿哲", s.path("kps").get(0).path("peer").asText());   // 名字来自草稿
+        Assertions.assertEquals("每单买 1～99 件，我该测哪些数？", s.path("messages").get(2).path("content").asText());
+
+        // 第 1 句：讲清了要点 1（原话核对得上）→ 自己讲清；短反应里的问句和“对，”被去掉；接着问要点 2 的 L1
+        fake.reply(turn("explain", true, "[{\"no\":1,\"status\":\"clear\",\"quote\":\"要测0，因为0应该被拒绝\"}]", false,
+                "对，原来如此。那 1 呢？"));
+        ResultActions r = say(sid, "要测0，因为0应该被拒绝");
+        Assertions.assertEquals("原来如此。 为什么挑这些？", lastAi(r));
+
+        // 第 2 句：不知道 → 讲了两句以后，带着常见误解问一次
+        fake.reply(turn("stuck", false, "[]", false, "没关系"));
+        Assertions.assertTrue(lastAi(say(sid, "不知道")).endsWith("那我只测 50 不就行了？"));
+
+        // 第 3 句：指出了误解；要点 2 讲到一部分（有进展、没讲清）→ 用模型的针对性追问，不原样重复 L1
+        fake.reply(turn("explain", true, "[{\"no\":2,\"status\":\"partial\",\"quote\":\"边界比较重要\"}]", true, "哦",
+                "为什么边界比中间更重要？"));
+        Assertions.assertTrue(lastAi(say(sid, "测50没用，边界比较重要")).endsWith("为什么边界比中间更重要？"));
+
+        // 第 4 句：模型说讲清了要点 2，但摘的不是学生原话 → 不算，同一条要点再问就升级（L2）
+        fake.reply(turn("explain", true, "[{\"no\":2,\"status\":\"clear\",\"quote\":\"错误常发生在边界附近\"}]", false, "嗯"));
+        Assertions.assertTrue(lastAi(say(sid, "可能发现不了吧")).endsWith("程序员把 ≥1 写成 >1，测 50 能发现吗？"));
+
+        // 第 5 句：没进展 → L3；第 6 句：没进展 → 不给答案，指出资料
+        fake.reply(turn("explain", true, "[]", false, "好"));
+        Assertions.assertTrue(lastAi(say(sid, "出在代码里？")).endsWith("错误一般出在哪里？"));
+        fake.reply(turn("explain", true, "[]", false, "好"));
+        Assertions.assertTrue(lastAi(say(sid, "不太确定")).contains("课件第 5 页"));
+
+        // 第 7 句：要点 2 引导到头 → 自动收尾：总评、复述、补充（认真尝试了 5 次）、建议复习、小结、对话完成
+        fake.reply(turn("explain", true, "[]", false, "明白"))
+                .then("{\"points\":[{\"no\":1,\"status\":\"clear\",\"quote\":\"要测0\"},{\"no\":2,\"status\":\"partial\",\"quote\":\"边界比较重要\"}],"
+                        + "\"attempted\":true,\"misconception_fixed\":true,\"recap\":\"我记住啦：测下限要测 0\"}");
+        r = say(sid, "我再想想")
+                .andExpect(jsonPath("$.data.status").value("done"))
+                .andExpect(jsonPath("$.data.kps[0].points[0].how").value("self"))
+                .andExpect(jsonPath("$.data.kps[0].points[1].how").value("supplemented"))
+                .andExpect(jsonPath("$.data.kps[0].misconceptionFixed").value(true));
+        String all = r.andReturn().getResponse().getContentAsString();
+        Assertions.assertTrue(all.contains("我理解一下：测下限要测 0"));        // 去掉了重复的“我记住啦”
+        Assertions.assertTrue(all.contains("错误常发生在边界附近"));            // 补充用的是老师确认的要点原文
+        Assertions.assertTrue(all.contains("建议接下来先看：课件第 5 页"));
+        Assertions.assertFalse(all.contains("考考我"));                         // 已去掉“考一考”
+        Assertions.assertTrue(all.contains("要点 2：讲了一部分，阿哲补充了"));
+        say(sid, "还能说吗").andExpect(jsonPath("$.code").value(400));
+        mockMvc.perform(get("/api/learn/courses/1")).andExpect(jsonPath("$.data.doneItemIds", Matchers.hasItem(3)));
+    }
+
+    @Test
+    void tenTurnsEndsAutomatically_noAttemptNoSupplement() throws Exception {
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kpIds\": [" + kpId + "]}"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
+        long sid = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start"))
+                .andReturn().getResponse().getContentAsString()).path("data").path("id").asLong();
+
+        // 一直闲聊：L1～L3、指出资料都走完，第 8 句左右自动收尾；几乎没尝试 → 不补充，只推荐复习
+        fake.reply(turn("chat", false, "[]", false, "哈哈"));
+        String last = "";
+        for (int i = 0; i < 10; i++) {
+            String body = say(sid, "哈哈哈").andReturn().getResponse().getContentAsString();
+            if (body.contains("\"status\":\"done\"")) {
+                last = body;
+                break;
+            }
+        }
+        Assertions.assertFalse(last.isEmpty(), "10 句以内应该自动收尾");
+        Assertions.assertFalse(last.contains("我刚去翻了资料"));
+        Assertions.assertTrue(last.contains("这几块你还没怎么讲"));
+    }
+}

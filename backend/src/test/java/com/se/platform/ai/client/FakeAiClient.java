@@ -41,7 +41,7 @@ public class FakeAiClient implements AiClient {
     }
 
     @Override
-    public ChatResult chat(ChatRequest request) {
+    public synchronized ChatResult chat(ChatRequest request) {
         requests.add(request);
         if (nextError != null) {
             String e = nextError;

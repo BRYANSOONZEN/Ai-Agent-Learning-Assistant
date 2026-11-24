@@ -3,6 +3,7 @@ package com.se.platform.intervention.controller;
 import com.se.platform.common.BusinessException;
 import com.se.platform.common.Result;
 import com.se.platform.intervention.dto.InterventionDtos.Board;
+import com.se.platform.intervention.dto.InterventionDtos.DueRequest;
 import com.se.platform.intervention.dto.InterventionDtos.InterventionView;
 import com.se.platform.intervention.dto.InterventionDtos.MyAssignments;
 import com.se.platform.intervention.dto.InterventionDtos.ReviewRequest;
@@ -37,13 +38,17 @@ public class InterventionController {
     /** GET /api/interventions/board?courseId=1：扫描生成新预警，返回待处理预警（带系统建议）和干预列表 */
     @GetMapping("/interventions/board")
     public Result<Board> board(@RequestParam Long courseId) {
-        return Result.ok(service.board(courseId));
+        synchronized (InterventionService.SCAN_LOCK) {   // 和 open-count 同时到时，别把同一条预警建两次
+            return Result.ok(service.board(courseId));
+        }
     }
 
     /** GET /api/interventions/open-count：侧边栏「干预管理」后面的数字 */
     @GetMapping("/interventions/open-count")
     public Result<Integer> openCount() {
-        return Result.ok(service.openCount());
+        synchronized (InterventionService.SCAN_LOCK) {
+            return Result.ok(service.openCount());
+        }
     }
 
     /** POST /api/interventions/{id}/review {approve: true, exerciseIds: [3, 5], note: "..."} */
@@ -62,9 +67,25 @@ public class InterventionController {
         return Result.ok();
     }
 
+    /** POST /api/interventions/{id}/revoke：撤回一条执行中的干预（系统自动执行的，老师觉得不对） */
+    @PostMapping("/interventions/{id}/revoke")
+    public Result<InterventionView> revoke(@PathVariable Long id) {
+        return Result.ok(service.revoke(id));
+    }
+
+    /** PUT /api/interventions/{id}/due {dueAt: "2026-12-01 23:59:00"}：执行中的干预改期限（延期） */
+    @PutMapping("/interventions/{id}/due")
+    public Result<InterventionView> changeDue(@PathVariable Long id, @RequestBody DueRequest req) {
+        return Result.ok(service.changeDue(id, req == null ? null : req.dueAt()));
+    }
+
     /** GET /api/interventions/mine：学生看老师布置给自己的 */
     @GetMapping("/interventions/mine")
     public Result<MyAssignments> mine() {
-        return Result.ok(service.mine(recordService.currentStudentId()));
+        long student = recordService.currentStudentId();
+        synchronized (InterventionService.SCAN_LOCK) {
+            service.scanStudent(student);   // 自动执行的干预不用等老师打开干预页
+            return Result.ok(service.mine(student));
+        }
     }
 }

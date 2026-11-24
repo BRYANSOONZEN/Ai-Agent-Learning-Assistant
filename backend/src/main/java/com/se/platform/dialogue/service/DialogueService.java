@@ -8,7 +8,11 @@ import com.se.platform.ai.client.ChatResult;
 import com.se.platform.ai.log.AiCallLogService;
 import com.se.platform.ai.prompt.PromptTemplate;
 import com.se.platform.common.BusinessException;
-import com.se.platform.common.DemoIdentity;
+import com.se.platform.common.CurrentUser;
+import com.se.platform.course.entity.ChapterItem;
+import com.se.platform.course.mapper.ChapterItemMapper;
+import com.se.platform.record.service.CompletionService;
+import com.se.platform.course.service.ChapterItemService;
 import com.se.platform.dialogue.dto.DialogueOpening;
 import com.se.platform.dialogue.dto.DialogueView;
 import com.se.platform.dialogue.dto.TopicView;
@@ -22,6 +26,7 @@ import com.se.platform.dialogue.model.JudgedType;
 import com.se.platform.dialogue.model.Judgement;
 import com.se.platform.dialogue.model.NextAction;
 import com.se.platform.dialogue.model.TopicResult;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,11 +63,14 @@ public class DialogueService {
     private final AiCallLogService callLog;
     private final JudgementParser parser;
     private final DialogueRules rules;
+    private final ChapterItemMapper itemMapper;
+    private final CompletionService completionService;
     private final PromptTemplate turnTemplate = PromptTemplate.load("dialogue_turn_v3");
 
     public DialogueService(DialogueTopicService topicService, DialogueSessionMapper sessionMapper,
                            DialogueTopicStateMapper stateMapper, DialogueMessageMapper messageMapper,
-                           AiCallLogService callLog, JudgementParser parser, DialogueRules rules) {
+                           AiCallLogService callLog, JudgementParser parser, DialogueRules rules,
+                           ChapterItemMapper itemMapper, CompletionService completionService) {
         this.topicService = topicService;
         this.sessionMapper = sessionMapper;
         this.stateMapper = stateMapper;
@@ -70,6 +78,8 @@ public class DialogueService {
         this.callLog = callLog;
         this.parser = parser;
         this.rules = rules;
+        this.itemMapper = itemMapper;
+        this.completionService = completionService;
     }
 
     // ===================== 对外的几个操作 =====================
@@ -86,12 +96,18 @@ public class DialogueService {
      */
     @Transactional
     public DialogueView start(Long chapterId, Long itemId) {
+        // 过了截止时间又不允许补做，不能开始新的对话；截止前已经开始的对话可以继续做完
+        ChapterItem item = itemId == null ? null : itemMapper.selectById(itemId);
+        if (item != null) {
+            ChapterItemService.requireOpen(item, LocalDateTime.now());
+            completionService.requireUnlocked(CurrentUser.studentId(), item); // 上一项学完才解锁
+        }
         List<TopicView> topics = topicService.listEnabled(chapterId, itemId);
         if (topics.isEmpty()) {
             throw BusinessException.badRequest("这一章还没有对话话题，请老师先添加");
         }
         DialogueSession session = new DialogueSession();
-        session.setStudentId(DemoIdentity.studentId());
+        session.setStudentId(CurrentUser.studentId());
         session.setChapterId(chapterId);
         session.setItemId(itemId);
         session.setKind("CHAPTER");

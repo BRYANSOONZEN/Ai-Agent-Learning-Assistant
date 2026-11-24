@@ -28,20 +28,24 @@ function write(all) {
   }
 }
 
-export function markDone(courseId, itemId) {
+// log = false for videos and documents: the server decided they are finished and already recorded it
+export function markDone(courseId, itemId, log = true) {
   const all = readAll()
   const list = all[courseId] || []
   if (list.includes(itemId)) return list
   all[courseId] = [...list, itemId]
   write(all)
-  logEvent('finish_item', itemId).catch(() => {})
+  // the study assistant refreshes when an item is finished (a chapter may just have been completed)
+  const refresh = () => window.dispatchEvent(new Event('learn-progress'))
+  if (log) logEvent('finish_item', itemId).then(refresh).catch(() => {})
+  else refresh()
   return all[courseId]
 }
 
-// the server's list of finished items wins; keep anything finished locally but not yet sent
+// the server's list of finished items is the truth (it also decides what is unlocked), so it replaces the local copy
 export function syncDone(courseId, serverIds = []) {
   const all = readAll()
-  all[courseId] = [...new Set([...serverIds, ...(all[courseId] || [])])]
+  all[courseId] = [...serverIds]
   write(all)
   return all[courseId]
 }

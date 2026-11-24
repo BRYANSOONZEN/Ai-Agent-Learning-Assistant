@@ -28,6 +28,7 @@ import {
   createItem,
   deleteItem,
   reorderItems,
+  getKpBadges,
 } from '@/api/teacherCourse'
 
 const route = useRoute()
@@ -78,7 +79,7 @@ const FIXED = {
 const ITEM_DESC = {
   video: '一个视频。一章要放几个视频，就加几个视频项。',
   document: '上传一个文件，或者直接写一段阅读内容。',
-  exercise: '一次练习，里面放几道单选题。一章可以有好几次练习。',
+  exercise: '一次练习：可以手写、AI 出题或上传已有题目。一章可以有好几次练习。',
   dialogue: '学生学到这里时和 AI 对话，按这里的话题顺序提问。',
 }
 const head = computed(() => {
@@ -132,9 +133,33 @@ function clickChapter(ch) {
 
 // ---------- loading ----------
 
+// AI 识别知识点的状态，显示在每章“知识点”入口：识别中 / 待确认 8 / 已确认 8
+const kpBadges = ref({}) // chapterId -> { status, count }
+const KP_BADGE = {
+  waiting: { text: '处理中', cls: 'busy' },
+  recognizing: { text: '识别中', cls: 'busy' },
+  draft: { text: '待确认', cls: 'todo' },
+  failed: { text: '失败', cls: 'todo' },
+}
+function kpBadge(chapterId) {
+  const b = kpBadges.value[chapterId]
+  if (!b || !KP_BADGE[b.status]) return null
+  const base = KP_BADGE[b.status]
+  return b.status === 'draft' ? { ...base, text: `待确认 ${b.count}` } : base
+}
+async function loadBadges() {
+  try {
+    const list = await getKpBadges(courseId.value)
+    kpBadges.value = Object.fromEntries(list.map((b) => [b.chapterId, b]))
+  } catch {
+    /* the badges are only a hint */
+  }
+}
+
 async function loadChapters() {
   chapters.value = await getChapters(courseId.value)
   if (!selected.value && chapters.value.length) open(chapters.value[0].id)
+  loadBadges()
 }
 
 // after any edit inside the chapter: counts on chapters + the item list
@@ -459,7 +484,8 @@ onMounted(load)
             >
               <el-icon class="item-icon"><Collection /></el-icon>
               <span class="item-label">知识点</span>
-              <span class="item-count">{{ ch.knowledgePointCount }}</span>
+              <span v-if="kpBadge(ch.id)" class="kp-badge" :class="kpBadge(ch.id).cls">{{ kpBadge(ch.id).text }}</span>
+              <span v-else class="item-count">{{ ch.knowledgePointCount }}</span>
             </li>
             <li
               class="item fixed"
@@ -506,6 +532,7 @@ onMounted(load)
             :key="'k' + selected.id"
             :chapter="selected"
             @changed="refresh"
+            @go="(v) => open(selected.id, v)"
           />
           <ChapterPublish
             v-else-if="view === 'publish'"
@@ -583,6 +610,23 @@ onMounted(load)
   background: rgba(255, 255, 255, 0.1);
   color: #c4d5e4;
   font-size: 11px;
+}
+
+/* AI 识别状态的小标签（大纲里每章“知识点”入口） */
+.kp-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 18px;
+}
+.kp-badge.todo {
+  background: #fde2e2;
+  color: #c45656;
+}
+.kp-badge.busy {
+  background: #faecd8;
+  color: #b88230;
 }
 
 /* ---------- layout ---------- */

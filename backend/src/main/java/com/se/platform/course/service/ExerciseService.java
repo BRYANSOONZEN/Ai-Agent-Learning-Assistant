@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.se.platform.common.BusinessException;
+import com.se.platform.course.dto.ChapterItemView;
 import com.se.platform.course.dto.ExerciseSaveRequest;
 import com.se.platform.course.dto.ExerciseView;
 import com.se.platform.course.entity.Chapter;
@@ -20,7 +21,11 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 单选题的增删改查，以及题目和知识点的关联 */
+/**
+ * 题目的增删改查，以及题目和知识点的关联。
+ * 6 种题型（Grader 的常量），每种要填的字段不同，copy() 里按题型检查。
+ * AI 生成、上传识别的题先是草稿（draft），老师确认后学生才看得到。
+ */
 @Service
 public class ExerciseService {
 
@@ -60,7 +65,8 @@ public class ExerciseService {
         exercise.setCourseId(chapter.getCourseId());
         exercise.setChapterId(chapter.getId());
         exercise.setItemId(itemService.requireOfType(req.itemId(), chapter.getId(), "exercise").getId());
-        exercise.setType("single_choice");
+        exercise.setSource("manual");
+        exercise.setDraft(false);
         exercise.setCreatedBy(chapterService.currentTeacherId());
         // 新题排在这次练习的最后
         exercise.setSortOrder(Math.toIntExact(exerciseMapper.selectCount(
@@ -98,28 +104,145 @@ public class ExerciseService {
     }
 
     private void copy(ExerciseSaveRequest req, Exercise exercise) {
-        List<String> options = req.options().stream().map(s -> s == null ? "" : s.trim()).toList();
-        if (options.stream().anyMatch(String::isEmpty)) {
-            throw BusinessException.badRequest("选项内容不能为空");
+        String type = req.type() == null || req.type().isBlank() ? Grader.SINGLE : req.type();
+        if (!Grader.TYPES.contains(type)) {
+            throw BusinessException.badRequest("不认识的题型：" + type);
         }
-        // 正确答案必须是 A 开始、选项数量以内的字母
-        String answer = req.answer().trim().toUpperCase();
-        int index = answer.length() == 1 ? answer.charAt(0) - 'A' : -1;
-        if (index < 0 || index >= options.size()) {
-            throw BusinessException.badRequest("正确答案要在 A～" + (char) ('A' + options.size() - 1) + " 之间");
+        String assess = req.assessType() == null || req.assessType().isBlank() ? "concept" : req.assessType();
+        if (!Grader.ASSESS.contains(assess)) {
+            throw BusinessException.badRequest("不认识的考查类型：" + assess);
         }
-        // 误解说明补齐到和选项一样多，多出来的截掉
-        List<String> notes = new ArrayList<>();
-        for (int i = 0; i < options.size(); i++) {
-            String note = req.optionNotes() != null && i < req.optionNotes().size() ? req.optionNotes().get(i) : null;
-            notes.add(note == null || i == index ? "" : note.trim());
+        List<String> options = List.of();
+        List<String> notes = List.of();
+        String answer = "";
+        List<String> reasons = List.of();
+        List<String> reasonNotes = List.of();
+        String reasonAnswer = null;
+        List<String> accepts = List.of();
+        List<String> keyPoints = List.of();
+        String reference = null;
+        switch (type) {
+            case Grader.FILL -> {
+                accepts = clean(req.accepts());
+                if (accepts.isEmpty() || accepts.size() > 5) {
+                    throw BusinessException.badRequest("填空题要写 1～5 个都算对的说法");
+                }
+            }
+            case Grader.SHORT -> {
+                keyPoints = clean(req.keyPoints());
+                reference = req.reference() == null ? "" : req.reference().strip();
+                if (reference.isEmpty()) {
+                    throw BusinessException.badRequest("简答题要写参考答案");
+                }
+                if (keyPoints.size() < 1 || keyPoints.size() > 5) {
+                    throw BusinessException.badRequest("简答题要写 1～5 条判分要点");
+                }
+            }
+            default -> {
+                options = Grader.JUDGE.equals(type) ? Grader.JUDGE_OPTIONS : trimAll(req.options());
+                if (options.size() < 2 || options.size() > 6) {
+                    throw BusinessException.badRequest("选项为 2～6 个");
+                }
+                if (options.stream().anyMatch(String::isEmpty)) {
+                    throw BusinessException.badRequest("选项内容不能为空");
+                }
+                answer = req.answer() == null ? "" : req.answer().strip().toUpperCase();
+                if (Grader.MULTIPLE.equals(type)) {
+                    answer = Grader.sortLetters(answer);
+                    if (answer.length() < 2 || answer.chars().anyMatch(c -> c - 'A' >= req.options().size())) {
+                        throw BusinessException.badRequest("多选题至少要有 2 个正确选项，而且都在选项范围内");
+                    }
+                } else {
+                    letterIndex(answer, options.size(), "正确答案");
+                }
+                notes = notesFor(req.optionNotes(), options.size(), Grader.MULTIPLE.equals(type) ? -1
+                        : answer.charAt(0) - 'A');
+                if (Grader.TWO_TIER.equals(type)) {
+                    reasons = trimAll(req.reasons());
+                    if (reasons.size() < 2 || reasons.size() > 6 || reasons.stream().anyMatch(String::isEmpty)) {
+                        throw BusinessException.badRequest("两段式题要写 2～6 个理由选项");
+                    }
+                    reasonAnswer = req.reasonAnswer() == null ? "" : req.reasonAnswer().strip().toUpperCase();
+                    int ri = letterIndex(reasonAnswer, reasons.size(), "正确理由");
+                    reasonNotes = notesFor(req.reasonNotes(), reasons.size(), ri);
+                }
+            }
         }
+        exercise.setType(type);
+        exercise.setAssessType(assess);
+        exercise.setKeyPointNo(req.keyPointNo());
         exercise.setStem(req.stem().trim());
         exercise.setOptions(toJson(options));
         exercise.setAnswer(answer);
         exercise.setAnalysis(req.analysis());
         exercise.setOptionNotes(toJson(notes));
+        exercise.setReasons(toJson(reasons));
+        exercise.setReasonAnswer(reasonAnswer);
+        exercise.setReasonNotes(toJson(reasonNotes));
+        exercise.setAccepts(toJson(accepts));
+        exercise.setReference(reference);
+        exercise.setKeyPoints(toJson(keyPoints));
         exercise.setDifficulty(req.difficulty() == null ? 2 : req.difficulty());
+    }
+
+    private static List<String> trimAll(List<String> list) {
+        return list == null ? List.of() : list.stream().map(x -> x == null ? "" : x.strip()).toList();
+    }
+
+    private static List<String> clean(List<String> list) {
+        return trimAll(list).stream().filter(x -> !x.isEmpty()).distinct().toList();
+    }
+
+    private static int letterIndex(String letter, int size, String what) {
+        int index = letter.length() == 1 ? letter.charAt(0) - 'A' : -1;
+        if (index < 0 || index >= size) {
+            throw BusinessException.badRequest(what + "要在 A～" + (char) ('A' + size - 1) + " 之间");
+        }
+        return index;
+    }
+
+    /** 误解说明补齐到和选项一样多，正确选项留空 */
+    private static List<String> notesFor(List<String> given, int size, int answerIndex) {
+        List<String> notes = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            String note = given != null && i < given.size() ? given.get(i) : null;
+            notes.add(note == null || i == answerIndex ? "" : note.trim());
+        }
+        return notes;
+    }
+
+    /** 新建一道题（AI 生成、上传识别用）：直接存成草稿，带来源和检查结果 */
+    @Transactional
+    public ExerciseView createDraft(Long itemId, ExerciseSaveRequest req, String source, String checkNote) {
+        ExerciseView v = create(new ExerciseSaveRequest(req.chapterId(), itemId, req.type(), req.assessType(),
+                req.keyPointNo(), req.stem(), req.options(), req.answer(), req.analysis(), req.optionNotes(),
+                req.reasons(), req.reasonAnswer(), req.reasonNotes(), req.accepts(), req.reference(),
+                req.keyPoints(), req.difficulty(), req.knowledgePointIds()));
+        Exercise e = require(v.id());
+        e.setSource(source);
+        e.setDraft(true);
+        e.setCheckNote(checkNote == null || checkNote.isBlank() ? null : checkNote);
+        exerciseMapper.updateById(e);
+        return toView(e);
+    }
+
+    /** 检查一道题的写法是否合格，不保存（AI 生成、上传识别时先检查一遍） */
+    public void validate(ExerciseSaveRequest req) {
+        copy(req, new Exercise());
+    }
+
+    /** 老师确认这次练习里的草稿题：学生从此看得到 */
+    @Transactional
+    public int confirmDrafts(Long itemId) {
+        ChapterItemView it = itemService.get(itemId);
+        chapterService.requireOwned(it.chapterId());
+        List<Exercise> drafts = exerciseMapper.selectList(new LambdaQueryWrapper<Exercise>()
+                .eq(Exercise::getItemId, itemId).eq(Exercise::getDraft, true));
+        for (Exercise e : drafts) {
+            e.setDraft(false);
+            exerciseMapper.updateById(e);
+        }
+        return drafts.size();
     }
 
     /** 关联知识点：先删后插（docs/database.md 的约定）。知识点必须属于本章 */
@@ -147,9 +270,13 @@ public class ExerciseService {
                 .filter(kp -> kp != null)
                 .map(kp -> new ExerciseView.KpRef(kp.getId(), kp.getName()))
                 .toList();
-        return new ExerciseView(e.getId(), e.getChapterId(), e.getItemId(), e.getType(), e.getStem(), fromJson(e.getOptions()),
-                e.getAnswer(), e.getAnalysis(), fromJson(e.getOptionNotes()), e.getDifficulty(), e.getSortOrder(),
-                kps);
+        return new ExerciseView(e.getId(), e.getChapterId(), e.getItemId(),
+                e.getType() == null ? Grader.SINGLE : e.getType(),
+                e.getAssessType() == null ? "concept" : e.getAssessType(), e.getKeyPointNo(), e.getStem(),
+                fromJson(e.getOptions()), e.getAnswer(), e.getAnalysis(), fromJson(e.getOptionNotes()),
+                fromJson(e.getReasons()), e.getReasonAnswer(), fromJson(e.getReasonNotes()), fromJson(e.getAccepts()),
+                e.getReference(), fromJson(e.getKeyPoints()), e.getSource() == null ? "manual" : e.getSource(),
+                Boolean.TRUE.equals(e.getDraft()), e.getCheckNote(), e.getDifficulty(), e.getSortOrder(), kps);
     }
 
     private String toJson(List<String> list) {

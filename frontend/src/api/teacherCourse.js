@@ -147,3 +147,110 @@ export function updateExercise(id, data) {
 export function deleteExercise(id) {
   return request.delete(`/exercises/${id}`)
 }
+
+// POST /api/exercises/generate { itemId, kpIds (chapter_kp ids), assessTypes, types, perKp }
+// -> { kps: [{ name, created, dropped, points, misconceptions, flagged, notes }], created, ms, calls, costCny }
+export function generateExercises(data) {
+  return request.post('/exercises/generate', data, { timeout: 600000 })
+}
+
+// POST /api/exercises/import (form: itemId, file | text) -> same shape as generate
+export function importExercises(itemId, { file, text }) {
+  const form = new FormData()
+  form.append('itemId', itemId)
+  if (file) form.append('file', file)
+  if (text) form.append('text', text)
+  return request.post('/exercises/import', form, { timeout: 300000 })
+}
+
+// POST /api/exercises/confirm?itemId= -> { confirmed }: drafts become visible to students
+export function confirmExercises(itemId) {
+  return request.post('/exercises/confirm', null, { params: { itemId } })
+}
+
+// GET /api/chapters/{id}/exercise-coverage -> [{ name, byAssess, byType, total, drafts, warning }]
+export function getExerciseCoverage(chapterId) {
+  return request.get(`/chapters/${chapterId}/exercise-coverage`)
+}
+
+// GET /api/exercises/short-answers?itemId= -> short-answer submissions, pending first
+export function getShortAnswers(itemId) {
+  return request.get('/exercises/short-answers', { params: { itemId } })
+}
+
+// PUT /api/exercises/short-answers/{recordId} { hits: [true, false] }
+export function reviewShortAnswer(recordId, hits) {
+  return request.put(`/exercises/short-answers/${recordId}`, { hits })
+}
+
+// GET /api/teacher/deadlines -> every item with a deadline in this teacher's published courses:
+// [{ itemId, courseName, chapterTitle, type, title, dueAt, allowLate, state, total, done, late, missing: [{ id, username, name }] }]
+export function getTeacherDeadlines() {
+  return request.get('/teacher/deadlines')
+}
+
+// ---------- 资料 → 知识点（backend: ChapterKpController） ----------
+// Uploading a video / PDF (uploadItemFile) queues it for text extraction right away.
+
+// GET /api/chapters/{id}/kp-status -> { status, uploadDone, message, processed, total,
+//   materials: [{ itemId, type, title, status, message }], kps: [{ id, name, summary, importance, keyPoints, misconceptions, sources, edited }] }
+// status: none | waiting | recognizing | draft | confirmed | failed
+export function getKpStatus(chapterId) {
+  return request.get(`/chapters/${chapterId}/kp-status`)
+}
+
+// 上传完毕: once every material is processed, knowledge points are recognized automatically
+export function kpUploadDone(chapterId) {
+  return request.post(`/chapters/${chapterId}/kp/upload-done`)
+}
+
+// 重新识别: keeps the knowledge points the teacher edited
+export function kpRerun(chapterId) {
+  return request.post(`/chapters/${chapterId}/kp/rerun`)
+}
+
+// 确认: students can see the knowledge point map; also synced to knowledge_point for exercises
+export function kpConfirm(chapterId) {
+  return request.post(`/chapters/${chapterId}/kp/confirm`)
+}
+
+// { name, summary, importance: '重点' | '一般', keyPoints: [{ text, sources }], misconceptions: [] }
+export function createChapterKp(chapterId, data) {
+  return request.post(`/chapters/${chapterId}/kps`, data)
+}
+
+export function updateChapterKp(id, data) {
+  return request.put(`/chapter-kps/${id}`, data)
+}
+
+export function deleteChapterKp(id) {
+  return request.delete(`/chapter-kps/${id}`)
+}
+
+// GET /api/chapters/{id}/kp-map -> { status, columns: [{ itemId, type, title }],
+//   rows: [{ kpId, name, importance, keyPointCount, spots: { [itemId]: [{ key, page, startSec, label }] } }] }
+export function getTeacherKpMap(chapterId) {
+  return request.get(`/chapters/${chapterId}/kp-map`)
+}
+
+// GET /api/courses/{id}/kp-badges -> [{ chapterId, status, count }] for the outline
+export function getKpBadges(courseId) {
+  return request.get(`/courses/${courseId}/kp-badges`)
+}
+
+// ---------- 费曼式 AI 对话（backend: FeynmanController） ----------
+
+// GET /api/chapter-items/{id}/feynman -> { status: none|draft|confirmed, kpIds, drafts: [{ kpId, name, keyPoints, draft, checks }],
+//   candidates: [{ id, name, importance }], maxKps }
+export function getFeynmanSetup(itemId) {
+  return request.get(`/chapter-items/${itemId}/feynman`)
+}
+
+// the model drafts one card per knowledge point (about 15 s each, at most 2 points)
+export function draftFeynman(itemId, kpIds) {
+  return request.post(`/chapter-items/${itemId}/feynman/draft`, { kpIds }, { timeout: 120000 })
+}
+
+export function confirmFeynman(itemId) {
+  return request.post(`/chapter-items/${itemId}/feynman/confirm`)
+}

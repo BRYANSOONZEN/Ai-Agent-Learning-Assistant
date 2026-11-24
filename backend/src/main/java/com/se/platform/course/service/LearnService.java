@@ -15,10 +15,15 @@ import com.se.platform.course.entity.ChapterItem;
 import com.se.platform.course.entity.Course;
 import com.se.platform.course.mapper.ChapterMapper;
 import com.se.platform.diagnosis.service.MasteryService;
+import com.se.platform.course.mapper.ChapterItemMapper;
+import com.se.platform.record.service.CompletionService;
+import com.se.platform.record.service.ProgressService;
 import com.se.platform.record.service.RecordService;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,16 +39,26 @@ public class LearnService {
     private final ExerciseService exerciseService;
     private final RecordService recordService;
     private final MasteryService masteryService;
+    private final ChapterItemMapper itemMapper;
+    private final CompletionService completionService;
+    private final ProgressService progressService;
+    private final ShortAnswerJudge shortJudge;
 
     public LearnService(CourseService courseService, ChapterMapper chapterMapper,
                         ChapterItemService itemService, ExerciseService exerciseService,
-                        RecordService recordService, MasteryService masteryService) {
+                        RecordService recordService, MasteryService masteryService,
+                        ChapterItemMapper itemMapper, CompletionService completionService,
+                        ProgressService progressService, ShortAnswerJudge shortJudge) {
         this.courseService = courseService;
         this.chapterMapper = chapterMapper;
         this.itemService = itemService;
         this.exerciseService = exerciseService;
         this.recordService = recordService;
         this.masteryService = masteryService;
+        this.itemMapper = itemMapper;
+        this.completionService = completionService;
+        this.progressService = progressService;
+        this.shortJudge = shortJudge;
     }
 
     public PageResult<CourseView> courses(int page, int size, String keyword) {
@@ -64,21 +79,36 @@ public class LearnService {
                 .stream()
                 .map(ch -> new LearnChapter(ch.getId(), ch.getTitle(), ch.getIntro(), itemService.list(ch.getId())))
                 .toList();
-        return new LearnCourse(courseService.get(courseId), chapters, recordService.doneItemIds(courseId));
+        long student = recordService.currentStudentId();
+        List<Long> itemIds = chapters.stream().flatMap(ch -> ch.items().stream()).map(it -> it.id()).toList();
+        Set<Long> done = completionService.doneItemIds(student, itemIds);
+        Set<Long> locked = completionService.lockedItemIds(done,
+                chapters.stream().map(ch -> ch.items().stream().map(it -> it.id()).toList()).toList());
+        var progress = itemIds.isEmpty() ? java.util.Map.<Long, com.se.platform.record.dto.ProgressDtos.ProgressView>of()
+                : progressService.views(student, itemMapper.selectBatchIds(itemIds));
+        return new LearnCourse(courseService.get(courseId), chapters,
+                itemIds.stream().filter(done::contains).toList(),
+                itemIds.stream().filter(locked::contains).toList(), progress);
     }
 
     /** 一次练习的题目，不带答案 */
     public List<QuizQuestion> questions(Long itemId) {
-        return exercises(itemService.require(itemId)).stream().map(e -> new QuizQuestion(e.id(), e.stem(), e.options())).toList();
+        ChapterItem item = itemService.require(itemId);
+        completionService.requireUnlocked(recordService.currentStudentId(), item);
+        return exercises(item).stream()
+                .map(e -> new QuizQuestion(e.id(), e.type(), e.stem(), e.options(), e.reasons())).toList();
     }
 
-    /** 判卷：没作答的题算错 */
+    /** 判卷：没作答的题算错；客观题程序判，简答题交给 ShortAnswerJudge（大模型判两次） */
     public QuizResult submit(Long itemId, Map<Long, String> answers) {
         ChapterItem item = itemService.require(itemId);
+        ChapterItemService.requireOpen(item, LocalDateTime.now());
+        completionService.requireUnlocked(recordService.currentStudentId(), item);
         List<QuestionResult> results = new ArrayList<>();
         int correct = 0;
         for (ExerciseView e : exercises(item)) {
-            QuestionResult r = grade(e, answers == null ? null : answers.get(e.id()));
+            String a = answers == null ? null : answers.get(e.id());
+            QuestionResult r = Grader.SHORT.equals(e.type()) ? shortJudge.judge(e, a) : grade(e, a);
             if (r.correct()) {
                 correct++;
             }
@@ -90,18 +120,9 @@ public class LearnService {
         return new QuizResult(results.size(), correct, results, changes);
     }
 
-    /** 判一道题；选错了就带上这个错误选项的误解说明，错题讲解要用 */
+    /** 判一道客观题（学习推荐也用）；选错了就带上这个错误选项的误解说明 */
     public static QuestionResult grade(ExerciseView e, String chosen) {
-        chosen = chosen == null ? null : chosen.trim().toUpperCase();
-        boolean right = e.answer().equals(chosen);
-        String note = null;
-        if (!right && chosen != null && chosen.length() == 1) {
-            int idx = chosen.charAt(0) - 'A';
-            if (idx >= 0 && idx < e.optionNotes().size() && !e.optionNotes().get(idx).isBlank()) {
-                note = e.optionNotes().get(idx);
-            }
-        }
-        return new QuestionResult(e.id(), e.stem(), e.options(), chosen, e.answer(), right, e.analysis(), note);
+        return Grader.grade(e, chosen);
     }
 
     /** 练习项的题目（带答案，只在服务端用）。章节没发布时学生看不到 */
@@ -113,6 +134,6 @@ public class LearnService {
         if (chapter == null || !"published".equals(chapter.getStatus())) {
             throw BusinessException.notFound("练习");
         }
-        return exerciseService.list(item.getChapterId(), item.getId());
+        return exerciseService.list(item.getChapterId(), item.getId()).stream().filter(e -> !e.draft()).toList();
     }
 }

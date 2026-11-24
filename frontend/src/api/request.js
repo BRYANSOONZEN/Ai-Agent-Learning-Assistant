@@ -17,16 +17,6 @@ request.interceptors.request.use((config) => {
   if (userStore.token) {
     config.headers.Authorization = `Bearer ${userStore.token}`
   }
-  // temporary until the backend has login: act as another demo student (see backend DemoIdentity)
-  let demoStudent = null
-  try {
-    demoStudent = localStorage.getItem('se-demo-student-id')
-  } catch {
-    // storage unavailable: stay the default demo student
-  }
-  if (demoStudent && userStore.role === 'student') {
-    config.headers['X-Demo-Student-Id'] = demoStudent
-  }
   return config
 })
 
@@ -34,20 +24,43 @@ request.interceptors.response.use(
   (response) => {
     const { code, message, data } = response.data
     if (code === 200) return data
-    ElMessage.error(message || '请求失败')
-    return Promise.reject(new Error(message))
+    // `silent: true` in the request config: the page shows the error itself (e.g. under the login form)
+    if (!response.config.silent) ElMessage.error(message || '请求失败')
+    const err = new Error(message || '请求失败')
+    err.code = code
+    return Promise.reject(err)
   },
   (error) => {
+    // the backend's auth check answers 401 / 403 with the same { code, message } body
+    const message = error.response?.data?.message
+    if (error.config?.silent) {
+      error.message = message || (error.response ? error.message : '连不上服务器，请检查后端是否已启动')
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401) {
       useUserStore().logout()
-      router.push('/login')
-      ElMessage.error('登录已过期，请重新登录')
+      const current = router.currentRoute.value
+      if (current.name !== 'login') {
+        router.push({ name: 'login', query: { redirect: current.fullPath } })
+      }
+      ElMessage.error(message || '登录已过期，请重新登录')
+    } else if (message) {
+      ElMessage.error(message)
+    } else if (!error.response) {
+      ElMessage.error('连不上服务器，请检查后端是否已启动')
     } else {
       ElMessage.error(error.message || '网络错误')
     }
     return Promise.reject(error)
   },
 )
+
+// <video src> / <a href> can't send the Authorization header, so material files carry the token in the URL
+export function withToken(url) {
+  const { token } = useUserStore()
+  if (!url || !token) return url
+  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token)
+}
 
 // Simulates network delay so mock data behaves like a real API
 export function mockResponse(data, delay = 300) {

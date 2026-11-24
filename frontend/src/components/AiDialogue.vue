@@ -7,7 +7,8 @@
  * Used by: the AI 对话 items of a chapter — students in LearnCourse, teachers in CourseBuilder
  * (preview with the real AI); and the standalone demo page DialogueView (whole chapter 1).
  */
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { hold, release } from '@/stores/assistantFocus'
 import {
   getOpening,
   startDialogue,
@@ -45,6 +46,11 @@ const resultLabels = {
 }
 
 const status = computed(() => dialogue.value?.status)
+
+// the study assistant stays hidden during the dialogue (it must not compete with it); back once it is finished
+const focusKey = 'dialogue-' + Math.random().toString(36).slice(2)
+watchEffect(() => (status.value === 'FINISHED' ? release(focusKey) : hold(focusKey)))
+onBeforeUnmount(() => release(focusKey))
 const canTalk = computed(() => status.value === 'OPEN' && !busy.value)
 
 function remember(view) {
