@@ -1,0 +1,4 @@
+软件截图。
+左侧文件树显示 `TEST_CODE` 文件夹下有 `index.html`、`validateUserInput_test.html`（高亮为当前打开文件）和 `validateUserInput.js`。
+中间代码编辑区展示 `validateUserInput_test.html` 的内容，包括 `<title>validateUserInput 单元测试</title>` 以及 `<body>` 中的 `<div id="output"></div>`。
+右侧为 AI 对话框，用户输入指令“给出能直接运行的测试代码”，下方展示了生成的代码片段，可见“12. 密码类型错误”和“13. 多个字段同时错误”的测试用例及断言（如 `assertEquals(r.isValid, false, ...)`）。该图说明了 Cursor 可根据指令生成测试代码并保存为 HTML 文件。

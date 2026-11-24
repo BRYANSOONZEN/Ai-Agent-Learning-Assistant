@@ -1,0 +1,1 @@
+软件截图。截图展示了Katalon Studio Enterprise中新建项目的操作界面。界面弹出的“New Project”窗口中设置了项目信息：项目名称（Name）为“test_demo”；项目类型（Type）选中了“Web”；起始模板（Start with）为“Blank project”；保存位置（Location）为“C:\Users\zymer\Katalon Studio”。下方勾选了“Generate .gitignore file”和“Generate build.gradle file”两个选项，底部有“OK”和“Cancel”按钮。背景左侧可见START菜单和部分示例项目（SAMPLE PROJECTS）列表。

@@ -1,0 +1,14 @@
+{
+  "source": "wiki_ch1.ogv",
+  "chapter_id": 1,
+  "duration_sec": 198.3,
+  "model": "small",
+  "language": "zh",
+  "language_probability": 1,
+  "model_load_sec": 4.4,
+  "transcribe_sec": 2.7,
+  "speed": 73.98,
+  "segments": [],
+  "chunks": [],
+  "status": "待老师校对"
+}

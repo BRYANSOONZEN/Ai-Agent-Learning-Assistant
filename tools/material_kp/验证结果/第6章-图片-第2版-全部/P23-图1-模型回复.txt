@@ -1,0 +1,17 @@
+软件截图。
+左侧文件目录显示 TEST_CODE，包含 index.html、validateUserInput_test.html，以及 JS 文件 validateUserInput.js。
+中间代码编辑区标签为 validateUserInput_test.html，可见代码包括：
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>validateUserInput 单元测试</title>
+  <style> body { font-family: system-ui, sans-serif; padding: 16px... h1 { font-size: 20px; } .pass { color: #16a34a; } .fail { color: #b91c1c; } pre { background: #0f172a; color: #e5e7eb; padding: ... </style>
+</head>
+<body>
+  <h1>validateUserInput 单元测试结果</h1>
+  <div id="output"></div>
+
+右侧面板标题为“User registration validation function”，提示文字“给出能直接运行的测试代码”，下方生成代码包含：
+`// 12. 密码类型错误`，以及 `assertEqual(r.isValid, false, '密码非字符串应不通过');` 等断言；
+`// 13. 多个字段同时错误`，以及 `assertEqual(r.isValid, false, '多个字段错误应不通过');`，对用户名、邮箱、密码边界包含大写字母、小写字母和数字等提示的检查。部分代码末尾被遮挡看不清。

@@ -1,0 +1,7 @@
+截图。
+左侧为“后台管理面板”界面，包含菜单（仪表盘、用户管理、报表等）、“关键指标”（在线用户、今日订单、错误数）及“操作日志”（记录了页面加载、初始化失败、请求统计数据失败等）。右侧为浏览器控制台（Console）显示的异常日志：
+1. `Failed to load resource: net::ERR_FILE_NOT_FOUND`（关联 `non-exist-avatar.png:1`）。
+2. `[ERROR] 初始化失败: initializeDashboard is not defined`（关联 `buggy_dashboard.html:142`）。
+3. 报CORS策略错误：无法从 `file:///C:/api_wrong_prefix/stats/today` 获取数据（关联 `buggy_dashboard.html:1`）。
+4. `[ERROR] 请求统计数据失败: Failed to fetch`（关联 `buggy_dashboard.html:142`）。
+截图旨在展示一个存在前端资源路径错误、JS未定义变量及API请求跨域/路径错误且可复现的缺陷页面。

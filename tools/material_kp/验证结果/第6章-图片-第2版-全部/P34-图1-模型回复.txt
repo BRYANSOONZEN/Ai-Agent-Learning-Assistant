@@ -1,0 +1,18 @@
+图类型：截图
+
+内容：
+图左侧为“后台管理面板”网页界面，右侧为浏览器“控制台”异常日志。
+左侧界面：包含“菜单”（下有“仪表盘”、“用户管理”、“报表（点击报错）”）；头像处显示破图图标与“用户”字样；“关键指标”栏包含表头“在线用户”、“今日订单”、“错误数”，下方有“刷新数据（经常失败）”按钮；“操作日志”栏显示四行记录：
+[14:33:30] [INFO] 页面加载完成，准备初始化
+[14:33:30] [ERROR] 初始化失败: initializeDa...（被遮挡）
+[14:33:30] [INFO] 开始刷新统计数据
+[14:33:30] [ERROR] 请求统计数据失败: Failed...（被遮挡）
+
+右侧控制台日志（自上而下）：
+1. `Failed to load resource: net::ERR_FILE_NOT_FOUND`，右侧源为 `non-exist-avatar.png:1`
+2. `[INFO] 页面加载完成，准备初始化`，源为 `buggy_dashboard.html:144`
+3. `[ERROR] 初始化失败: initializeDashboard is not defined`，源为 `buggy_dashboard.html:142`
+4. `[INFO] 开始刷新统计数据`，源为 `buggy_dashboard.html:144`
+5. `Access to fetch at 'file:///C:/api_wrong_prefix/stats/today' from origin 'null' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome-extension, chrome-untrusted, data, edge, http, https, isolated-app.`，源为 `buggy_dashboard.html:1`
+6. `Failed to load resource: net::ERR_FAILED`，源为 `/C:/api_wrong_prefix/stats/today:1`
+7. `[ERROR] 请求统计数据失败: Failed to fetch`，源为 `buggy_dashboard.html:142`

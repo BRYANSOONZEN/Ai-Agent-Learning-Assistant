@@ -1,0 +1,464 @@
+{
+  "source": "mit_debugging_0-10.m4a",
+  "chapter_id": 7,
+  "duration_sec": 600.0,
+  "engine": "sensevoice",
+  "model": "SenseVoiceSmall + fsmn-vad",
+  "language": "en",
+  "model_load_sec": 5.8,
+  "transcribe_sec": 101.0,
+  "terms": [],
+  "knowledge_points": [
+    "printf debugging",
+    "logging and log levels",
+    "colored terminal output",
+    "system logs",
+    "debuggers",
+    "profiling"
+  ],
+  "speed": 5.94,
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 15.0,
+      "text": "That's all right so welcome back today we're going to cover the debugging and profiling before I get into it were going to kind of make another reminder to fill in the survey just one of the main things we want to get from you is questions because the last,"
+    },
+    {
+      "start": 15.0,
+      "end": 29.0,
+      "text": "There is going to be questions from you guys about things that we haven't covered that of like you want us to kind of talk more in depth and the more questions we get, the more interesting we can make a section so please go on and feeling sure."
+    },
+    {
+      "start": 29.5,
+      "end": 44.5,
+      "text": "So today's lecture is going to be a lot of topics, the other topics revolve around the concept of what do you do when you have a program that has some bugs, which is most of the time like when you are programming, you are kind of thinking hard about how you implement something."
+    },
+    {
+      "start": 44.5,
+      "end": 59.5,
+      "text": "like a health life or like fixing all the issues that program has and even if your program behaves like you want, it might be that it's really slow or like it's taking a lot of resources in the process So today we're going to see a lot of different approaches of,"
+    },
+    {
+      "start": 59.5,
+      "end": 74.5,
+      "text": "Dealing with these problems. So first, the first section is on the bargain. The bargain can be done in many different ways. They are all kind of like the most simple approach that like premats, like C students will."
+    },
+    {
+      "start": 74.5,
+      "end": 89.5,
+      "text": "through will be just you have some code and it's not behaving like you want so you probe the code by like adding print statements and this is called print F debugging and it works pretty well I have to be honest like I use it a lot of the time because,"
+    },
+    {
+      "start": 89.5,
+      "end": 104.5,
+      "text": "How kind of simple to set up and how quick the feedback can be One of these issues with print thebugging is that you can get a lot of output and maybe you don't want to get as much output as you're getting."
+    },
+    {
+      "start": 104.5,
+      "end": 119.5,
+      "text": "people have thought slightly more complex ways of doing print debugging there we go And one of these ways is what is usually referred to login."
+    },
+    {
+      "start": 119.5,
+      "end": 134.5,
+      "text": "The advantage of doing logging versus doing print F debugging is that when you're creating logs, you are not necessarily creating the logs because there's like a specific issue you want to fix is mostly because you have built a more complex software system."
+    },
+    {
+      "start": 134.5,
+      "end": 149.5,
+      "text": "You want to log when some events happen and one of the core advantages of using a login library is that you can define severity levels and you can filter based on those. And let's see an example."
+    },
+    {
+      "start": 149.5,
+      "end": 164.6,
+      "text": "Of how can we do something like that, So yeah everything fits here. This is really silly example. we're just going to sample random numbers and depending on the value of the number that we can interpret as a kind of how wrong things are."
+    },
+    {
+      "start": 164.6,
+      "end": 173.8,
+      "text": "Going, we are going to log the value of the number, and then we can see what is going on."
+    },
+    {
+      "start": 174.3,
+      "end": 189.3,
+      "text": "Check the N to disable these from and if we were just to execute the code as it is, we just get the output and we just keep getting more and more output, but you can,"
+    },
+    {
+      "start": 189.3,
+      "end": 204.3,
+      "text": "Have to kind of e it and make sense of what is going on. and we don't know what is the relative timing between prints. We don't really know whether this is just an information message like a message of whether something went wrong."
+    },
+    {
+      "start": 204.3,
+      "end": 211.0,
+      "text": "If we just go in and do not that one, they won."
+    },
+    {
+      "start": 213.2,
+      "end": 228.2,
+      "text": "I want to undo that one we can set that for and now the output looks something more like this, so for example, if you have several different modules that you're programming with you can identify them with like different labels here."
+    },
+    {
+      "start": 228.2,
+      "end": 243.2,
+      "text": "So we have debug levels, we have critical info at different levels, and it might be handy because here we might only care about the error messages like those are like the we have been working on our code so far as so good and."
+    },
+    {
+      "start": 243.2,
+      "end": 252.4,
+      "text": "We get some error, we can log that to identify where it's happening, but maybe there's a lot of information messages, but we can deal with that."
+    },
+    {
+      "start": 252.9,
+      "end": 267.9,
+      "text": "By just changing the level to error level and now if we run this again, were only going to get those errors in the output and we can just look through those to make sense of,"
+    },
+    {
+      "start": 267.9,
+      "end": 282.9,
+      "text": "What is going on, Another really useful tool when you are dealing with logs is as you kind of look at this, it has become easier because now we have kind of these critical and error labels that we can quickly end."
+    },
+    {
+      "start": 282.9,
+      "end": 298.0,
+      "text": "But since kind of humans are fairly visual creatures, one thing that you can do is use colors from your terminal to identify these things. So now changing the format."
+    },
+    {
+      "start": 298.0,
+      "end": 313.0,
+      "text": "I've done is kind of slightly changed how the output is formatted. And when I do that, now whenever I get a warning message is color coded by yellow, whenever I get like an error like fade red and when it's."
+    },
+    {
+      "start": 313.0,
+      "end": 327.0,
+      "text": "criticalriical to how a balld red indicating something went wrong and here is like a really short output but when you start having like thousands and thousands of lines of law, which is not unrealistic and happens every single day in a lot of apps."
+    },
+    {
+      "start": 327.4,
+      "end": 342.5,
+      "text": "kindd of quickly browsing through them identifying where like the arrow or like the red patches are can be really useful. A quick aside is you may be curious about how the terminal is displaying these colors like at the end of,"
+    },
+    {
+      "start": 342.5,
+      "end": 357.5,
+      "text": "Today the terminal is only uping characters, so are how is this program or like how are other programs like LS that has all these fancy colors, how are they telling to a terminal that it should use these different colors is,"
+    },
+    {
+      "start": 357.5,
+      "end": 372.5,
+      "text": "Kind of extremely fancy what these tools are doing is doing something along these lines Here we have common I can clear the rest of the output so we can focus on this. There's some special character, somescape."
+    },
+    {
+      "start": 372.5,
+      "end": 387.5,
+      "text": "Characters here, then we have some text and then we have some other special characters and if we execute this line we are like red this is Ray and you might have picked up on the fact that we have a 25500 here."
+    },
+    {
+      "start": 387.5,
+      "end": 402.5,
+      "text": "And this is just telling the RGV values of the color we want in the terminal and you prettymats can do this in any piece of code that you have and that you can color code the output and your terminal is fairly fancy, supports a lot of different colors in there."
+    },
+    {
+      "start": 402.5,
+      "end": 411.8,
+      "text": "This is not even all of them, this is like a 16 of them, and I think it can be fairly useful to know about that."
+    },
+    {
+      "start": 412.2,
+      "end": 427.3,
+      "text": "Another thing is maybe you don't enjoy like the thing like logs are kind of really fit for you, the thing is a lot of other systems that you might start using will use logs as you start building layer and layer systems, you might rely on other depend."
+    },
+    {
+      "start": 427.3,
+      "end": 442.3,
+      "text": "Common dependencies might be web servers or databases is a really common one. And those will be logging their errors or like exceptions in their own logs. Of course, you will get some client side error, but those sometimes are."
+    },
+    {
+      "start": 442.3,
+      "end": 457.3,
+      "text": "Like informative enough for you to figure out what is going on in most unique systems, the logs are usually placed under a fo core like last bar log. And if we list it, we can see there's like a bunch of."
+    },
+    {
+      "start": 457.3,
+      "end": 460.5,
+      "text": "Bgs in here."
+    },
+    {
+      "start": 462.2,
+      "end": 477.2,
+      "text": "It's scroll it a bit, so we have like the sata monitor log, like some weak logs, things related to the wfi for example, and we have the."
+    },
+    {
+      "start": 477.5,
+      "end": 492.5,
+      "text": "System log, which contains a lot of information about the system, we can get information about what's going on, Similarlyly there are kind of tools that will let you more like samely go through this output, but here looking,"
+    },
+    {
+      "start": 492.5,
+      "end": 507.5,
+      "text": "The system law, I can look at this and say, oh, there's some service that is kind of existing with some abnormal code and based on that information I can go and try to figure out what's going on, like what's going wrong."
+    },
+    {
+      "start": 507.5,
+      "end": 522.5,
+      "text": "One thing to know when youre working with logs is that more traditionally, kind of their own, like every software had their own v, but has been increasingly more popular to have a unified system log where everything is placed."
+    },
+    {
+      "start": 522.5,
+      "end": 537.5,
+      "text": "And you can like pretty much any application can log into this system log, but instead of being in a plain text format it will be compressed in some special format an example of this was what we cover in the there running lecture."
+    },
+    {
+      "start": 537.5,
+      "end": 552.5,
+      "text": "Elect were using the journal CDL, which is kind of accessing the log and output in other output here in Mac now the command is logO which will display a lot of information I'm going to just display the last."
+    },
+    {
+      "start": 552.5,
+      "end": 567.5,
+      "text": "10 seconds because logs are really, really ver and just displaying the last 10 seconds is still going to add a fairly large amount of lines. So if we go back through,"
+    },
+    {
+      "start": 567.5,
+      "end": 582.6,
+      "text": "What's going on, we here see that like a lot of Apple things are going on since this is a MacBook and maybe we could find errors about like some system issue here again, they are fairlyables you might,"
+    },
+    {
+      "start": 582.6,
+      "end": 597.6,
+      "text": "want to practice your data wrangling techniques here, like 10 seconds equal to like 500 lines of log, so you can kind of make an idea of how many per second you' are getting and they are not only,"
+    },
+    {
+      "start": 597.6,
+      "end": 600.0,
+      "text": "Useful for figuring out some other."
+    }
+  ],
+  "chunks": [
+    {
+      "id": 1,
+      "start": 0.0,
+      "end": 44.5,
+      "at": "00:00",
+      "text": "That's all right so welcome back today we're going to cover the debugging and profiling before I get into it were going to kind of make another reminder to fill in the survey just one of the main things we want to get from you is questions because the last, There is going to be questions from you guys about things that we haven't covered that of like you want us to kind of talk more in depth and the more questions we get, the more interesting we can make a section so please go on and feeling sure. So today's lecture is going to be a lot of topics, the other topics revolve around the concept of what do you do when you have a program that has some bugs, which is most of the time like when you are programming, you are kind of thinking hard about how you implement something.",
+      "overlap": null,
+      "knowledge_points": [
+        "profiling"
+      ]
+    },
+    {
+      "id": 2,
+      "start": 44.5,
+      "end": 74.5,
+      "at": "00:44",
+      "text": "like a health life or like fixing all the issues that program has and even if your program behaves like you want, it might be that it's really slow or like it's taking a lot of resources in the process So today we're going to see a lot of different approaches of, Dealing with these problems. So first, the first section is on the bargain. The bargain can be done in many different ways. They are all kind of like the most simple approach that like premats, like C students will.",
+      "overlap": {
+        "at": "00:29",
+        "text": "So today's lecture is going to be a lot of topics, the other topics revolve around the concept of what do you do when you have a program that has some bugs, which is most of the time like when you are programming, you are kind of thinking hard about how you implement something."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 3,
+      "start": 74.5,
+      "end": 104.5,
+      "at": "01:14",
+      "text": "through will be just you have some code and it's not behaving like you want so you probe the code by like adding print statements and this is called print F debugging and it works pretty well I have to be honest like I use it a lot of the time because, How kind of simple to set up and how quick the feedback can be One of these issues with print thebugging is that you can get a lot of output and maybe you don't want to get as much output as you're getting.",
+      "overlap": {
+        "at": "00:59",
+        "text": "Dealing with these problems. So first, the first section is on the bargain. The bargain can be done in many different ways. They are all kind of like the most simple approach that like premats, like C students will."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 4,
+      "start": 104.5,
+      "end": 134.5,
+      "at": "01:44",
+      "text": "people have thought slightly more complex ways of doing print debugging there we go And one of these ways is what is usually referred to login. The advantage of doing logging versus doing print F debugging is that when you're creating logs, you are not necessarily creating the logs because there's like a specific issue you want to fix is mostly because you have built a more complex software system.",
+      "overlap": {
+        "at": "01:29",
+        "text": "How kind of simple to set up and how quick the feedback can be One of these issues with print thebugging is that you can get a lot of output and maybe you don't want to get as much output as you're getting."
+      },
+      "knowledge_points": [
+        "system logs"
+      ]
+    },
+    {
+      "id": 5,
+      "start": 134.5,
+      "end": 164.6,
+      "at": "02:14",
+      "text": "You want to log when some events happen and one of the core advantages of using a login library is that you can define severity levels and you can filter based on those. And let's see an example. Of how can we do something like that, So yeah everything fits here. This is really silly example. we're just going to sample random numbers and depending on the value of the number that we can interpret as a kind of how wrong things are.",
+      "overlap": {
+        "at": "01:59",
+        "text": "The advantage of doing logging versus doing print F debugging is that when you're creating logs, you are not necessarily creating the logs because there's like a specific issue you want to fix is mostly because you have built a more complex software system."
+      },
+      "knowledge_points": [
+        "logging and log levels"
+      ]
+    },
+    {
+      "id": 6,
+      "start": 164.6,
+      "end": 204.3,
+      "at": "02:44",
+      "text": "Going, we are going to log the value of the number, and then we can see what is going on. Check the N to disable these from and if we were just to execute the code as it is, we just get the output and we just keep getting more and more output, but you can, Have to kind of e it and make sense of what is going on. and we don't know what is the relative timing between prints. We don't really know whether this is just an information message like a message of whether something went wrong.",
+      "overlap": {
+        "at": "02:29",
+        "text": "Of how can we do something like that, So yeah everything fits here. This is really silly example. we're just going to sample random numbers and depending on the value of the number that we can interpret as a kind of how wrong things are."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 7,
+      "start": 204.3,
+      "end": 243.2,
+      "at": "03:24",
+      "text": "If we just go in and do not that one, they won. I want to undo that one we can set that for and now the output looks something more like this, so for example, if you have several different modules that you're programming with you can identify them with like different labels here. So we have debug levels, we have critical info at different levels, and it might be handy because here we might only care about the error messages like those are like the we have been working on our code so far as so good and.",
+      "overlap": {
+        "at": "03:09",
+        "text": "Have to kind of e it and make sense of what is going on. and we don't know what is the relative timing between prints. We don't really know whether this is just an information message like a message of whether something went wrong."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 8,
+      "start": 243.2,
+      "end": 282.9,
+      "at": "04:03",
+      "text": "We get some error, we can log that to identify where it's happening, but maybe there's a lot of information messages, but we can deal with that. By just changing the level to error level and now if we run this again, were only going to get those errors in the output and we can just look through those to make sense of, What is going on, Another really useful tool when you are dealing with logs is as you kind of look at this, it has become easier because now we have kind of these critical and error labels that we can quickly end.",
+      "overlap": {
+        "at": "03:48",
+        "text": "So we have debug levels, we have critical info at different levels, and it might be handy because here we might only care about the error messages like those are like the we have been working on our code so far as so good and."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 9,
+      "start": 282.9,
+      "end": 313.0,
+      "at": "04:42",
+      "text": "But since kind of humans are fairly visual creatures, one thing that you can do is use colors from your terminal to identify these things. So now changing the format. I've done is kind of slightly changed how the output is formatted. And when I do that, now whenever I get a warning message is color coded by yellow, whenever I get like an error like fade red and when it's.",
+      "overlap": {
+        "at": "04:27",
+        "text": "What is going on, Another really useful tool when you are dealing with logs is as you kind of look at this, it has become easier because now we have kind of these critical and error labels that we can quickly end."
+      },
+      "knowledge_points": [
+        "colored terminal output"
+      ]
+    },
+    {
+      "id": 10,
+      "start": 313.0,
+      "end": 372.5,
+      "at": "05:13",
+      "text": "criticalriical to how a balld red indicating something went wrong and here is like a really short output but when you start having like thousands and thousands of lines of law, which is not unrealistic and happens every single day in a lot of apps. kindd of quickly browsing through them identifying where like the arrow or like the red patches are can be really useful. A quick aside is you may be curious about how the terminal is displaying these colors like at the end of, Today the terminal is only uping characters, so are how is this program or like how are other programs like LS that has all these fancy colors, how are they telling to a terminal that it should use these different colors is, Kind of extremely fancy what these tools are doing is doing something along these lines Here we have common I can clear the rest of the output so we can focus on this. There's some special character, somescape.",
+      "overlap": {
+        "at": "04:58",
+        "text": "I've done is kind of slightly changed how the output is formatted. And when I do that, now whenever I get a warning message is color coded by yellow, whenever I get like an error like fade red and when it's."
+      },
+      "knowledge_points": [
+        "colored terminal output"
+      ]
+    },
+    {
+      "id": 11,
+      "start": 372.5,
+      "end": 402.5,
+      "at": "06:12",
+      "text": "Characters here, then we have some text and then we have some other special characters and if we execute this line we are like red this is Ray and you might have picked up on the fact that we have a 25500 here. And this is just telling the RGV values of the color we want in the terminal and you prettymats can do this in any piece of code that you have and that you can color code the output and your terminal is fairly fancy, supports a lot of different colors in there.",
+      "overlap": {
+        "at": "05:57",
+        "text": "Kind of extremely fancy what these tools are doing is doing something along these lines Here we have common I can clear the rest of the output so we can focus on this. There's some special character, somescape."
+      },
+      "knowledge_points": [
+        "colored terminal output"
+      ]
+    },
+    {
+      "id": 12,
+      "start": 402.5,
+      "end": 442.3,
+      "at": "06:42",
+      "text": "This is not even all of them, this is like a 16 of them, and I think it can be fairly useful to know about that. Another thing is maybe you don't enjoy like the thing like logs are kind of really fit for you, the thing is a lot of other systems that you might start using will use logs as you start building layer and layer systems, you might rely on other depend. Common dependencies might be web servers or databases is a really common one. And those will be logging their errors or like exceptions in their own logs. Of course, you will get some client side error, but those sometimes are.",
+      "overlap": {
+        "at": "06:27",
+        "text": "And this is just telling the RGV values of the color we want in the terminal and you prettymats can do this in any piece of code that you have and that you can color code the output and your terminal is fairly fancy, supports a lot of different colors in there."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 13,
+      "start": 442.3,
+      "end": 477.2,
+      "at": "07:22",
+      "text": "Like informative enough for you to figure out what is going on in most unique systems, the logs are usually placed under a fo core like last bar log. And if we list it, we can see there's like a bunch of. Bgs in here. It's scroll it a bit, so we have like the sata monitor log, like some weak logs, things related to the wfi for example, and we have the.",
+      "overlap": {
+        "at": "07:07",
+        "text": "Common dependencies might be web servers or databases is a really common one. And those will be logging their errors or like exceptions in their own logs. Of course, you will get some client side error, but those sometimes are."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 14,
+      "start": 477.5,
+      "end": 507.5,
+      "at": "07:57",
+      "text": "System log, which contains a lot of information about the system, we can get information about what's going on, Similarlyly there are kind of tools that will let you more like samely go through this output, but here looking, The system law, I can look at this and say, oh, there's some service that is kind of existing with some abnormal code and based on that information I can go and try to figure out what's going on, like what's going wrong.",
+      "overlap": {
+        "at": "07:42",
+        "text": "It's scroll it a bit, so we have like the sata monitor log, like some weak logs, things related to the wfi for example, and we have the."
+      },
+      "knowledge_points": []
+    },
+    {
+      "id": 15,
+      "start": 507.5,
+      "end": 537.5,
+      "at": "08:27",
+      "text": "One thing to know when youre working with logs is that more traditionally, kind of their own, like every software had their own v, but has been increasingly more popular to have a unified system log where everything is placed. And you can like pretty much any application can log into this system log, but instead of being in a plain text format it will be compressed in some special format an example of this was what we cover in the there running lecture.",
+      "overlap": {
+        "at": "08:12",
+        "text": "The system law, I can look at this and say, oh, there's some service that is kind of existing with some abnormal code and based on that information I can go and try to figure out what's going on, like what's going wrong."
+      },
+      "knowledge_points": [
+        "system logs"
+      ]
+    },
+    {
+      "id": 16,
+      "start": 537.5,
+      "end": 597.6,
+      "at": "08:57",
+      "text": "Elect were using the journal CDL, which is kind of accessing the log and output in other output here in Mac now the command is logO which will display a lot of information I'm going to just display the last. 10 seconds because logs are really, really ver and just displaying the last 10 seconds is still going to add a fairly large amount of lines. So if we go back through, What's going on, we here see that like a lot of Apple things are going on since this is a MacBook and maybe we could find errors about like some system issue here again, they are fairlyables you might, want to practice your data wrangling techniques here, like 10 seconds equal to like 500 lines of log, so you can kind of make an idea of how many per second you' are getting and they are not only,",
+      "overlap": {
+        "at": "08:42",
+        "text": "And you can like pretty much any application can log into this system log, but instead of being in a plain text format it will be compressed in some special format an example of this was what we cover in the there running lecture."
+      },
+      "knowledge_points": [
+        "system logs"
+      ]
+    },
+    {
+      "id": 17,
+      "start": 597.6,
+      "end": 600.0,
+      "at": "09:57",
+      "text": "Useful for figuring out some other.",
+      "overlap": {
+        "at": "09:42",
+        "text": "want to practice your data wrangling techniques here, like 10 seconds equal to like 500 lines of log, so you can kind of make an idea of how many per second you' are getting and they are not only,"
+      },
+      "knowledge_points": []
+    }
+  ],
+  "status": "待老师校对",
+  "source_info": {
+    "title": "Lecture 7 - Debugging and Profiling (2020)",
+    "by": "Missing Semester (MIT)",
+    "license": "CC BY 3.0",
+    "from": "Wikimedia Commons",
+    "clip": "00:00-10:00"
+  }
+}

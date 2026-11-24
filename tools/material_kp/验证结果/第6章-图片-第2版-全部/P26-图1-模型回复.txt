@@ -1,0 +1,8 @@
+截图
+
+截图展示了名为“Web Recorder”的软件窗口。
+URL输入框内显示：`file:///C:/Users/zymer/Desktop/test_code/index.html`。
+输入框右侧有被红框标出的“Record”按钮，以及暂停和停止图标。
+界面中部有提示文字：“Hint: Right-click on the web elements, select Katalon Studio verification actions to record Hide”。
+底部有“Expand”、“Save Script”、“Cancel”按钮。
+该图说明了在输入本地html链接后，可以点击“Record”按钮开始进行前端页面的测试录制操作。

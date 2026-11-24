@@ -1,0 +1,4 @@
+软件截图。左侧文件树有 `buggy_dashboard.html` 及新建的 `buggy_dashboard_log_fixed.h...`。中间代码区显示新文件 `buggy_dashboard_log_fixed.html`，标题为“缺陷示例后台界面（基于日志修复版）”，注释写了“仍保留原始 UI 缺陷，这里只修复异常日志暴露的问题”。
+右侧 AI 面板中，用户输入提示词“不基于代码分析，而基于异常日志”，日志包含“【Failed to load resource: net::ERR_FILE_NOT_FOUND”。
+AI 回复（红框标出）：“我先查看 buggy_dashboard.html 的代码，结合你给的异常日志定位问题，然后会在同一目录下创建一个修复后的新 HTML 文件。”
+下方修复说明写到已修复 3 类问题，其中问题 1 为资源 404，指出原路径为 `./images/non-exist-avatar.png`，修复为 `<img src="https://via.placeholder.com/100" alt="用户头像">`。底部终端路径为 `C:\Users\zymer\Desktop\test_code`。

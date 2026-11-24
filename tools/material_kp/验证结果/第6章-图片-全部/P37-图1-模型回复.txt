@@ -1,0 +1,9 @@
+截图。
+图为代码编辑器（Cursor）界面，分为左侧文件树、中间代码区和右侧AI分析区。
+左侧文件树可见`TEST_CODE`目录及`buggy_dashboard_log_fixed.html`等文件。
+右侧AI对话框是核心：
+1. 红框高亮文字说明操作逻辑：“我先查看 buggy_dashboard.html 的代码，结合你给的异常日志定位问题，然后会在同一目录下创建一个修复后的新 HTML 文件。”
+2. 下方说明“基于异常日志的缺陷分析与修复说明”，指出暴露出3类问题。
+3. 图中展示了“问题1：资源 404 (net::ERR_FILE_NOT_FOUND)”。原文件头像路径写成`./images/non-existent-avatar.png`。
+4. 修复方式：改成使用稳定占位图`<img src="https://via.placeholder.com/100" alt="用户头像">`。
+中间代码区展示了新创建文件`buggy_dashboard_log_fixed.html`的HTML代码。底部终端路径为`PS C:\Users\zymer\Desktop\test_code>`。

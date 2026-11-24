@@ -1,0 +1,12 @@
+截图。
+
+该图展示了 Katalon Studio Enterprise 的软件界面。工具栏中间包含一个被红框标注的绿色播放按钮。
+左侧“Tests Explorer”面板展示了项目结构，包含 Test Cases、Object Repository（内含 button_submit、input_3-20_username、input_email、input_8_password 等对象）以及 Test Suites 等。
+右侧“New Test Case”面板是一个表格，表头为 Item、Object、Input、Output、Description，记录了自动生成的测试步骤：
+1- Open Browser，Input 包含 file:///C:/...（看不清全貌）
+2- Navigate To Url
+3- Set Text，Object 为 input_3-20_username，Input 为 "123123"
+4- Set Text，Object 为 input_email，Input 为 "123333"
+5- Set Encrypted Text，Object 为 input_8_password
+6- Click，Object 为 button_submit
+7至15步主要交替执行 Set Text / Set Encrypted Text（针对邮箱和密码）与 Click（button_submit）操作。

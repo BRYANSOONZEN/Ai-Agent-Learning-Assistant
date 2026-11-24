@@ -1,0 +1,3 @@
+截图
+
+图为 Katalon Studio Enterprise 的新建项目界面。弹窗标题为“New Project”，提示“Please enter project information”。具体配置项包含：Name 为“test_demo”，Type 选中“Web”，Start with 为“Blank project”，Location 为“C:\Users\zymer\Katalon Studio”。下方勾选了“Generate .gitignore file”和“Generate build.gradle file”，底部有 OK 和 Cancel 按钮。背景左侧可见“START”菜单（New Project 等）与“SAMPLE PROJECTS”列表，右侧网页含“Try Out Now”、“Test Case”等字样。该图说明了在 Katalon Studio 中新建 Web 项目的具体参数填写步骤。
