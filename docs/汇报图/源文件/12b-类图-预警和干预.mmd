@@ -1,0 +1,49 @@
+classDiagram
+    direction LR
+    class InterventionController {
+        +board() +openCount() +review()
+        +updateAlert() +mine()
+    }
+    class InterventionService {
+        +board(courseId) Board
+        +openCount() int
+        +review(id, request) InterventionView
+        +ignoreAlert(alertId)
+        +mine(studentId) MyAssignments
+    }
+    class LayerService {
+        +concept(studentId, kpId, after) Concept
+        +application(studentId, kpId) Application
+        +classify(concept, application)$ String
+    }
+    class RecordService {
+        +currentStudentId() long
+    }
+    class Alert {
+        <<entity>>
+        类型：A、B、AB
+        状态：open、handled、ignored
+        证据快照 evidence
+    }
+    class Intervention {
+        <<entity>>
+        类型：PRACTICE、REVIEW、REVIEW_PRACTICE
+        状态：pending、approved、rejected、done
+        前后值、是否有效
+    }
+    class Mastery {
+        <<entity>>
+        掌握度、作答次数、答对次数
+    }
+    class Recommendation {
+        <<entity>>
+        来源：system、teacher
+    }
+    InterventionController --> InterventionService
+    InterventionController --> RecordService
+    InterventionService --> LayerService
+    InterventionService --> Alert
+    InterventionService --> Intervention
+    InterventionService --> Recommendation
+    InterventionService --> Mastery
+    LayerService --> Mastery

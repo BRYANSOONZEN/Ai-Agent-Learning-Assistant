@@ -1,0 +1,22 @@
+erDiagram
+    direction LR
+    USER ||--o{ ANSWER_RECORD : "学生作答"
+    EXERCISE ||--o{ ANSWER_RECORD : "被作答"
+    USER ||--o{ LEARNING_EVENT : "产生"
+    USER ||--o{ MASTERY : "拥有"
+    KNOWLEDGE_POINT ||--o{ MASTERY : "被度量"
+    USER ||--o{ ALERT : "被预警"
+    KNOWLEDGE_POINT ||--o{ ALERT : "针对"
+    ALERT ||--o| INTERVENTION : "产生"
+    USER ||--o{ INTERVENTION : "接受"
+    USER ||--o{ RECOMMENDATION : "收到"
+    INTERVENTION ||--o{ RECOMMENDATION : "布置练习"
+    ALERT["预警 alert"]
+    ANSWER_RECORD["作答 answer_record"]
+    EXERCISE["题目 exercise"]
+    INTERVENTION["干预 intervention"]
+    KNOWLEDGE_POINT["知识点 knowledge_point"]
+    LEARNING_EVENT["学习事件 learning_event"]
+    MASTERY["掌握度 mastery"]
+    RECOMMENDATION["推荐 recommendation"]
+    USER["用户 user"]

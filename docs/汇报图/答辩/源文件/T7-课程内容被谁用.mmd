@@ -1,0 +1,23 @@
+flowchart LR
+    subgraph A["老师建的课程内容"]
+        direction TB
+        I["<b>内容项</b><br/>视频 · 文档"]
+        E["<b>题目</b><br/>每题关联知识点<br/>错误选项的误解说明"]
+        T["<b>对话话题</b><br/>考哪个知识点"]
+    end
+    subgraph B["学生学习时留下的记录（record、dialogue）"]
+        direction TB
+        LE[("<b>learning_event</b><br/>看了 / 学完哪一项")]
+        AR[("<b>answer_record</b><br/>每道题的答案和对错")]
+        DS[("<b>对话结果</b><br/>每个话题：自己答出<br/>提示后答出 · 看了讲解")]
+    end
+    I --> LE
+    E --> AR
+    T --> DS
+    AR --> MA[("<b>mastery 掌握度</b><br/>每人每知识点 0～1<br/>按题目关联的知识点算")]
+    MA --> DG["<b>学情诊断 · 画像</b><br/>按 课程 → 章节 → 知识点<br/>排好掌握度和原因"]
+    DS --> DG
+    MA --> RC["<b>学习推荐</b><br/>掌握度 &lt; 0.6 的知识点<br/>从关联的题目里挑题"]
+    MA --> IV["<b>预警与干预</b><br/>应用层看掌握度<br/>概念层看对话结果<br/>布置这个知识点的题<br/>复习本章的视频文档"]
+    DS --> IV
+    LE --> AS["<b>个人学习助手</b><br/>学完一章 = 本章每项<br/>都学完过一次"]

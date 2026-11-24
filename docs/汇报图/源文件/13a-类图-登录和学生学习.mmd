@@ -1,0 +1,42 @@
+classDiagram
+    direction LR
+    class AuthController {
+        +login(request) LoginResponse
+    }
+    class AuthService {
+        -passwordEncoder BCrypt
+        +login(request) LoginResponse
+    }
+    class UserMapper {
+        <<BaseMapper>>
+    }
+    class User {
+        <<entity>>
+        username passwordHash
+        name role clazzId status
+    }
+    class LearnController
+    class LearnService {
+        +courses() +course()
+        +questions(itemId) List
+        +submit(itemId, answers) QuizResult
+        +grade(exercise, chosen)$ QuestionResult
+    }
+    class CourseService
+    class ChapterItemService
+    class ExerciseService
+    class RecordService {
+        +saveAnswers() +logEvent()
+    }
+    class MasteryService {
+        +update(studentId, exerciseIds) List
+    }
+    AuthController --> AuthService
+    AuthService --> UserMapper
+    UserMapper --> User
+    LearnController --> LearnService
+    LearnService --> CourseService
+    LearnService --> ChapterItemService
+    LearnService --> ExerciseService
+    LearnService --> RecordService
+    LearnService --> MasteryService

@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant V as 对话页面
+    participant S as DialogueService
+    participant R as DialogueRules
+    participant D as 数据库
+    Note over S: 解析结果，程序重算要点
+    S->>R: onAnswer 或 onTransfer
+    R-->>S: 下一步动作和话题结果
+    Note over S: 检查回复，不合格改用预写内容
+    S->>D: 保存回复，更新状态
+    S-->>V: 对话、进度、总结

@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant V as 对话页面
+    participant C as DialogueController
+    participant S as DialogueService
+    participant L as AiCallLogService
+    participant A as AiClient
+    participant G as DeepSeek
+    participant D as 数据库
+    V->>C: POST 学生这一句
+    C->>S: send(id, text)
+    S->>D: 读取状态，保存学生消息
+    Note over S: 用 dialogue_turn_v3 拼提示词
+    S->>L: call(任务, 版本, 请求)
+    L->>A: chat(请求)
+    A->>G: POST /chat/completions
+    G-->>A: JSON 内容和 token 用量
+    A-->>L: ChatResult
+    L->>D: 写入调用日志
+    L-->>S: 结果和日志编号

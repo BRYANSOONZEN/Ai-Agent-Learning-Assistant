@@ -1,0 +1,22 @@
+classDiagram
+    direction LR
+    class CourseController
+    class CourseService {
+        +page() +pageMine() +pagePublished()
+        +get() +create() +update() +delete()
+        +currentTeacherId() 演示身份，待替换
+    }
+    class ChapterService
+    class ChapterItemService
+    class KnowledgePointService
+    class ExerciseService
+    class MaterialService
+    CourseController --> CourseService
+    CourseController --> ChapterService
+    ChapterService --> CourseService
+    ChapterItemService --> ChapterService
+    ChapterItemService --> MaterialService
+    KnowledgePointService --> ChapterService
+    MaterialService --> ChapterService
+    ExerciseService --> ChapterService
+    ExerciseService --> ChapterItemService

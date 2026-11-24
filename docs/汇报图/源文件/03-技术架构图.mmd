@@ -1,0 +1,22 @@
+flowchart LR
+    subgraph FE[前端 Vue 3 + Element Plus + ECharts]
+        direction TB
+        P1[老师端页面]
+        P2[学生端页面]
+        P3[路由守卫：按角色显示菜单]
+        P4[Axios：统一请求和错误提示]
+        P1 ~~~ P2 ~~~ P3 ~~~ P4
+    end
+    subgraph BE[后端 Spring Boot 3.5 + Java 21]
+        direction TB
+        C[Controller：接收请求，校验参数，统一返回]
+        S[Service：业务规则]
+        M[Mapper：MyBatis-Plus 读写数据库]
+        A2[通用 AI 层：提示词模板、调用并记录、AiClient]
+        C --> S --> M ~~~ A2
+    end
+    DB[("数据库 19 张表<br/>当前 H2 内存库")]
+    LLM[[DeepSeek]]
+    FE -- "HTTP /api" --> BE
+    BE -- 读写 --> DB
+    BE -- "HTTPS<br/>key 只在后端" --> LLM

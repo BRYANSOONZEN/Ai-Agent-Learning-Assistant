@@ -1,0 +1,21 @@
+flowchart TB
+    subgraph R1[" "]
+        direction LR
+        A["新建课程<br/>输入：名称、简介、模块<br/>输出：course 草稿"] --> B["编辑章节<br/>输入：标题、介绍<br/>输出：chapter、chapter_item"]
+        B --> C["录入知识点<br/>输入：名称、原理句<br/>输出：knowledge_point"]
+        C --> D["出题并关联知识点<br/>输入：题干、选项、答案、错项说明<br/>输出：exercise 及关联"]
+        D --> E["上传资料<br/>输入：视频或文档<br/>输出：material"]
+    end
+    subgraph R2[" "]
+        direction LR
+        F{"使用 AI<br/>起草话题?"}
+        F -- 是 --> G["AI 起草<br/>输入：问题、参考答案<br/>输出：要点、提示、变式题草稿"]
+        F -- 否 --> H["老师手动填写"]
+        G --> I["老师修改确认<br/>输出：dialogue_topic"]
+        H --> I
+        I --> J["发布章节<br/>输出：status = published"]
+        J --> K(["学生可见"])
+    end
+    R1 --> R2
+    style R1 fill:none,stroke:none
+    style R2 fill:none,stroke:none

@@ -1,0 +1,29 @@
+classDiagram
+    direction LR
+    class DialogueController {
+        +start() +send() +stuck() +resume()
+    }
+    class DialogueService {
+        +start(chapterId, itemId) DialogueView
+        +send(sessionId, text) DialogueView
+        +stuck(sessionId) DialogueView
+        +resume(sessionId) DialogueView
+        -recount() Counted
+        -checkedReply() String
+    }
+    class DialogueRules {
+        +onAnswer(state, type, ...) Decision
+        +onTransfer(state, type, ...) Decision
+        +shouldPause(skips) boolean
+    }
+    class JudgementParser {
+        +parse(content) Judgement
+    }
+    class AiCallLogService {
+        +call(task, version, request) Logged
+        +markCheck(logId, passed, error)
+    }
+    DialogueController --> DialogueService
+    DialogueService --> DialogueRules
+    DialogueService --> JudgementParser
+    DialogueService --> AiCallLogService

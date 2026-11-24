@@ -1,0 +1,31 @@
+classDiagram
+    direction LR
+    class JudgementParser {
+        +parse(content) Judgement
+    }
+    class DialogueRules {
+        +onAnswer() Decision
+        +onTransfer() Decision
+    }
+    class JudgedType {
+        <<enum>>
+        CORRECT PARTIAL WRONG
+        IRRELEVANT WANT_ANSWER
+        STRUGGLING CLARIFY OFF_TOPIC
+    }
+    class NextAction {
+        <<enum>>
+        CONTINUE HINT GIVE_POINT
+        START_TRANSFER REVEAL
+        END_WITHHELD NEXT_TOPIC SKIP
+    }
+    class TopicResult {
+        <<enum>>
+        SELF_CORRECT HINT_CORRECT
+        REVEALED_APPLIED REVEALED
+        SKIPPED_IRRELEVANT
+    }
+    JudgementParser ..> JudgedType
+    DialogueRules ..> JudgedType
+    DialogueRules ..> NextAction
+    DialogueRules ..> TopicResult

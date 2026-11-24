@@ -1,0 +1,33 @@
+classDiagram
+    direction LR
+    class DialogueService
+    class TopicDraftService {
+        +draft(request) TopicDraft
+    }
+    class DialogueTopicService {
+        +list() +create() +update() +delete()
+    }
+    class PromptTemplate {
+        +load(name) PromptTemplate
+        +render(values) String
+    }
+    class AiCallLogService {
+        +call(task, version, request) Logged
+        +totals() Totals
+    }
+    class AiClient {
+        <<interface>>
+        +chat(request) ChatResult
+    }
+    class OpenAiCompatibleClient
+    class FakeAiClient {
+        <<测试用>>
+    }
+    DialogueService --> DialogueTopicService
+    DialogueService --> PromptTemplate
+    DialogueService --> AiCallLogService
+    TopicDraftService --> PromptTemplate
+    TopicDraftService --> AiCallLogService
+    AiCallLogService --> AiClient
+    AiClient <|.. OpenAiCompatibleClient
+    AiClient <|.. FakeAiClient

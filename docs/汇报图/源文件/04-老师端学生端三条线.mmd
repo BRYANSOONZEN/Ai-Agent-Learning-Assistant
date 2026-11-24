@@ -1,0 +1,29 @@
+flowchart LR
+    subgraph TS[老师端]
+        direction TB
+        T1[建课、发布]
+        T2[全班预警]
+        T3[审核 A+B<br/>撤回 A、B]
+        T4[看干预效果]
+    end
+    subgraph BEDB[同一个后端和数据库]
+        direction TB
+        D1[("内容线<br/>课程、题目、话题")]
+        D2[("证据线<br/>作答、对话、掌握度")]
+        D3[("干预线<br/>预警、干预、推荐")]
+    end
+    subgraph SS[学生端]
+        direction TB
+        S1[看到已发布内容]
+        S2[学习、做题、对话]
+        S3[学习助手<br/>总结和任务]
+    end
+    T1 -- 写入 --> D1 -- 读取 --> S1
+    S2 -- 写入 --> D2
+    D2 -- A、B 自动 --> D3
+    D2 -- 全班统计 --> T2
+    D3 -- A+B --> T3
+    T3 -- 通过、撤回 --> D3
+    D3 -- 读取 --> S3
+    S3 -- 新数据 --> D2
+    D3 -- 前后对比 --> T4

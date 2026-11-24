@@ -1,0 +1,23 @@
+stateDiagram-v2
+    direction LR
+    state 预警 {
+        direction LR
+        state "待处理 open" as aopen
+        state "已处理 handled" as ahandled
+        state "已忽略 ignored" as aignored
+        aopen --> ahandled: 自动执行或老师通过
+        aopen --> aignored: 老师驳回或忽略
+    }
+    state 干预 {
+        direction LR
+        state "待审核 pending" as pending
+        state "执行中 approved" as approved
+        state "已驳回 rejected" as rejected
+        state "已完成 done" as done
+        state "已撤回 revoked" as revoked
+        pending --> approved: A、B 自动；A+B 老师通过
+        pending --> rejected: 老师驳回或忽略预警
+        approved --> approved: A+B 进入第 2 步
+        approved --> done: 系统判断完成，记录有效或无效
+        approved --> revoked: 老师撤回
+    }

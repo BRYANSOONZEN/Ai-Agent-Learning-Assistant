@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant V as 页面
+    participant S as AuthService
+    participant F as JWT 过滤器
+    participant B as 业务接口
+    Note over V,B: 计划实现
+    S-->>V: 登录成功时返回 JWT，有效 24 小时
+    V->>F: 请求带 Authorization Bearer
+    Note over F: 校验 token
+    alt 无效或过期
+        F-->>V: HTTP 401
+    else 有效
+        F->>B: 写入当前用户，放行
+        B-->>V: 校验角色后返回结果
+    end

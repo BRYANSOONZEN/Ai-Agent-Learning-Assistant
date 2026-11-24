@@ -1,0 +1,16 @@
+erDiagram
+    direction LR
+    USER ||--o{ DIALOGUE_SESSION : "学生对话"
+    CHAPTER ||--o{ DIALOGUE_SESSION : "在某章开始"
+    CHAPTER ||--o{ DIALOGUE_TOPIC : "包含"
+    DIALOGUE_SESSION ||--|{ DIALOGUE_TOPIC_STATE : "每话题一条"
+    DIALOGUE_TOPIC ||--o{ DIALOGUE_TOPIC_STATE : "被引用"
+    DIALOGUE_SESSION ||--o{ DIALOGUE_MESSAGE : "包含"
+    AI_CALL_LOG ||--o{ DIALOGUE_MESSAGE : "对应"
+    AI_CALL_LOG["调用日志 ai_call_log"]
+    CHAPTER["章节 chapter"]
+    DIALOGUE_MESSAGE["消息 dialogue_message"]
+    DIALOGUE_SESSION["对话 dialogue_session"]
+    DIALOGUE_TOPIC["话题 dialogue_topic"]
+    DIALOGUE_TOPIC_STATE["话题进度 dialogue_topic_state"]
+    USER["用户 user"]

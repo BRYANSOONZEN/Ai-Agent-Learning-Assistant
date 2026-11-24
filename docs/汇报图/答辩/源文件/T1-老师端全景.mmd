@@ -1,0 +1,9 @@
+flowchart LR
+    a1[建课、出题<br/>上传资料、发布] --> m1[course<br/>课程内容] -- 写 --> d1[("course · chapter<br/>knowledge_point<br/>exercise · material")]
+    a2[写对话话题] --> m2[dialogue<br/>对话话题] -- 写 --> d2[("dialogue_topic")]
+    a3[看全班学情] --> m3[diagnosis<br/>学情诊断] -- 读 --> d3[("学生学习时产生<br/>answer_record · mastery<br/>dialogue_topic_state")]
+    a4[处理预警<br/>审核 A+B · 撤回] --> m4[intervention<br/>预警和干预] -- 写 --> d4[("alert · intervention<br/>recommendation")]
+    a5[看 AI 调用记录] --> m5[ai<br/>AI 通用层] -- 写 · 读 --> d5[("ai_call_log")]
+    m4 -. 读两层证据 .-> d3
+    m2 -. AI 起草 .-> m5
+    m5 -. 调用 .-> L[[DeepSeek]]

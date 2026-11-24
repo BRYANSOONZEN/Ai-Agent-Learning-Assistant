@@ -1,0 +1,11 @@
+stateDiagram-v2
+    direction LR
+    state "进行中 OPEN" as OPEN
+    state "暂停 PAUSED" as PAUSED
+    state "结束 FINISHED" as FINISHED
+    [*] --> OPEN: 开始对话
+    OPEN --> OPEN: 回答、卡住、换话题
+    OPEN --> PAUSED: 连续跳过 2 个话题
+    PAUSED --> OPEN: 学生点继续对话
+    OPEN --> FINISHED: 最后一个话题结束
+    FINISHED --> [*]

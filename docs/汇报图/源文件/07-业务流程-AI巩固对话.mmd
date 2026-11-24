@@ -1,0 +1,26 @@
+flowchart TB
+    subgraph R1[" "]
+        direction LR
+        A["开始对话<br/>输入：章节已启用话题<br/>输出：session、topic_state"] --> B["学生作答或点我卡住了<br/>输入：一句话<br/>输出：dialogue_message"]
+        B --> C["拼提示词并调模型<br/>输入：当前话题、状态、对话<br/>输出：类型、要点、回复"]
+        C --> D["程序重算要点<br/>输入：模型结果 + 已答要点<br/>输出：最终类型"]
+        D --> E["规则决定下一步<br/>输入：状态 + 类型<br/>输出：动作"]
+    end
+    subgraph R2[" "]
+        direction LR
+        Q{"下一步动作"}
+        Q --> F
+        Q --> G
+        Q --> H
+        Q --> I
+        F["追问或升级提示 L1–L3"] --> X(["学生继续作答"])
+        G["一次给一条要点"] --> X
+        H["变式题"] --> J["作答后显示完整讲解"]
+        J --> I["换话题或跳过"]
+        I --> K{"话题<br/>都结束?"}
+        K -- 否 --> X
+        K -- 是 --> L(["总结<br/>结果进入概念层"])
+    end
+    R1 --> R2
+    style R1 fill:none,stroke:none
+    style R2 fill:none,stroke:none

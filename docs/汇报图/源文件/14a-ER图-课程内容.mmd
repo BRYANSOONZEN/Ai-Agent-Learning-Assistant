@@ -1,0 +1,21 @@
+erDiagram
+    direction LR
+    USER ||--o{ COURSE : "老师授课"
+    COURSE ||--o{ CHAPTER : "包含"
+    COURSE ||--o{ MATERIAL : "拥有"
+    CHAPTER ||--o{ CHAPTER_ITEM : "包含"
+    CHAPTER ||--o{ KNOWLEDGE_POINT : "包含"
+    CHAPTER ||--o{ EXERCISE : "包含"
+    CHAPTER ||--o{ DIALOGUE_TOPIC : "包含"
+    KNOWLEDGE_POINT ||--o{ DIALOGUE_TOPIC : "考察"
+    EXERCISE ||--o{ EXERCISE_KNOWLEDGE_POINT : "关联"
+    KNOWLEDGE_POINT ||--o{ EXERCISE_KNOWLEDGE_POINT : "关联"
+    CHAPTER["章节 chapter"]
+    CHAPTER_ITEM["内容项 chapter_item"]
+    COURSE["课程 course"]
+    DIALOGUE_TOPIC["话题 dialogue_topic"]
+    EXERCISE["题目 exercise"]
+    EXERCISE_KNOWLEDGE_POINT["题目知识点 exercise_knowledge_point"]
+    KNOWLEDGE_POINT["知识点 knowledge_point"]
+    MATERIAL["资料 material"]
+    USER["用户 user"]

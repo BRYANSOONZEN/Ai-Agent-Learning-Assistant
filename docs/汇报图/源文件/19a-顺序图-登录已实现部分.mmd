@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant V as 登录页面
+    participant C as AuthController
+    participant S as AuthService
+    participant D as user 表
+    Note over V,D: 已实现，后端测试通过，前端未接入
+    V->>C: POST /api/auth/login
+    C->>S: login(用户名, 密码)
+    S->>D: 按用户名查询
+    D-->>S: 用户和 BCrypt 哈希
+    Note over S: 比对密码，检查账号状态
+    S-->>V: 用户信息，或 400、403

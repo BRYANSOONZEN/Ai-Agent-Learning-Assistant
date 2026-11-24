@@ -1,0 +1,24 @@
+flowchart TB
+    subgraph R1[" "]
+        direction LR
+        A["打开推荐页<br/>输入：最新诊断"] --> B["找薄弱知识点<br/>掌握度低于 0.6<br/>从低到高"]
+        B --> C{"老师正在<br/>干预?"}
+        C -- 是 --> D(["先不推<br/>显示老师布置的任务"])
+        C -- 否 --> E["挑题<br/>上次做错 > 没做过<br/>> 错后做对"]
+        E --> F["限量<br/>每点最多 3 道<br/>共最多 5 道"]
+    end
+    subgraph R2[" "]
+        direction LR
+        G["写推荐理由<br/>输出：recommendation"] --> H{"学生操作"}
+        H -- 做题 --> I["保存作答<br/>重算掌握度"]
+        H -- 换一道 --> J["标记 dismissed<br/>以后不再推"]
+        I --> K{"做对?"}
+        K -- 是 --> L["标记 done"]
+        K -- 否 --> M["继续保留"]
+        L --> Z(["下次打开时<br/>按新掌握度重新挑题"])
+        M --> Z
+        J --> Z
+    end
+    R1 --> R2
+    style R1 fill:none,stroke:none
+    style R2 fill:none,stroke:none

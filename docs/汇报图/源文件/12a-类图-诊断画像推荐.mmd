@@ -1,0 +1,39 @@
+classDiagram
+    direction LR
+    class DiagnosisService {
+        +student(studentId) StudentDiagnosis
+        +course(courseId) CourseOverview
+    }
+    class MasteryService {
+        +compute(results)$ Double
+        +level(mastery)$ String
+        +update(studentId, exerciseIds) List
+    }
+    class ProfileService {
+        +student(studentId) StudentProfile
+    }
+    class RecommendService {
+        +student(studentId) RecommendationList
+    }
+    class RecordService {
+        +saveAnswers(item, results)
+        +logEvent(type, itemId, seconds)
+        +overview(studentId) RecordOverview
+    }
+    class Mastery {
+        <<entity>>
+        掌握度、作答次数、答对次数
+    }
+    class Recommendation {
+        <<entity>>
+        来源：system、teacher
+        状态：new、done、dismissed
+    }
+    ProfileService --> DiagnosisService
+    ProfileService --> RecordService
+    RecommendService --> DiagnosisService
+    RecommendService --> MasteryService
+    RecommendService --> RecordService
+    RecommendService --> Recommendation
+    DiagnosisService --> Mastery
+    MasteryService --> Mastery

@@ -1,0 +1,19 @@
+flowchart TB
+    subgraph R1[" "]
+        direction LR
+        A["老师打开干预页<br/>或学生打开学习助手"] --> B["扫描学生和知识点<br/>输入：对话结果、掌握度"]
+        B --> C{"两层判断"}
+        C -- "A 或 B" --> F0["自动执行<br/>输出：approved"]
+        C -- "A+B" --> E{"老师审核"}
+        E -- 驳回或忽略 --> G(["关闭预警"])
+    end
+    subgraph R2[" "]
+        direction LR
+        H["学生执行<br/>A：变式练习<br/>B：复习并重做对话<br/>A+B：先 B 后 A"] --> I["系统判断完成<br/>输出：before、after"]
+        I --> J{"有效?"}
+        J -- 是 --> K(["结束，记为有效"])
+        J -- 否 --> L(["记为无效<br/>问题仍在时重新预警"])
+    end
+    R1 -- "自动执行或老师通过" --> R2
+    style R1 fill:none,stroke:none
+    style R2 fill:none,stroke:none

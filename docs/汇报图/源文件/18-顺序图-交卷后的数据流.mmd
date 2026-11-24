@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant V as 学习页面
+    participant C as LearnController
+    participant S as LearnService
+    participant R as RecordService
+    participant M as MasteryService
+    participant D as 数据库
+    V->>C: 提交答案
+    C->>S: submit(itemId, answers)
+    S->>D: 读取题目和正确答案
+    Note over S: 逐题判分
+    S->>R: saveAnswers(item, results)
+    R->>D: 写入 answer_record
+    S->>M: update(学生, 题目)
+    M->>D: 找到题目关联的知识点
+    M->>D: 重算并写入 mastery
+    M-->>S: 每个知识点前后变化
+    S-->>V: 成绩、解析、掌握度变化
+    Note over V,D: 之后打开推荐页、干预页时，读取最新掌握度
