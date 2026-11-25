@@ -49,6 +49,7 @@ public final class AccessRules {
             rule("/api/assistant/**", STUDENT),
             rule("/api/diagnosis/me", STUDENT),
             rule("/api/profiles/me", STUDENT),
+            rule("/api/profiles/me/**", STUDENT),
             rule("/api/interventions/mine", STUDENT),
             // 资料文件：老师预览、学生学习都要看
             rule("/api/materials/**", STUDENT, TEACHER),

@@ -36,4 +36,45 @@ public final class ProfileDtos {
     /** 一次交卷，按时间从早到晚 */
     public record QuizPoint(LocalDateTime time, String title, int correct, int total) {
     }
+
+    // ------------------------------------------------------------------ 每章画像 + 课程四维（2026-11-25）
+
+    /** 学生能看画像的课程（选择用） */
+    public record CourseOption(Long courseId, String name, int chaptersDone, int chapters) {
+    }
+
+    /**
+     * 一门课的画像：每章分析 + 课程四维。四维只在全部章节学完后开放（open）。
+     *
+     * @param refDate 学习持续性的参考日：学完时 = 最后一项完成的日期；没学完时 = 今天
+     */
+    public record CourseProfile(Long courseId, String courseName, String studentName, boolean open,
+                                int chaptersDone, int chapters, LocalDate refDate, LocalDateTime computedAt,
+                                List<CourseDimension> dimensions, List<ChapterProfile> chapterProfiles,
+                                List<DayActivity> days) {
+    }
+
+    /**
+     * 四维之一：value 0～1；没有分母时 value 为空，reason 说明原因。numerator / denominator 给页面解释用。
+     */
+    public record CourseDimension(String key, String label, Double value, int numerator, int denominator,
+                                  String formula, String source, String reason) {
+    }
+
+    /**
+     * 每章画像（学的过程中一直显示，学完是“学习小结”）。
+     *
+     * @param flowDone    学习流程进度（含 AI 对话）
+     * @param contentDone 内容进度（视频、文档、练习；不含 AI 对话）
+     * @param correct     第一次作答全对的题数；graded 已判的题数；pending 等老师确认的题数
+     */
+    public record ChapterProfile(Long chapterId, String title, boolean completed, int flowDone, int flowTotal,
+                                 int contentDone, int contentTotal, int exercisesSubmitted, int exercises,
+                                 int correct, int graded, int pending, List<PointColor> points, String summary) {
+    }
+
+    /** 知识点颜色：green 第一次就掌握 / orange 补回来了 / red 还没掌握 / none 没练过 */
+    public record PointColor(Long knowledgePointId, String name, String color, Double firstMastery,
+                             String remedyStatus) {
+    }
 }

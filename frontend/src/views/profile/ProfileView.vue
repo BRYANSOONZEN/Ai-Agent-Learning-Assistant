@@ -1,401 +1,271 @@
 <script setup>
 /*
- * 学生画像 (the 画 stage). Everything comes from GET /api/profiles/me, which works it out from the
- * learning records (记) and mastery / dialogue results (诊) when the page opens:
- * tags with the reason behind each, six dimensions (each says how it was computed, or that there is
- * not enough data yet), study minutes over the last 14 days, and the score of every quiz submission.
+ * 学生画像 (docs/模块说明/学生画像-设计.md), per course:
+ *   - every chapter: learning-flow progress (incl. the AI dialogue), content progress (without it), exercises
+ *     submitted, first-attempt accuracy, and each knowledge point's colour (green = mastered at the first try,
+ *     orange = recovered, red = not yet). Shown all along; once a chapter is done it is its 学习小结.
+ *   - the course's four dimensions, open only when every chapter is done: 学习持续性, 学习完成度, 按时完成率,
+ *     有效作答正确率. The AI dialogue is never counted. A dimension without a denominator shows "暂无数据";
+ *     the polygon is drawn only when all four have values.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import ChartCard from '@/components/ChartCard.vue'
-import { getMyProfile } from '@/api/profile'
+import { getCourseProfile, getProfileCourses } from '@/api/profile'
 
+const PRIMARY = '#940b01'
+const courses = ref([])
+const courseId = ref(null)
 const profile = ref(null)
 const loading = ref(false)
 
-const TAG_TYPES = {
-  behavior: { label: '学习习惯', cls: 'behavior' },
-  strength: { label: '优势', cls: 'strength' },
-  weakness: { label: '薄弱', cls: 'weakness' },
+const pct = (v) => (v == null ? '暂无数据' : Math.round(v * 100) + '%')
+const COLORS = {
+  green: { label: '第一次就掌握', cls: 'green' },
+  orange: { label: '补回来了', cls: 'orange' },
+  red: { label: '还没掌握', cls: 'red' },
+  none: { label: '没练过', cls: 'none' },
 }
 
-const percent = (v) => (v == null ? '-' : Math.round(v * 100) + '%')
-const md = (d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
-
-const tagGroups = computed(() =>
-  Object.keys(TAG_TYPES)
-    .map((type) => ({ type, ...TAG_TYPES[type], tags: profile.value.tags.filter((t) => t.type === type) }))
-    .filter((g) => g.tags.length),
-)
-
-// shared, recessive chart chrome: light grid, muted axis text, one series so no legend
-const AXIS_TEXT = { color: '#8e9eb0', fontSize: 11 }
-const SPLIT = { lineStyle: { color: '#edf1f5' } }
-const PRIMARY = '#5c76e9'
-
-const daysOption = computed(() => {
-  const days = profile.value.days
-  return {
-    grid: { left: 36, right: 12, top: 16, bottom: 28 },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(92,118,233,0.06)' } },
-      formatter: ([p]) => {
-        const d = days[p.dataIndex]
-        return `${d.date}<br/>学习 <b>${d.minutes}</b> 分钟，${d.actions} 次学习活动`
-      },
-    },
-    xAxis: {
-      type: 'category',
-      data: days.map((d) => md(d.date)),
-      axisTick: { show: false },
-      axisLine: { lineStyle: { color: '#dce5ed' } },
-      axisLabel: AXIS_TEXT,
-    },
-    yAxis: { type: 'value', name: '分钟', nameTextStyle: AXIS_TEXT, minInterval: 1, axisLabel: AXIS_TEXT, splitLine: SPLIT },
-    series: [
-      {
-        type: 'bar',
-        data: days.map((d) => d.minutes),
-        barMaxWidth: 18,
-        itemStyle: { color: PRIMARY, borderRadius: [4, 4, 0, 0] },
-      },
-    ],
-  }
+onMounted(async () => {
+  courses.value = (await getProfileCourses()) || []
+  const start = courses.value.find((c) => c.chaptersDone > 0) || courses.value[0]
+  courseId.value = start?.courseId ?? null
 })
-
-const quizOption = computed(() => {
-  const q = profile.value.quizTrend
-  return {
-    grid: { left: 40, right: 16, top: 16, bottom: 28 },
-    tooltip: {
-      trigger: 'axis',
-      formatter: ([p]) => {
-        const a = q[p.dataIndex]
-        return `${a.time.slice(0, 16)}<br/>${a.title}<br/>答对 <b>${a.correct} / ${a.total}</b>`
-      },
-    },
-    xAxis: {
-      type: 'category',
-      data: q.map((a) => md(a.time)),
-      boundaryGap: false,
-      axisTick: { show: false },
-      axisLine: { lineStyle: { color: '#dce5ed' } },
-      axisLabel: AXIS_TEXT,
-    },
-    yAxis: {
-      type: 'value',
-      min: 0,
-      max: 100,
-      interval: 25,
-      axisLabel: { ...AXIS_TEXT, formatter: '{value}%' },
-      splitLine: SPLIT,
-    },
-    series: [
-      {
-        type: 'line',
-        data: q.map((a) => Math.round((a.correct / a.total) * 100)),
-        lineStyle: { width: 2, color: PRIMARY },
-        itemStyle: { color: PRIMARY, borderColor: '#fff', borderWidth: 2 },
-        symbolSize: 10,
-      },
-    ],
-  }
-})
-
-// ECharts pulls a missing value to the centre, which reads as 0%, so only dimensions with data are plotted
-const plotted = computed(() => profile.value.dimensions.filter((d) => d.value != null))
-const unplotted = computed(() => profile.value.dimensions.filter((d) => d.value == null))
-
-const radarOption = computed(() => {
-  const dims = plotted.value
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: () => dims.map((d) => `${d.label}：<b>${percent(d.value)}</b>`).join('<br/>'),
-    },
-    radar: {
-      center: ['50%', '52%'],
-      // narrower on a phone so the side labels stay inside the canvas
-      radius: window.innerWidth < 600 ? '50%' : '64%',
-      axisNameGap: 8,
-      splitNumber: 4,
-      indicator: dims.map((d) => ({ name: d.label, max: 1 })),
-      axisName: {
-        formatter: (name) => `{name|${name}}\n{value|${percent(dims.find((d) => d.label === name).value)}}`,
-        rich: {
-          name: { color: '#4a5a6c', fontSize: 12, lineHeight: 18, align: 'center' },
-          value: { color: '#1f2d3d', fontSize: 13, fontWeight: 700, lineHeight: 18, align: 'center' },
-        },
-      },
-      axisLine: { lineStyle: { color: '#dce5ed' } },
-      splitLine: { lineStyle: { color: '#edf1f5' } },
-      splitArea: { show: false },
-    },
-    series: [
-      {
-        type: 'radar',
-        symbolSize: 8,
-        lineStyle: { width: 2, color: PRIMARY },
-        itemStyle: { color: PRIMARY, borderColor: '#fff', borderWidth: 2 },
-        areaStyle: { color: PRIMARY, opacity: 0.14 },
-        data: [{ value: dims.map((d) => d.value), name: '六个维度' }],
-      },
-    ],
-  }
-})
-
-async function load() {
+watch(courseId, async (id) => {
+  if (!id) return
   loading.value = true
   try {
-    profile.value = await getMyProfile()
+    profile.value = await getCourseProfile(id)
   } finally {
     loading.value = false
   }
-}
+})
 
-onMounted(load)
+const complete = computed(() => profile.value?.dimensions.every((d) => d.value != null))
+const radarOption = computed(() => {
+  const dims = profile.value?.dimensions || []
+  return {
+    tooltip: { trigger: 'item', formatter: () => dims.map((d) => `${d.label}：<b>${pct(d.value)}</b>`).join('<br/>') },
+    radar: {
+      center: ['50%', '52%'],
+      radius: window.innerWidth < 600 ? '50%' : '62%',
+      splitNumber: 4,
+      indicator: dims.map((d) => ({ name: `${d.label}\n${pct(d.value)}`, max: 1 })),
+      axisName: { color: '#262626', fontSize: 12, lineHeight: 18 },
+      axisLine: { lineStyle: { color: '#d9d9d9' } },
+      splitLine: { lineStyle: { color: '#eeeeee' } },
+      splitArea: { show: false },
+    },
+    // missing values are not plotted as 0: the polygon is only drawn when all four have data
+    series: complete.value
+      ? [{
+          type: 'radar',
+          symbolSize: 7,
+          lineStyle: { width: 2, color: PRIMARY },
+          itemStyle: { color: PRIMARY, borderColor: '#fff', borderWidth: 2 },
+          areaStyle: { color: PRIMARY, opacity: 0.12 },
+          data: [{ value: dims.map((d) => d.value), name: '课程四维' }],
+        }]
+      : [],
+  }
+})
+
+const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.minutes > 0 || d.actions > 0).length)
 </script>
 
 <template>
   <div v-loading="loading" class="profile">
-    <PageHeader
-      title="学生画像"
-      description="用你的学习记录、答题和 AI 对话现算出来的：你是怎样的学习者、强在哪、弱在哪。每一条都写了依据。"
-    />
+    <PageHeader title="学生画像" subtitle="每章看知识点颜色和练习情况；全部章节学完后开放课程四维画像。AI 对话不计入画像分数。">
+      <el-select v-model="courseId" placeholder="选课程" style="width: 240px">
+          <el-option v-for="c in courses" :key="c.courseId" :label="`${c.name}（学完 ${c.chaptersDone}/${c.chapters} 章）`" :value="c.courseId" />
+      </el-select>
+    </PageHeader>
 
     <template v-if="profile">
-      <!-- who: name, the key numbers, and the tags with their reasons -->
-      <section class="sw-summary portrait">
-        <span class="avatar">{{ profile.studentName?.[0] }}</span>
-        <div class="sw-summary-main">
-          <span class="sw-eyebrow on-dark">LEARNER PROFILE</span>
-          <h2>{{ profile.studentName }}</h2>
-          <p>学了 {{ profile.stats.minutes }} 分钟，学完 {{ profile.stats.itemsFinished }} 项内容。</p>
+      <!-- course four dimensions -->
+      <section class="app-card block">
+        <div class="block-head">
+          <h3>课程四维画像</h3>
+          <span class="muted">计算时间 {{ String(profile.computedAt).slice(0, 16) }} · 持续性参考日 {{ profile.refDate }}</span>
         </div>
-        <div class="sw-summary-stat">
-          <strong>{{ profile.stats.activeDays14 }}</strong>
-          <span>近 14 天学习天数</span>
+        <div v-if="!profile.open" class="locked">
+          学完全部章节后开放（已学完 {{ profile.chaptersDone }}/{{ profile.chapters }} 章）。下面先看每一章的情况。
         </div>
-        <div class="sw-summary-stat">
-          <strong>{{ percent(profile.stats.accuracy) }}</strong>
-          <span>答题正确率</span>
-        </div>
-        <div class="sw-summary-stat">
-          <strong>{{ profile.stats.weakPoints }}</strong>
-          <span>薄弱知识点</span>
-        </div>
-      </section>
-
-      <section class="app-card tags-card">
-        <div class="sw-heading">
-          <div>
-            <span class="sw-eyebrow">YOUR PATTERN</span>
-            <h3>画像标签</h3>
-          </div>
-        </div>
-        <div class="tags">
-          <p v-if="!tagGroups.length" class="empty-note">学习记录还太少，多学几次就会出现标签。</p>
-          <div v-for="g in tagGroups" :key="g.type" class="tag-group">
-            <span class="group-label">{{ g.label }}</span>
-            <ul>
-              <li v-for="t in g.tags" :key="t.name" class="tag" :class="g.cls">
-                <strong>{{ t.name }}</strong>
-                <span>{{ t.reason }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- six dimensions: the radar shows the shape, the list beside it gives each number and its reason -->
-      <section class="app-card dims">
-        <div class="sw-heading dims-head">
-          <div>
-            <span class="sw-eyebrow">DIMENSIONS</span>
-            <h3>六个维度</h3>
-          </div>
-          <router-link :to="{ name: 'diagnosis' }" class="sw-link">
-            知识点详情在学情诊断<el-icon><Right /></el-icon>
-          </router-link>
-        </div>
-        <div class="dims-body">
-          <div>
-            <ChartCard v-if="plotted.length >= 3" plain :option="radarOption" height="340px" />
-            <p v-else class="empty-note radar-empty">有数据的维度不足 3 个，多学几次就能画出图。</p>
-            <p v-if="plotted.length >= 3 && unplotted.length" class="radar-note">
-              {{ unplotted.map((d) => d.label).join('、') }}还没有数据，图上没有画。
-            </p>
+        <div v-else class="dims">
+          <div class="radar">
+            <ChartCard plain :option="radarOption" height="320px" />
+            <p v-if="!complete" class="muted center">画像数据不完整：有维度暂无数据，没有画多边形</p>
           </div>
           <div class="dim-list">
-            <div v-for="d in profile.dimensions" :key="d.key" class="dim" :class="{ missing: d.value == null }">
-              <span class="dim-label">{{ d.label }}</span>
-              <span class="dim-value">{{ d.value == null ? '数据不足' : percent(d.value) }}</span>
-              <span class="dim-reason">{{ d.reason }}</span>
+            <div v-for="d in profile.dimensions" :key="d.key" class="dim">
+              <div class="dim-top">
+                <b>{{ d.label }}</b>
+                <span class="dim-value" :class="{ none: d.value == null }">{{ pct(d.value) }}</span>
+              </div>
+              <p class="dim-reason">{{ d.reason }}</p>
+              <p class="muted">算法：{{ d.formula }}</p>
+              <p class="muted">数据：{{ d.source }}</p>
             </div>
           </div>
         </div>
       </section>
 
-      <div class="charts">
-        <ChartCard title="近 14 天学习时长" :option="daysOption" height="240px" />
-        <div v-if="profile.quizTrend.length">
-          <ChartCard title="每次交卷的正确率" :option="quizOption" height="240px" />
+      <!-- every chapter -->
+      <section v-for="ch in profile.chapterProfiles" :key="ch.chapterId" class="app-card block">
+        <div class="block-head">
+          <h3>{{ ch.title }}</h3>
+          <el-tag :type="ch.completed ? 'success' : 'info'" size="small">{{ ch.completed ? '学习小结' : '学习中' }}</el-tag>
         </div>
-        <div v-else class="app-card empty-chart">
-          <div class="chart-title">每次交卷的正确率</div>
-          <el-empty :image-size="60" description="还没交过练习" />
+        <div class="bars">
+          <div>
+            <span class="muted">学习流程（含 AI 对话）{{ ch.flowDone }}/{{ ch.flowTotal }}</span>
+            <el-progress :percentage="ch.flowTotal ? Math.round((ch.flowDone / ch.flowTotal) * 100) : 0" :stroke-width="8" :color="PRIMARY" />
+          </div>
+          <div>
+            <span class="muted">内容（视频、文档、练习）{{ ch.contentDone }}/{{ ch.contentTotal }}</span>
+            <el-progress :percentage="ch.contentTotal ? Math.round((ch.contentDone / ch.contentTotal) * 100) : 0" :stroke-width="8" color="#595959" />
+          </div>
+          <div class="stat">
+            <span class="muted">练习交了</span><b>{{ ch.exercisesSubmitted }}/{{ ch.exercises }} 组</b>
+          </div>
+          <div class="stat">
+            <span class="muted">第一次作答全对</span>
+            <b>{{ ch.graded ? `${ch.correct}/${ch.graded}` : '暂无' }}</b>
+            <small v-if="ch.pending" class="muted">（{{ ch.pending }} 题等老师确认）</small>
+          </div>
         </div>
-      </div>
+        <div v-if="ch.points.length" class="points">
+          <span v-for="p in ch.points" :key="p.knowledgePointId" class="point" :class="COLORS[p.color].cls"
+            :title="p.firstMastery != null ? `第一次 ${Math.round(p.firstMastery * 100)}%` : ''">
+            {{ p.name }}<small>{{ COLORS[p.color].label }}</small>
+          </span>
+        </div>
+        <p class="summary">{{ ch.summary }}</p>
+      </section>
+
+      <p class="muted">近 14 天有学习记录的日子：{{ activeDays }} 天（看视频、文档 ≥ 30 秒或交过题才算“有效学习日”）。</p>
     </template>
+    <el-empty v-else-if="!loading" description="还没有可以看画像的课程" />
   </div>
 </template>
 
 <style scoped>
-.profile .app-card + .app-card {
-  margin-top: 0;
-}
-
-/* ---------- portrait ---------- */
-.portrait {
-  margin-bottom: 22px;
-}
-.tags-card {
-  margin-bottom: 22px;
-}
-.tags-card .tags {
-  margin-top: 16px;
-}
-.avatar {
-  flex: none;
-  width: 58px;
-  height: 58px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-}
-.tags {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-  gap: 16px 28px;
-  align-content: start;
-}
-.empty-note {
-  margin: 0;
-  color: var(--app-text-muted);
-}
-.group-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--app-text-muted);
-  font-size: 12px;
-}
-.tag-group ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.tag {
+.profile {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+  flex-direction: column;
+  gap: 14px;
 }
-.tag strong {
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 12px;
-  background: #f0edff;
-  color: #6d5fd0;
+.block {
+  padding: 16px 18px;
 }
-.tag.strength strong {
-  background: #e8f7f4;
-  color: #1f7a69;
-}
-.tag.weakness strong {
-  background: #fdeeec;
-  color: #b23b2f;
-}
-.tag span {
-  color: var(--app-text-secondary);
-  font-size: 13px;
-}
-
-/* ---------- dimensions ---------- */
-.dims {
-  margin: 22px 0;
-}
-.dims-head {
-  margin-bottom: 8px;
-}
-.dims-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+.block-head {
+  display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
-.radar-note {
-  margin: 4px 0 0;
-  color: var(--app-text-muted);
+.block-head h3 {
+  margin: 0;
+}
+.muted {
+  color: #595959;
   font-size: 12px;
+  margin: 2px 0;
+}
+.center {
   text-align: center;
 }
-.radar-empty {
-  text-align: center;
+.locked {
+  padding: 14px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  color: #595959;
+}
+.dims {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+.dim-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 .dim {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--el-border-color-lighter);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7f7f7;
 }
-.dim:first-child {
-  border-top: 0;
-}
-.dim-label {
-  font-weight: 600;
+.dim-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
 .dim-value {
-  text-align: right;
+  font-size: 22px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  color: #940b01;
 }
-.missing .dim-value {
-  color: var(--app-text-muted);
-  font-weight: 500;
-  font-size: 12px;
+.dim-value.none {
+  font-size: 14px;
+  color: #8c8c8c;
 }
 .dim-reason {
-  grid-column: 1 / -1;
-  color: var(--app-text-secondary);
+  margin: 4px 0;
   font-size: 13px;
-  line-height: 1.5;
 }
-
-/* ---------- charts ---------- */
-.charts {
+.bars {
   display: grid;
-  /* minmax(0, …) so a chart canvas can never push its column wider than the page */
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 1fr 1fr 0.6fr 0.8fr;
+  gap: 14px;
+  align-items: end;
 }
-.chart-title {
-  font-weight: 600;
-  margin-bottom: var(--app-space-md);
+.stat b {
+  display: block;
+  font-size: 18px;
 }
-
-@media (max-width: 1100px) {
-  .charts {
-    grid-template-columns: 1fr;
-  }
-  .dims-body {
+.points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.point {
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+.point small {
+  margin-left: 6px;
+  font-size: 11px;
+}
+.point.green {
+  background: #e6f2ef;
+  color: #2f7d6d;
+}
+.point.orange {
+  background: #fbf1e4;
+  color: #c77a1f;
+}
+.point.red {
+  background: #f8e7e5;
+  color: #b4433a;
+}
+.point.none {
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+.summary {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #262626;
+}
+@media (max-width: 820px) {
+  .dims,
+  .bars,
+  .dim-list {
     grid-template-columns: 1fr;
   }
 }
