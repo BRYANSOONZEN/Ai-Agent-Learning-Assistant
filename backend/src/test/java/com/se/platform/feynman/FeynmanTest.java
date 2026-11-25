@@ -201,6 +201,16 @@ class FeynmanTest {
         say(sid, "还能说吗").andExpect(jsonPath("$.code").value(400));
         mockMvc.perform(get("/api/learn/courses/1")).andExpect(jsonPath("$.data.doneItemIds", Matchers.hasItem(3)));
 
+        // 老师重新生成草稿：没聊完的那一次作废，学生再打开从新草稿开始（已完成的不受影响）
+        long open = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start").param("again", "true"))
+                .andReturn().getResponse().getContentAsString()).path("data").path("id").asLong();
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kpIds\": [" + kpId + "]}"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
+        Assertions.assertEquals("expired", jdbc.queryForObject("SELECT status FROM feynman_session WHERE id = ?", String.class, open));
+        Assertions.assertEquals("done", jdbc.queryForObject("SELECT status FROM feynman_session WHERE id = ?", String.class, sid));
+
         // 再打开：显示上一次的对话和总结；点“再讲一次”才开始新的，上一次保留
         mockMvc.perform(post("/api/learn/items/3/feynman/start"))
                 .andExpect(jsonPath("$.data.id").value(sid))
@@ -332,5 +342,38 @@ class FeynmanTest {
         mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
         String start = mockMvc.perform(post("/api/learn/items/3/feynman/start")).andReturn().getResponse().getContentAsString();
         Assertions.assertTrue(start.contains("我在测网店下单数量，1～99 件，该怎么挑测试值？"));
+    }
+
+    @Test
+    void speakerPrefixStripped() throws Exception {
+        com.fasterxml.jackson.databind.node.ObjectNode d = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(
+                "{\"scene\":{\"opening\":\"小柯说：你好\"},\"misconception_probe\":{\"line\":\"小柯：只测 50？\"},"
+                + "\"key_points\":[{\"no\":1,\"L1\":\"还有吗？\",\"L2\":\"小柯说：我给了AI一句话\",\"L3\":\"他问：错误在哪？\"}]}");
+        com.se.platform.feynman.service.FeynmanDraftService.stripSpeaker(d, "小柯");
+        Assertions.assertEquals("你好", d.path("scene").path("opening").asText());
+        Assertions.assertEquals("只测 50？", d.path("misconception_probe").path("line").asText());
+        Assertions.assertEquals("还有吗？", d.path("key_points").get(0).path("L1").asText());
+        Assertions.assertEquals("我给了AI一句话", d.path("key_points").get(0).path("L2").asText());
+        Assertions.assertEquals("错误在哪？", d.path("key_points").get(0).path("L3").asText());
+    }
+
+    @Test
+    void ackQuestionsAndLeaksRemoved() throws Exception {
+        // 实测出现过的：不带问号的问句也要去掉
+        Assertions.assertEquals("AI自动写用例", com.se.platform.feynman.service.FeynmanEngine.cleanAck("AI自动写用例，那它写之前会看些什么呢"));
+        Assertions.assertEquals("哦，自愈这个我懂了。", com.se.platform.feynman.service.FeynmanEngine.cleanAck("哦，自愈这个我懂了。那还有别的环节吗？"));
+
+        // 泄露：追问把还没讲清的要点 2 的答案（错误常发生在边界附近）说出来了
+        JsonNode d = json.readTree("{\"keyPoints\":[\"边界外的值也要测，比如 0\",\"错误常发生在边界附近\"],"
+                + "\"draft\":" + DRAFT + "}");
+        com.se.platform.feynman.service.FeynmanEngine.Kp k = new com.se.platform.feynman.service.FeynmanEngine.Kp();
+        k.name = "边界测试值的选取";
+        k.points.add(new com.se.platform.feynman.service.FeynmanEngine.Point());
+        k.points.add(new com.se.platform.feynman.service.FeynmanEngine.Point());
+        Assertions.assertTrue(com.se.platform.feynman.service.FeynmanEngine.leaks("是不是因为错误常发生在边界附近？", k, d, "要测 0"));
+        Assertions.assertFalse(com.se.platform.feynman.service.FeynmanEngine.leaks("为什么边界比中间更重要？", k, d, "要测 0"));
+        // 学生自己说过的不算泄露
+        Assertions.assertFalse(com.se.platform.feynman.service.FeynmanEngine.leaks("你说错误常发生在边界附近，为什么？", k, d,
+                "我觉得错误常发生在边界附近"));
     }
 }

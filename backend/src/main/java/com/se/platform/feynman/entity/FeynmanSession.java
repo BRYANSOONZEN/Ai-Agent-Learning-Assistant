@@ -13,6 +13,8 @@ public class FeynmanSession {
 
     public static final String OPEN = "open";
     public static final String DONE = "done";
+    /** 老师重新生成了草稿，没聊完的旧对话作废（记录保留），学生再打开从新草稿开始 */
+    public static final String EXPIRED = "expired";
 
     private Long id;
     private Long studentId;

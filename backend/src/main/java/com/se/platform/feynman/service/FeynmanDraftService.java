@@ -18,7 +18,9 @@ import com.se.platform.course.mapper.CourseMapper;
 import com.se.platform.course.service.ChapterService;
 import com.se.platform.feynman.dto.FeynmanDtos.Candidate;
 import com.se.platform.feynman.dto.FeynmanDtos.SetupView;
+import com.se.platform.feynman.entity.FeynmanSession;
 import com.se.platform.feynman.entity.FeynmanSetup;
+import com.se.platform.feynman.mapper.FeynmanSessionMapper;
 import com.se.platform.feynman.mapper.FeynmanSetupMapper;
 import com.se.platform.material.dto.KpDtos.KeyPoint;
 import com.se.platform.material.entity.ChapterKp;
@@ -56,6 +58,7 @@ public class FeynmanDraftService {
     private final ChapterKpMapper kpMapper;
     private final FeynmanSetupMapper setupMapper;
     private final ChapterKpStateMapper stateMapper;
+    private final FeynmanSessionMapper sessionMapper;
     private final KpRecognizer recognizer;
     private final AiCallLogService callLog;
     private final ObjectMapper json;
@@ -63,7 +66,8 @@ public class FeynmanDraftService {
 
     public FeynmanDraftService(ChapterItemMapper itemMapper, CourseMapper courseMapper, ChapterService chapterService,
                                ChapterKpMapper kpMapper, FeynmanSetupMapper setupMapper,
-                               ChapterKpStateMapper stateMapper, KpRecognizer recognizer,
+                               ChapterKpStateMapper stateMapper, FeynmanSessionMapper sessionMapper,
+                               KpRecognizer recognizer,
                                AiCallLogService callLog, ObjectMapper json) {
         this.itemMapper = itemMapper;
         this.courseMapper = courseMapper;
@@ -71,6 +75,7 @@ public class FeynmanDraftService {
         this.kpMapper = kpMapper;
         this.setupMapper = setupMapper;
         this.stateMapper = stateMapper;
+        this.sessionMapper = sessionMapper;
         this.recognizer = recognizer;
         this.callLog = callLog;
         this.json = json;
@@ -174,6 +179,11 @@ public class FeynmanDraftService {
         } else {
             setupMapper.updateById(s);
         }
+        // 草稿整份换了（知识点、同学、场景、要点都可能不同）：没聊完的旧对话作废，学生再打开从新草稿开始；记录保留
+        FeynmanSession expired = new FeynmanSession();
+        expired.setStatus(FeynmanSession.EXPIRED);
+        sessionMapper.update(expired, new LambdaQueryWrapper<FeynmanSession>()
+                .eq(FeynmanSession::getItemId, itemId).eq(FeynmanSession::getStatus, FeynmanSession.OPEN));
         return view(itemId);
     }
 
@@ -302,6 +312,7 @@ public class FeynmanDraftService {
             if (d == null || !d.has("scene") || !d.path("key_points").isArray()) {
                 throw BusinessException.badRequest("AI 起草失败，请再点一次“生成对话草稿”");
             }
+            stripSpeaker((ObjectNode) d, peerName(d));
             usedScenes.add(d.path("scene").path("setting").asText());
             usedNames.add(peerName(d));
             ObjectNode node = json.createObjectNode();
@@ -318,6 +329,27 @@ public class FeynmanDraftService {
             throw e;
         } catch (Exception e) {
             throw BusinessException.badRequest("AI 起草失败：" + e.getMessage());
+        }
+    }
+
+    /** 这些句子由程序直接发给学生，开头不该带“小柯说：”（实测 L2 出现过） */
+    public static void stripSpeaker(ObjectNode d, String name) {
+        java.util.function.UnaryOperator<String> clean = t -> t == null ? null
+                : t.replaceFirst("^\\s*(" + Pattern.quote(name) + "|他|同学)\\s*(说|问)?\\s*[：:]\\s*", "");
+        if (d.path("scene").isObject()) {
+            ObjectNode sc = (ObjectNode) d.path("scene");
+            sc.put("opening", clean.apply(sc.path("opening").asText()));
+        }
+        if (d.path("misconception_probe").isObject()) {
+            ObjectNode mp = (ObjectNode) d.path("misconception_probe");
+            mp.put("line", clean.apply(mp.path("line").asText()));
+        }
+        for (JsonNode p : d.path("key_points")) {
+            if (p.isObject()) {
+                for (String f : List.of("L1", "L2", "L3")) {
+                    ((ObjectNode) p).put(f, clean.apply(p.path(f).asText()));
+                }
+            }
         }
     }
 

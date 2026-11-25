@@ -217,9 +217,20 @@ public class FeynmanEngine {
             k.misconFixed = true;
         }
         String said = studentText(s.getId(), st.idx);
-        boolean progress = apply(k, j.path("points"), said);
+        Integer tgt = k.target;
+        String tgtBefore = tgt == null ? null : k.points.get(tgt).status;
+        apply(k, j.path("points"), said);
+        // “有进展”只看正在追问的那条要点：学生在别的要点上有进展，不影响这条的提示级别
+        boolean progress = tgt != null && rank(k.points.get(tgt).status) > rank(tgtBefore);
 
         String ack = cleanAck(j.path("ack").asText(""));
+        if (leaks(ack, k, d, said)) {
+            ack = "";   // 短反应替学生说出了还没讲清的要点：不用
+        }
+        String followup = j.path("followup").asText("").strip();
+        if (leaks(followup, k, d, said)) {
+            followup = "";   // 追问里带出了答案：不用，改用老师确认过的提示
+        }
         boolean allClear = k.points.stream().allMatch(p -> "clear".equals(p.status));
         if (allClear || k.turns >= MAX_TURNS) {
             if (!ack.isEmpty()) {
@@ -229,14 +240,14 @@ public class FeynmanEngine {
             return view(s);
         }
         String next;
-        if ("question".equals(kind)) {
+        if ("question".equals(kind) && !j.path("attempt").asBoolean(false)) {   // 真的在提问；用疑问语气猜答案的按讲解处理
             String ptr = pointer(d, Math.max(0, target(k)));
             next = "这个我也不确定，你可以看看" + (ptr.isEmpty() ? "资料" : ptr) + "，看完接着给我讲讲？";
         } else if (!k.misconAsked && k.turns >= 2 && !k.misconFixed) {
             k.misconAsked = true;   // 讲了两句以后，小林带着常见误解问一次：看学生能不能指出错在哪
             next = d.path("draft").path("misconception_probe").path("line").asText();
         } else {
-            next = nextQuestion(k, d, progress, j.path("followup").asText("").strip());
+            next = nextQuestion(k, d, progress, followup);
             if (next == null) {   // 每条没讲清的要点都引导到头了
                 finish(s, st, k, d);
                 return view(s);
@@ -449,10 +460,43 @@ public class FeynmanEngine {
         return b.toString();
     }
 
+    /**
+     * 泄露检查：短反应和追问不能替学生说出还没讲清的要点。
+     * 还没讲清的要点原文里任意连续 4 个字，出现在这句话里，却没在学生说过的话、知识点名称、开场白、
+     * 这条要点老师确认过的 L1～L3 里出现过，就算泄露。
+     */
+    public static boolean leaks(String line, Kp k, JsonNode d, String said) {
+        String l = normalize(line);
+        if (l.length() < 4) {
+            return false;
+        }
+        String base = normalize(said) + "|" + normalize(k.name) + "|"
+                + normalize(d.path("draft").path("scene").path("opening").asText());
+        JsonNode texts = d.path("keyPoints");
+        for (int i = 0; i < texts.size() && i < k.points.size(); i++) {
+            if ("clear".equals(k.points.get(i).status)) {
+                continue;
+            }
+            JsonNode kp = keyPoint(d, i + 1);
+            String allowed = base + "|" + normalize(kp.path("L1").asText()) + "|" + normalize(kp.path("L2").asText())
+                    + "|" + normalize(kp.path("L3").asText());
+            String text = normalize(texts.get(i).asText());
+            for (int j = 0; j + 4 <= text.length(); j++) {
+                String g = text.substring(j, j + 4);
+                if (l.contains(g) && !allowed.contains(g)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** 短反应只是“嗯，我在听”的作用：去掉里面的问句和开头的对错评判 */
-    static String cleanAck(String ack) {
+    public static String cleanAck(String ack) {
         String a = ack == null ? "" : ack.strip();
         a = a.replaceAll("[^。！!？?]*[？?]", "").strip();   // 带问号的句子去掉：一次只问一个问题，问题由程序决定
+        a = a.replaceAll("[^。！!，,；;]*[吗呢](?=[。！!，,；;]|$)[。！!，,；;]?", "").strip();   // 没写问号的问句（“……会看些什么呢”）也去掉
+        a = a.replaceAll("^[，,；;]+|[，,；;]+$", "").strip();
         a = a.replaceFirst("^(对的?|没错|不对|很好|是的)[，,。！! ]*", "").strip();
         return a;
     }
@@ -491,6 +535,7 @@ public class FeynmanEngine {
     JsonNode judge(FeynmanSession s, State st, Kp k, JsonNode d, String text) {
         int t = target(k);
         String prompt = turnTemplate.render(Map.of("peer", k.peer, "target", t < 0 ? "（无）" : String.valueOf(t + 1),
+                "target_text", t < 0 ? "" : "：" + d.path("keyPoints").path(t).asText(),
                 "name", k.name, "points", pointsText(d),
                 "misconception", d.path("draft").path("misconception_probe").path("misconception").asText(),
                 "status", statusText(k), "recent", recent(s.getId(), st.idx, 12), "student", text));

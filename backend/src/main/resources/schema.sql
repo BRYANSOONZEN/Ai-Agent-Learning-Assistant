@@ -441,7 +441,7 @@ CREATE TABLE feynman_session (                   -- 一个学生的一次对话�
     id          BIGINT       NOT NULL AUTO_INCREMENT,
     student_id  BIGINT       NOT NULL,
     item_id     BIGINT       NOT NULL,
-    status      VARCHAR(16)  NOT NULL,           -- open 进行中 / done 完成
+    status      VARCHAR(16)  NOT NULL,           -- open 进行中 / done 完成 / expired 老师重新生成了草稿，没聊完的作废
     state       TEXT         NOT NULL,           -- JSON
     created_at  DATETIME     NOT NULL,
     updated_at  DATETIME     NOT NULL,
