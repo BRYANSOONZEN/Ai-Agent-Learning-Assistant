@@ -11,7 +11,7 @@ from diag import diagram, formula  # noqa: E402
 
 cover("软件工程智能学习平台", "最终答辩（初稿）· 模块三：AI 对话（老师端）", "SE LEARNING PLATFORM · FINAL DEFENSE · GROUP 2")
 SECTION[0] = 2
-dark_slide("老师端 · AI 对话草稿", "大模型起草 · 程序检查 · 老师修改和确认")
+dark_slide("老师端 · AI 对话", "老师起草和确认 · 学生每一句怎么判断 · 三级提示")
 
 # ---------------------------------------------------------------- 1. 完整流程图
 s = new_slide("AI 对话草稿：完整流程", "学生把知识点讲给 AI 扮演的同学听；老师只准备草稿并确认，之后的对话不再参与")
