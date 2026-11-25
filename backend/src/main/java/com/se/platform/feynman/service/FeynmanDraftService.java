@@ -177,6 +177,75 @@ public class FeynmanDraftService {
         return view(itemId);
     }
 
+    /** 老师能改的字段，和每个字段的长度上限 */
+    private static final Map<String, Integer> SCENE_FIELDS = Map.of("name", 6, "persona", 120, "setting", 200, "opening", 80);
+    private static final Map<String, Integer> POINT_FIELDS = Map.of("understood_if", 300, "partial_if", 300,
+            "L1", 80, "L2", 80, "L3", 80, "pointer", 300);
+
+    /**
+     * 老师改草稿里的文字。只改能改的字段，改完重新跑程序检查；已确认的草稿改了之后变回“待确认”，再确认一次学生才用新的。
+     * 要点原文、选的误解不在这里改（要点去“知识点”里改，误解换一条就重新生成）。
+     */
+    public SetupView edit(Long itemId, Long kpId, JsonNode patch) {
+        requireDialogue(itemId);
+        FeynmanSetup s = find(itemId);
+        if (s == null) {
+            throw BusinessException.badRequest("还没有草稿");
+        }
+        if (patch == null || !patch.isObject()) {
+            throw BusinessException.badRequest("没有要改的内容");
+        }
+        List<JsonNode> all = drafts(s);
+        ObjectNode node = (ObjectNode) all.stream().filter(n -> n.path("kpId").asLong() == (kpId == null ? -1 : kpId))
+                .findFirst().orElseThrow(() -> BusinessException.badRequest("这个知识点不在草稿里"));
+        ObjectNode d = (ObjectNode) node.path("draft");
+        copy(patch.path("scene"), (ObjectNode) d.path("scene"), SCENE_FIELDS, "场景");
+        String line = patch.path("misconception_probe").path("line").asText(null);
+        if (line != null) {
+            ((ObjectNode) d.path("misconception_probe")).put("line", text(line, 80, "带着误解说的话"));
+        }
+        for (JsonNode p : patch.path("key_points")) {
+            int no = p.path("no").asInt();
+            for (JsonNode kp : d.path("key_points")) {
+                if (kp.path("no").asInt() == no) {
+                    copy(p, (ObjectNode) kp, POINT_FIELDS, "要点 " + no);
+                }
+            }
+        }
+        List<KeyPoint> points = new ArrayList<>();
+        node.path("keyPoints").forEach(t -> points.add(new KeyPoint(t.asText(), List.of())));
+        node.set("checks", json.valueToTree(check(d, points)));
+        node.put("edited", true);
+        s.setDrafts(json.valueToTree(all).toString());
+        s.setStatus(FeynmanSetup.DRAFT);   // 改了就要再确认一次
+        setupMapper.updateById(s);
+        return view(itemId);
+    }
+
+    private void copy(JsonNode from, ObjectNode to, Map<String, Integer> fields, String where) {
+        fields.forEach((f, max) -> {
+            if (from.has(f)) {
+                to.put(f, text(from.path(f).asText(), max, where + "的" + LABELS.getOrDefault(f, f)));
+            }
+        });
+    }
+
+    private static final Map<String, String> LABELS = Map.ofEntries(Map.entry("name", "名字"),
+            Map.entry("persona", "身份"), Map.entry("setting", "情境"), Map.entry("opening", "开场白"),
+            Map.entry("understood_if", "讲清标准"), Map.entry("partial_if", "不完整标准"),
+            Map.entry("pointer", "资料位置"));
+
+    private static String text(String v, int max, String what) {
+        String t = v == null ? "" : v.strip();
+        if (t.isEmpty()) {
+            throw BusinessException.badRequest(what + "不能为空");
+        }
+        if (t.length() > max) {
+            throw BusinessException.badRequest(what + "不能超过 " + max + " 字");
+        }
+        return t;
+    }
+
     public SetupView confirm(Long itemId) {
         requireDialogue(itemId);
         FeynmanSetup s = find(itemId);

@@ -251,6 +251,12 @@ export function draftFeynman(itemId, kpIds) {
   return request.post(`/chapter-items/${itemId}/feynman/draft`, { kpIds }, { timeout: 120000 })
 }
 
+// PUT { kpId, draft: { scene: {name, persona, setting, opening}, misconception_probe: {line},
+//   key_points: [{no, understood_if, partial_if, L1, L2, L3, pointer}] } } -> setup (status back to draft)
+export function editFeynmanDraft(itemId, kpId, draft) {
+  return request.put(`/chapter-items/${itemId}/feynman/draft`, { kpId, draft })
+}
+
 export function confirmFeynman(itemId) {
   return request.post(`/chapter-items/${itemId}/feynman/confirm`)
 }

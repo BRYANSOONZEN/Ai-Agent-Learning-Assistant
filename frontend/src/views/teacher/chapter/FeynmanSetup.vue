@@ -7,7 +7,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { confirmFeynman, draftFeynman, getFeynmanSetup } from '@/api/teacherCourse'
+import { confirmFeynman, draftFeynman, editFeynmanDraft, getFeynmanSetup } from '@/api/teacherCourse'
 
 const props = defineProps({ item: { type: Object, required: true } })
 
@@ -43,6 +43,45 @@ async function draft() {
     ElMessage.success('草稿已生成，请检查后确认')
   } finally {
     drafting.value = false
+  }
+}
+
+// 老师改草稿：一次改一张卡片；要点原文不在这里改（去“知识点”里改）
+const editing = ref(null)
+const form = ref(null)
+const saving = ref(false)
+
+function startEdit(d) {
+  const x = d.draft
+  editing.value = d.kpId
+  form.value = {
+    scene: {
+      name: x.scene.name || '小林',
+      persona: x.scene.persona || '',
+      setting: x.scene.setting || '',
+      opening: x.scene.opening || '',
+    },
+    misconception_probe: { line: x.misconception_probe?.line || '' },
+    key_points: x.key_points.map((p) => ({
+      no: p.no,
+      understood_if: p.understood_if,
+      partial_if: p.partial_if,
+      L1: p.L1,
+      L2: p.L2,
+      L3: p.L3,
+      pointer: p.pointer,
+    })),
+  }
+}
+
+async function saveEdit() {
+  saving.value = true
+  try {
+    setup.value = await editFeynmanDraft(props.item.id, editing.value, form.value)
+    editing.value = null
+    ElMessage.success(setup.value.status === 'draft' ? '已保存，请再确认一次草稿，学生才会用改过的内容' : '已保存')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -106,7 +145,45 @@ onMounted(load)
           <span v-for="c in d.checks" :key="c.name" class="sw-tag" :class="c.ok ? 'teal' : 'red'" :title="c.detail">
             {{ c.ok ? '✓' : '!' }} {{ c.name }}
           </span>
+          <span v-if="d.edited" class="sw-tag gray">老师改过</span>
+          <el-button v-if="editing !== d.kpId" class="edit-btn" size="small" :disabled="editing !== null" @click="startEdit(d)">
+            修改
+          </el-button>
         </header>
+        <template v-if="editing === d.kpId">
+          <dl class="edit">
+            <dt>AI 同学名字</dt>
+            <dd><el-input v-model="form.scene.name" maxlength="6" show-word-limit /></dd>
+            <dt>他是谁</dt>
+            <dd><el-input v-model="form.scene.persona" maxlength="120" show-word-limit /></dd>
+            <dt>场景</dt>
+            <dd><el-input v-model="form.scene.setting" type="textarea" autosize maxlength="200" show-word-limit /></dd>
+            <dt>开场白</dt>
+            <dd><el-input v-model="form.scene.opening" type="textarea" autosize maxlength="80" show-word-limit /></dd>
+            <dt>带着的误解</dt>
+            <dd><el-input v-model="form.misconception_probe.line" type="textarea" autosize maxlength="80" show-word-limit /></dd>
+          </dl>
+          <div v-for="p in form.key_points" :key="p.no" class="point">
+            <div class="point-title">要点 {{ p.no }}：{{ d.keyPoints[p.no - 1] }}</div>
+            <div class="muted">要点原文是标准答案，要改请去“知识点”里改，再重新生成草稿</div>
+            <div class="grid edit">
+              <span class="sw-tag teal">讲清</span>
+              <el-input v-model="p.understood_if" type="textarea" autosize maxlength="300" />
+              <span class="sw-tag gray">不完整</span>
+              <el-input v-model="p.partial_if" type="textarea" autosize maxlength="300" />
+              <b>L1</b><el-input v-model="p.L1" maxlength="80" show-word-limit />
+              <b>L2</b><el-input v-model="p.L2" type="textarea" autosize maxlength="80" show-word-limit />
+              <b>L3</b><el-input v-model="p.L3" maxlength="80" show-word-limit />
+              <b>之后</b><el-input v-model="p.pointer" type="textarea" autosize maxlength="300" />
+            </div>
+          </div>
+          <div class="actions">
+            <el-button type="primary" :loading="saving" @click="saveEdit">保存修改</el-button>
+            <el-button @click="editing = null">取消</el-button>
+            <span class="muted">保存后会重新做 4 项检查；已确认的草稿要再确认一次，学生才会用改过的内容</span>
+          </div>
+        </template>
+        <template v-else>
         <dl>
           <dt>AI 同学</dt>
           <dd>{{ d.draft.scene.name || '小林' }}：{{ d.draft.scene.persona }}</dd>
@@ -128,9 +205,10 @@ onMounted(load)
             <b>之后</b><span>不给答案，指向：{{ p.pointer }}</span>
           </div>
         </div>
+        </template>
       </article>
       <div class="actions">
-        <el-button v-if="setup.status !== 'confirmed'" type="primary" :disabled="changed || stale.length > 0" @click="confirm">
+        <el-button v-if="setup.status !== 'confirmed'" type="primary" :disabled="changed || stale.length > 0 || editing !== null" @click="confirm">
           确认草稿
         </el-button>
         <span class="muted">规则：每个知识点学生最多说 10 句，自动结束；认真尝试过但没讲清的，AI 同学会补充并推荐复习；对话结果只给学生看</span>
@@ -233,5 +311,14 @@ dd {
 }
 .grid b {
   color: #3946c9;
+}
+.edit-btn {
+  margin-left: auto;
+}
+dl.edit {
+  align-items: center;
+}
+.grid.edit {
+  align-items: center;
 }
 </style>

@@ -3,6 +3,7 @@ package com.se.platform.feynman.controller;
 import com.se.platform.common.Result;
 import com.se.platform.feynman.dto.FeynmanDtos.Availability;
 import com.se.platform.feynman.dto.FeynmanDtos.DraftRequest;
+import com.se.platform.feynman.dto.FeynmanDtos.EditRequest;
 import com.se.platform.feynman.dto.FeynmanDtos.SayRequest;
 import com.se.platform.feynman.dto.FeynmanDtos.SessionView;
 import com.se.platform.feynman.dto.FeynmanDtos.SetupView;
@@ -11,6 +12,7 @@ import com.se.platform.feynman.service.FeynmanEngine;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,6 +40,12 @@ public class FeynmanController {
     @PostMapping("/api/chapter-items/{id}/feynman/draft")
     public Result<SetupView> draft(@PathVariable Long id, @RequestBody DraftRequest req) {
         return Result.ok(drafts.draft(id, req.kpIds()));
+    }
+
+    /** PUT /api/chapter-items/{id}/feynman/draft {"kpId": 3, "draft": {...}}：老师改草稿里的文字 */
+    @PutMapping("/api/chapter-items/{id}/feynman/draft")
+    public Result<SetupView> edit(@PathVariable Long id, @RequestBody EditRequest req) {
+        return Result.ok(drafts.edit(id, req.kpId(), req.draft()));
     }
 
     @PostMapping("/api/chapter-items/{id}/feynman/confirm")

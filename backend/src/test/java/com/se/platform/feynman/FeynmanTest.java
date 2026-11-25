@@ -2,6 +2,7 @@ package com.se.platform.feynman;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -265,5 +266,42 @@ class FeynmanTest {
         // 下一句正常判断：从 L1 开始，没有因为失败的那句升级
         fake.reply(turn("explain", true, "[]", false, "嗯"));
         Assertions.assertTrue(lastAi(say(sid, "要测0吧")).endsWith("还有吗？"));
+    }
+
+    @Test
+    void teacherEditsDraft_checksRerun_needsReconfirm() throws Exception {
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kpIds\": [" + kpId + "]}"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm")).andExpect(jsonPath("$.data.status").value("confirmed"));
+
+        // 改开场白和要点 1 的 L3；L3 照抄了要点原文“边界外的值也要测” → 程序检查标红；改了之后变回待确认
+        String body = "{\"kpId\": " + kpId + ", \"draft\": {\"scene\": {\"opening\": \"我在测网店下单数量，1～99 件，该怎么挑测试值？\"},"
+                + "\"key_points\": [{\"no\": 1, \"L3\": \"边界外的值也要测吗？\"}], \"recap\": \"不能改这个\"}}";
+        mockMvc.perform(put("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.data.status").value("draft"))
+                .andExpect(jsonPath("$.data.drafts[0].draft.scene.opening").value("我在测网店下单数量，1～99 件，该怎么挑测试值？"))
+                .andExpect(jsonPath("$.data.drafts[0].draft.key_points[0].L3").value("边界外的值也要测吗？"))
+                .andExpect(jsonPath("$.data.drafts[0].draft.key_points[0].L1").value("还有吗？"))
+                .andExpect(jsonPath("$.data.drafts[0].draft.recap").value("复述"))
+                .andExpect(jsonPath("$.data.drafts[0].edited").value(true))
+                .andExpect(jsonPath("$.data.drafts[0].checks[3].ok").value(false));
+        // 待确认时学生用不了
+        mockMvc.perform(get("/api/learn/items/3/feynman")).andExpect(jsonPath("$.data.enabled").value(false));
+
+        // 空的、太长的不收
+        mockMvc.perform(put("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpId\": " + kpId + ", \"draft\": {\"key_points\": [{\"no\": 2, \"L1\": \"  \"}]}}"))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("不能为空")));
+        mockMvc.perform(put("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpId\": " + kpId + ", \"draft\": {\"scene\": {\"opening\": \"" + "很".repeat(81) + "\"}}}"))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("不能超过 80 字")));
+
+        // 再确认后学生用的是改过的开场白
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
+        String start = mockMvc.perform(post("/api/learn/items/3/feynman/start")).andReturn().getResponse().getContentAsString();
+        Assertions.assertTrue(start.contains("我在测网店下单数量，1～99 件，该怎么挑测试值？"));
     }
 }

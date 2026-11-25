@@ -25,6 +25,13 @@ public final class FeynmanDtos {
     public record DraftRequest(List<Long> kpIds) {
     }
 
+    /**
+     * 老师改一个知识点的草稿：draft 里只取能改的文字（同学名字、身份、情境、开场白、带着误解说的话，
+     * 每条要点的讲清 / 不完整标准、L1～L3、讲不出时指向哪里），其他字段忽略。要点原文不能在这里改（去“知识点”里改）。
+     */
+    public record EditRequest(Long kpId, JsonNode draft) {
+    }
+
     public record SayRequest(String text) {
     }
 
