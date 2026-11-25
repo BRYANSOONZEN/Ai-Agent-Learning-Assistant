@@ -578,3 +578,40 @@ CREATE TABLE intervention (
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_intervention_student ON intervention (student_id, status);
+
+-- ---------------------------------------------------------------------
+-- 小助手自动干预：每一轮补练（docs/模块说明/小助手-自动干预与聊天.md 第四节）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS remedy_round;
+CREATE TABLE remedy_round (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    student_id         BIGINT       NOT NULL,
+    knowledge_point_id BIGINT       NOT NULL,
+    round_no           INT          NOT NULL,              -- 第几轮（最多 2 轮）
+    exercise_ids       VARCHAR(255) NOT NULL,              -- 这一轮的补练题（小助手当场生成的），逗号分隔
+    status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 还没交 / done 交了
+    score              DOUBLE,                             -- 这一轮的平均分
+    escalated          TINYINT(1)   NOT NULL DEFAULT 0,    -- 2 轮后还没补回来 → 转给老师
+    created_at         DATETIME,
+    finished_at        DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_remedy_student ON remedy_round (student_id, knowledge_point_id);
+
+-- ---------------------------------------------------------------------
+-- 小助手聊天记录（docs/模块说明/小助手-自动干预与聊天.md 第三节）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS assistant_message;
+CREATE TABLE assistant_message (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    student_id         BIGINT       NOT NULL,
+    chapter_id         BIGINT       NOT NULL,
+    role               VARCHAR(16)  NOT NULL,              -- student / assistant
+    content            TEXT         NOT NULL,
+    blocked            VARCHAR(32),                        -- 被程序拦下的原因（question 出题 / answer 给答案），没拦为空
+    original           TEXT,                               -- 被拦下时大模型原来的回复（只给开发看，用来调规则）
+    ai_call_id         BIGINT,
+    created_at         DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_assistant_message ON assistant_message (student_id, chapter_id);

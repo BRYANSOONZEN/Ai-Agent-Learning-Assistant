@@ -61,6 +61,8 @@ public class Exercise {
      * 两段式、多选、填空、简答只在练习里做。
      */
     public boolean recommendable() {
-        return !Boolean.TRUE.equals(draft) && (type == null || "single_choice".equals(type) || "judge".equals(type));
+        // 小助手给某个学生当场生成的补练题只给他自己，不推荐给别人、不布置成干预
+        return !Boolean.TRUE.equals(draft) && !"assistant".equals(source)
+                && (type == null || "single_choice".equals(type) || "judge".equals(type));
     }
 }

@@ -1,6 +1,10 @@
 <script setup>
 /*
- * 个人学习助手 (docs/计划-个人学习助手.md), first version: rules and templates only, no model call.
+ * 个人学习助手. Design and rules: docs/模块说明/小助手-自动干预与聊天.md.
+ * Two tabs: 学习情况 (per knowledge point, practice only, with the automatic intervention: review the
+ * material, then 补练题 generated from this student's own mistakes, done right here) and 问问题 (free chat
+ * with the model; no quiz answers, no questions before the first quiz submission).
+ * Opens by itself after a quiz submission that left red / orange points (event 'assistant-open').
  * A floating button in the bottom-right corner; the panel opens only when clicked.
  * Hidden while an exercise is being answered or an AI dialogue is going (stores/assistantFocus).
  * Shows only this student's own data:
@@ -16,6 +20,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAssistantSummary } from '@/api/assistant'
+import RemedyBox from './RemedyBox.vue'
+import AssistantChat from './AssistantChat.vue'
 import { getMyAssignments } from '@/api/intervention'
 import { studentBusy } from '@/stores/assistantFocus'
 
@@ -27,6 +33,8 @@ const loading = ref(false)
 const summary = ref(null) // { chapters, focusChapterId }
 const running = ref([]) // interventions in progress for me
 const shownChapter = ref(null)
+const mode = ref('report') // 'report' 学习情况 | 'chat' 问问题
+const remedyKp = ref(null) // which knowledge point's 补练题 are open
 
 const hidden = computed(() => studentBusy.value || route.name === 'dialogue')
 watch(hidden, (h) => {
@@ -52,11 +60,23 @@ async function refresh() {
   }
 }
 
+// after a quiz submission with red / orange points: open by itself on 学习情况
+function openAfterQuiz() {
+  mode.value = 'report'
+  open.value = true
+  shownChapter.value = null
+  refresh()
+}
+
 onMounted(() => {
   refresh()
   window.addEventListener('learn-progress', refresh)
+  window.addEventListener('assistant-open', openAfterQuiz)
 })
-onBeforeUnmount(() => window.removeEventListener('learn-progress', refresh))
+onBeforeUnmount(() => {
+  window.removeEventListener('learn-progress', refresh)
+  window.removeEventListener('assistant-open', openAfterQuiz)
+})
 watch(() => route.name, refresh)
 
 const chapters = computed(() => summary.value?.chapters || [])
@@ -98,14 +118,14 @@ function toggle() {
 
 // ---------- labels and actions ----------
 
+// practice only (the AI dialogue is not scored): the colour of the current mastery
 const VERDICT = {
-  good: { text: '稳了', type: 'success' },
-  apply: { text: '会讲不会用', type: 'warning' },
-  concept: { text: '概念没讲出来', type: 'danger' },
-  both: { text: '两边都不稳', type: 'danger' },
-  few: { text: '练得太少', type: 'info' },
-  none: { text: '数据不够', type: 'info' },
+  good: { text: '掌握', type: 'success' },
+  medium: { text: '一般', type: 'warning' },
+  weak: { text: '薄弱', type: 'danger' },
+  none: { text: '未练习', type: 'info' },
 }
+const REMEDY = { recovered: '已补回来', practicing: '补练中' }
 
 const IV_TYPE = { PRACTICE: '练习', REVIEW: '复习 + 重新对话', REVIEW_PRACTICE: '复习对话后再练习' }
 
@@ -124,7 +144,7 @@ function goPractice() {
 }
 
 // one step of the automatic review plan: open the video at the right second / the document, or go practise
-function doStep(ch, st) {
+function doStep(ch, st, p) {
   if (st.kind === 'review' && st.itemId) {
     open.value = false
     router.push({
@@ -133,11 +153,13 @@ function doStep(ch, st) {
       query: { chapter: ch.chapterId, view: 'item:' + st.itemId, ...(st.startSec != null ? { t: st.startSec } : {}) },
     })
   } else if (st.kind === 'dialogue') goItem(ch, ch.dialogueItemId)
+  else if (st.kind === 'remedy') remedyKp.value = remedyKp.value === p.knowledgePointId ? null : p.knowledgePointId
   else goPractice()
 }
 
 function act(ch, p) {
   if (p.action === 'dialogue') goItem(ch, ch.dialogueItemId)
+  else if (p.action === 'remedy') remedyKp.value = p.knowledgePointId
   else goPractice()
 }
 </script>
@@ -154,7 +176,16 @@ function act(ch, p) {
           <button class="close" type="button" aria-label="关闭" @click="open = false">×</button>
         </header>
 
-        <div class="panel-body">
+        <div v-if="chapters.length" class="modes">
+          <button type="button" :class="{ active: mode === 'report' }" @click="mode = 'report'">学习情况</button>
+          <button type="button" :class="{ active: mode === 'chat' }" @click="mode = 'chat'">问问题</button>
+        </div>
+
+        <div v-if="mode === 'chat' && current" class="panel-body">
+          <AssistantChat :chapter-id="current.chapterId" :chapter-title="current.title" />
+        </div>
+
+        <div v-else class="panel-body">
           <!-- nothing yet -->
           <div v-if="summary && !chapters.length" class="empty">
             <p>你还没开始学习。选一门课，从第一章开始吧。</p>
@@ -192,6 +223,9 @@ function act(ch, p) {
                     <el-tag :type="VERDICT[p.verdict]?.type" size="small" effect="light">
                       {{ VERDICT[p.verdict]?.text }}
                     </el-tag>
+                    <el-tag v-if="p.remedyStatus" :type="p.remedyStatus === 'recovered' ? 'success' : 'warning'" size="small" effect="plain">
+                      {{ REMEDY[p.remedyStatus] }}
+                    </el-tag>
                   </div>
                   <p>{{ p.text }}</p>
                   <ul v-if="p.details?.length && p.verdict !== 'good'" class="details">
@@ -200,14 +234,15 @@ function act(ch, p) {
                   <ol v-if="p.plan?.length" class="plan">
                     <li v-for="(st, k) in p.plan" :key="k">
                       <span>{{ st.text }}</span>
-                      <el-button size="small" link type="primary" @click="doStep(current, st)">
-                        {{ st.kind === 'review' ? '去看' : st.kind === 'dialogue' ? '去讲' : '去做题' }}
+                      <el-button size="small" link type="primary" @click="doStep(current, st, p)">
+                        {{ st.kind === 'review' ? '去看' : st.kind === 'dialogue' ? '去讲' : st.kind === 'remedy' ? (remedyKp === p.knowledgePointId ? '收起' : '做补练题') : '去做题' }}
                       </el-button>
                     </li>
                   </ol>
-                  <el-button v-else-if="p.action" size="small" :type="p.verdict === 'few' ? 'default' : 'primary'" plain @click="act(current, p)">
-                    {{ p.action === 'dialogue' ? '巩固一下（AI 对话）' : '去做题' }}
+                  <el-button v-else-if="p.action" size="small" type="primary" plain @click="act(current, p)">
+                    {{ p.action === 'dialogue' ? '巩固一下（AI 对话）' : '做补练题' }}
                   </el-button>
+                  <RemedyBox v-if="remedyKp === p.knowledgePointId" :key="'rm' + p.knowledgePointId" :kp-id="p.knowledgePointId" @changed="refresh" />
                 </li>
               </ul>
             </template>
@@ -418,12 +453,28 @@ function act(ch, p) {
 .points > li.v-good {
   border-left-color: var(--app-success);
 }
-.points > li.v-apply {
+.points > li.v-medium {
   border-left-color: var(--app-warning);
 }
-.points > li.v-concept,
-.points > li.v-both {
+.points > li.v-weak {
   border-left-color: var(--app-danger);
+}
+.modes {
+  display: flex;
+  border-bottom: 1px solid var(--app-border);
+}
+.modes button {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--el-text-color-regular);
+}
+.modes button.active {
+  color: var(--el-color-primary);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--el-color-primary);
 }
 .point-head {
   display: flex;

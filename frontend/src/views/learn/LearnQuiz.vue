@@ -73,6 +73,10 @@ async function submit() {
     const answers = Object.fromEntries(questions.value.map((q) => [q.id, answerOf(q)]))
     result.value = await submitQuiz(props.itemId, answers)
     emit('done')
+    // red / orange points: the study assistant opens by itself with the review plan and 补练题
+    if ((result.value.masteryChanges || []).some((c) => c.level === 'weak' || c.level === 'medium')) {
+      setTimeout(() => window.dispatchEvent(new Event('assistant-open')), 300)
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } finally {
     submitting.value = false

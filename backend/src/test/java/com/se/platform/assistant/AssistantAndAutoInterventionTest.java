@@ -180,7 +180,8 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.chapters[0].completed").value(false))
                 .andExpect(jsonPath("$.data.chapters[0].nextItemId").value(3))
                 .andExpect(jsonPath("$.data.chapters[0].report.headline", Matchers.containsString("根据你目前的练习")))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].plan[0].kind").value("practice"))
+                // 只看练习：知识点 1 第一次错了（红）→ 补练题（这里没有识别资料，所以没有“看资料”这一步）
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].plan[0].kind").value("remedy"))
                 .andExpect(jsonPath("$.data.focusChapterId").value(1));
     }
 
@@ -197,17 +198,17 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.chapters[0].report.good").value(0))
                 .andExpect(jsonPath("$.data.chapters[0].report.weak").value(1))
                 .andExpect(jsonPath("$.data.chapters[0].report.headline", Matchers.containsString("还需要补")))
-                // 知识点 1：对话自己讲出来了，练习 0，反复同一个误解 → 会讲不会用，去做题
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("apply"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].concept").value("good"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].application").value("bad"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").value("practice"))
+                // 知识点 1：只看练习，当前 0（红），反复同一个误解 → 看资料、做补练题
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("weak"))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].level").value("weak"))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].firstMastery").value(0.0))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").value("remedy"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].misconception")
                         .value("只取了边界和内侧，缺少越过边界的值"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].text",
-                        Matchers.containsString("对话里你自己讲出来了")))
-                // 知识点 2：对话讲出来了，但没做过练习 → 再做几道确认
-                .andExpect(jsonPath("$.data.chapters[0].report.points[1].verdict").value("few"));
+                        Matchers.containsString("第一次练习 0%")))
+                // 知识点 2：没做过练习
+                .andExpect(jsonPath("$.data.chapters[0].report.points[1].verdict").value("none"));
     }
 
     @Test
@@ -222,19 +223,18 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.chapters[0].report.headline",
                         Matchers.not(Matchers.containsString("没有明显薄弱"))))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[*].verdict", Matchers.contains("none", "none")))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[*].action",
-                        Matchers.contains("practice", "practice")));
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text").value("还没做过这个知识点的练习。"));
     }
 
     @Test
-    void conceptWeakStudent_isSentToDialogue() throws Exception {
+    void practiceGood_noRemedy_evenIfDialogueWeak() throws Exception {
+        // 学生04：练习全对，对话里没讲出来。AI 对话不打分（2026-11-25），只看练习 → 绿，不用补
         for (int item = 1; item <= 3; item++) {
             finishItem(8, item);
         }
-        summary(8).andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("concept"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").value("dialogue"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text",
-                        Matchers.containsString("还没能自己讲出来")));
+        summary(8).andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("good"))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").doesNotExist())
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text").value("掌握得不错。"));
     }
 
     @Test

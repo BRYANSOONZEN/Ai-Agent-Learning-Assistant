@@ -14,10 +14,10 @@ import com.se.platform.course.mapper.ChapterMapper;
 import com.se.platform.course.mapper.CourseMapper;
 import com.se.platform.course.mapper.KnowledgePointMapper;
 import com.se.platform.diagnosis.entity.Mastery;
-import com.se.platform.intervention.service.InterventionService;
-import com.se.platform.intervention.service.LayerService;
-import com.se.platform.intervention.service.LayerService.Application;
-import com.se.platform.intervention.service.LayerService.Concept;
+import com.se.platform.assistant.dto.AssistantDtos.PlanStep;
+import com.se.platform.assistant.entity.RemedyRound;
+import com.se.platform.diagnosis.mapper.MasteryMapper;
+import com.se.platform.diagnosis.service.MasteryService;
 import com.se.platform.record.entity.LearningEvent;
 import com.se.platform.record.mapper.LearningEventMapper;
 import java.time.LocalDateTime;
@@ -34,7 +34,8 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li>学完一章 = 这一章所有学习项都完成过一次（learning_event 里的 finish_item）</li>
- *   <li>学完后的个人总结：每个知识点用和干预相同的两层判断（LayerService），再加上反复出现的误解</li>
+ *   <li>做过这一章的练习后的个人总结：每个知识点只看练习（当前掌握度的颜色、第一次的掌握度、补练状态），
+ *       加上错在哪条要点、最常见的误解、复习方案（看资料 → 小助手里的补练题）</li>
  * </ul>
  * 只读这个学生自己的数据；题目答案、话题要点、其他学生的数据都不碰。
  */
@@ -46,22 +47,21 @@ public class AssistantService {
     private final ChapterItemMapper itemMapper;
     private final KnowledgePointMapper kpMapper;
     private final LearningEventMapper eventMapper;
-    private final LayerService layerService;
-    private final InterventionService interventionService;
+    private final MasteryMapper masteryMapper;
+    private final RemedyService remedyService;
     private final PracticeAnalysis practiceAnalysis;
 
     public AssistantService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
-                            KnowledgePointMapper kpMapper, LearningEventMapper eventMapper,
-                            LayerService layerService, InterventionService interventionService,
-                            PracticeAnalysis practiceAnalysis) {
+                            KnowledgePointMapper kpMapper, LearningEventMapper eventMapper, MasteryMapper masteryMapper,
+                            RemedyService remedyService, PracticeAnalysis practiceAnalysis) {
         this.practiceAnalysis = practiceAnalysis;
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
         this.itemMapper = itemMapper;
         this.kpMapper = kpMapper;
         this.eventMapper = eventMapper;
-        this.layerService = layerService;
-        this.interventionService = interventionService;
+        this.masteryMapper = masteryMapper;
+        this.remedyService = remedyService;
     }
 
     public Summary summary(long studentId) {
@@ -149,14 +149,14 @@ public class AssistantService {
                     : "里 " + good + " 个已经稳了，" + unsure + " 个还要多练几道才能判断。");
         } else {
             // 只说不为 0 的部分，例如"2 个知识点里 1 个还需要补，1 个再练几道确认一下"
-            int few = (int) points.stream().filter(p -> "few".equals(p.verdict())).count();
+            int few = (int) points.stream().filter(p -> "none".equals(p.verdict())).count();
             List<String> parts = new ArrayList<>();
             if (good > 0) {
                 parts.add(good + " 个已经稳了");
             }
             parts.add(weak + " 个还需要补");
             if (few > 0) {
-                parts.add(few + " 个再练几道确认一下");
+                parts.add(few + " 个还没练到");
             }
             headline = "「" + ch.getTitle() + "」" + (completed ? "你学完了。" : "根据你目前的练习：") + points.size()
                     + " 个知识点里 "
@@ -166,67 +166,52 @@ public class AssistantService {
     }
 
     static boolean isWeak(String verdict) {
-        return "apply".equals(verdict) || "concept".equals(verdict) || "both".equals(verdict);
+        return "weak".equals(verdict) || "medium".equals(verdict);
     }
 
-    /** 一个知识点：两层判断 → 结论、一句话、建议做什么 */
+    /**
+     * 一个知识点：只看练习（2026-11-25 起 AI 对话不打分，不再用“概念层”）。
+     * 颜色 = 当前掌握度的等级；红、橙的给复习方案和“做补练题”（小助手的自动干预，见 RemedyService）。
+     */
     private PointReport point(long studentId, KnowledgePoint kp, PracticeAnalysis.Context ctx) {
-        Concept concept = layerService.concept(studentId, kp.getId(), null);
-        Application app = layerService.application(studentId, kp.getId());
-        Mastery m = app.mastery();
-        Double mastery = m == null ? null : m.getMastery();
-        int attempts = m == null ? 0 : m.getAttemptCount();
-        String misconception = interventionService.mainMisconception(studentId, kp.getId());
+        Mastery m = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
+                .eq(Mastery::getStudentId, studentId).eq(Mastery::getKnowledgePointId, kp.getId()));
+        boolean practiced = m != null && m.getFirstCount() != null && m.getFirstCount() > 0
+                || m != null && m.getRemedyCount() != null && m.getRemedyCount() > 0;
+        Double mastery = practiced ? m.getMastery() : null;
+        String level = MasteryService.level(mastery);
+        String status = m == null ? null : m.getRemedyStatus();
+        List<RemedyRound> rounds = remedyService.rounds(studentId, kp.getId());
+        boolean escalated = rounds.stream().anyMatch(r -> Boolean.TRUE.equals(r.getEscalated()));
+        boolean weak = "weak".equals(level) || "medium".equals(level);
+        PracticeAnalysis.Result pr = practiceAnalysis.analyse(studentId, kp, ctx, weak, false);
+        String misconception = weak ? pr.misconception() : null;
+        // 方案里只留“看资料”；做题改成小助手里的补练题
+        List<PlanStep> plan = new ArrayList<>(pr.plan().stream().filter(st -> "review".equals(st.kind())).toList());
 
-        String c = concept.state();
-        String a = app.state();
-        boolean conceptOk = LayerService.GOOD.equals(c) || LayerService.FAIR.equals(c);
-        boolean skipped = concept.topics().stream().anyMatch(t -> "SKIPPED_IRRELEVANT".equals(t.result()));
-
-        String saidInDialogue = LayerService.GOOD.equals(c) ? "对话里你自己讲出来了"
-                : LayerService.FAIR.equals(c) ? "对话里你在提示后讲出来了"
-                : LayerService.BAD.equals(c) ? (skipped ? "对话里这个话题你跳过了" : "对话里你还没能自己讲出来")
-                : "这一章的对话没有考到它";
-        String practice = m == null ? "还没做过练习"
-                : LayerService.NONE.equals(a) ? "练习只做了 " + attempts + " 次"
-                : String.format("练习掌握度 %.2f", mastery);
-        String because = misconception == null ? "" : "，几次都是这个问题：" + misconception;
-
-        String verdict;
+        String first = m == null || m.getFirstMastery() == null ? null
+                : String.format("第一次练习 %d%%", Math.round(m.getFirstMastery() * 100));
         String text;
-        String action;
-        if (LayerService.BAD.equals(c) && LayerService.BAD.equals(a)) {
-            verdict = "both";
-            text = saidInDialogue + "，" + practice + because + "。先复习这一章，再和 AI 聊一次，然后做题。";
+        String action = null;
+        if (!practiced) {
+            text = "还没做过这个知识点的练习。";
+        } else if ("good".equals(level)) {
+            text = MasteryService.STATUS_RECOVERED.equals(status) ? (first == null ? "" : first + "，") + "补练后已经补回来了。"
+                    : "掌握得不错。";
+        } else if (escalated) {
+            text = "两轮补练还没补回来，已经告诉老师了。也可以先去 AI 对话把它讲一遍。";
             action = "dialogue";
-        } else if (LayerService.BAD.equals(c)) {
-            verdict = "concept";
-            text = practice.startsWith("练习掌握度") ? practice + "，不错；但" + saidInDialogue + "。先复习，再和 AI 聊一次。"
-                    : saidInDialogue + "。先复习，再和 AI 聊一次。";
-            action = "dialogue";
-        } else if (LayerService.BAD.equals(a)) {
-            verdict = "apply";
-            text = (conceptOk ? saidInDialogue + "，但" : "") + practice + because + "。做几道题把它用熟。";
-            action = "practice";
-        } else if (LayerService.GOOD.equals(a)) {
-            verdict = "good";
-            text = (conceptOk ? saidInDialogue + "，" : "") + practice + "，已经稳了。";
-            action = null;
-        } else if (conceptOk) {
-            verdict = "few";
-            text = saidInDialogue + "，" + practice + "，再做几道确认一下。";
-            action = "practice";
         } else {
-            verdict = "none";
-            text = "还没有足够的数据判断：" + saidInDialogue + "，" + practice + "。多做几道题就能看出来。";
-            action = "practice";   // 练习不够 3 次时，多做题是唯一能补上数据的办法
+            text = (first == null ? "" : first + "，") + ("weak".equals(level) ? "还需要补一补" : "还差一点")
+                    + (misconception == null ? "" : "。你可能是这样想的：" + misconception) + "。先看资料，再做几道补练题。";
+            action = "remedy";
+            plan.add(new PlanStep("remedy", rounds.isEmpty() ? "做 3 道根据你的错题出的新题（在小助手里做）"
+                    : "继续补练（第 " + Math.min(rounds.size() + (rounds.get(rounds.size() - 1).getStatus().equals(RemedyRound.OPEN) ? 0 : 1),
+                    RemedyService.MAX_ROUNDS) + " 轮）", null, null));
         }
-        PracticeAnalysis.Result pr = practiceAnalysis.analyse(studentId, kp, ctx, !"good".equals(verdict),
-                "concept".equals(verdict) || "both".equals(verdict));
-        if (misconception == null && pr.misconception() != null && !"good".equals(verdict)) {
-            misconception = pr.misconception();
-        }
-        return new PointReport(kp.getId(), kp.getName(), c, a, mastery, attempts, misconception, verdict, text,
-                action, pr.details(), pr.plan());
+        return new PointReport(kp.getId(), kp.getName(), level, mastery,
+                m == null ? null : m.getFirstMastery(), status, rounds.size(), escalated,
+                m == null || m.getAttemptCount() == null ? 0 : m.getAttemptCount(), misconception,
+                practiced ? level : "none", text, action, weak ? pr.details() : List.of(), plan);
     }
 }

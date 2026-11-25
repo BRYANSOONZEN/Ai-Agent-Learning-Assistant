@@ -318,9 +318,9 @@ class ExerciseTypesTest {
         }
         assertThat(p).isNotNull();
         assertThat(p.path("details").toString()).contains("情境应用").contains("没掌握的要点 1").contains("容易想成");
-        // 方案：先看资料（老师写在练习页上的文字 D1-T0 = 第 1 项），再做题
+        // 方案：先看资料（老师写在练习页上的文字 D1-T0 = 第 1 项），再做补练题
         assertThat(p.path("plan").get(0).path("kind").asText()).isEqualTo("review");
         assertThat(p.path("plan").get(0).path("itemId").asLong()).isEqualTo(1);
-        assertThat(p.path("plan").toString()).contains("practice");
+        assertThat(p.path("plan").toString()).contains("remedy"); // 再做小助手里的补练题
     }
 }

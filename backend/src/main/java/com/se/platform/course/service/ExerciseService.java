@@ -226,6 +226,24 @@ public class ExerciseService {
         return toView(e);
     }
 
+    /** 小助手生成的补练题：不属于任何一次练习（item_id 为空），不是草稿，不经过老师审核，来源 assistant */
+    public static final String SOURCE_ASSISTANT = "assistant";
+
+    public ExerciseView createRemedy(Long courseId, Long teacherId, ExerciseSaveRequest req) {
+        Exercise exercise = new Exercise();
+        exercise.setCourseId(courseId);
+        exercise.setChapterId(req.chapterId());
+        exercise.setItemId(null);
+        exercise.setSource(SOURCE_ASSISTANT);
+        exercise.setDraft(false);
+        exercise.setCreatedBy(teacherId);
+        exercise.setSortOrder(1000);
+        copy(req, exercise);
+        exerciseMapper.insert(exercise);
+        saveLinks(exercise, req.knowledgePointIds());
+        return toView(exercise);
+    }
+
     /** 检查一道题的写法是否合格，不保存（AI 生成、上传识别时先检查一遍） */
     public void validate(ExerciseSaveRequest req) {
         copy(req, new Exercise());

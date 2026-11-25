@@ -35,6 +35,8 @@ public class AiCallLogService {
     public static final String TASK_EXERCISE_SOLVE = "EXERCISE_SOLVE";
     public static final String TASK_EXERCISE_IMPORT = "EXERCISE_IMPORT";
     public static final String TASK_SHORT_JUDGE = "SHORT_JUDGE";
+    /** 小助手：学生随时提问（docs/模块说明/小助手-自动干预与聊天.md 第三节） */
+    public static final String TASK_ASSISTANT_CHAT = "ASSISTANT_CHAT";
 
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
 

@@ -245,9 +245,84 @@ public class ExerciseGenService {
         return meter.result(out);
     }
 
-    private KpGen generateOne(Meter meter, ChapterItem item, String course, ChapterKp kp, int kpNo,
-                              List<String> assess, List<String> types, Plan plan, String requirement,
-                              Map<String, String> pointer, Map<String, String> texts) {
+    // ------------------------------------------------------------------ 小助手的个人补练题
+
+    /** 补练题只出程序能马上判的题型 */
+    public static final List<String> REMEDY_TYPES = List.of(Grader.SINGLE, Grader.TWO_TIER, Grader.JUDGE, Grader.MULTIPLE);
+
+    /**
+     * 给一个学生当场生成补练题（docs/模块说明/小助手-自动干预与聊天.md 第四节）：不属于任何练习、不是草稿、不经过老师审核。
+     * requirement 由小助手按这个学生的错题写好（考哪几条要点、用哪个误解、别和哪些题重复）。
+     * AI 不看答案做一遍，做错的（可能有歧义）直接删掉；可用的少于 2 道就再生成一次。
+     */
+    public List<ExerciseView> generateRemedy(Long knowledgePointId, String requirement, int count, int round) {
+        ChapterKp kp = chapterKpMapper.selectOne(new LambdaQueryWrapper<ChapterKp>()
+                .eq(ChapterKp::getKnowledgePointId, knowledgePointId).last("LIMIT 1"));
+        if (kp == null) {
+            throw BusinessException.badRequest("这个知识点没有识别资料，没法生成补练题");
+        }
+        com.se.platform.course.entity.Chapter chapter = chapterMapperOf(kp.getChapterId());
+        Course course = courseMapper.selectById(chapter.getCourseId());
+        List<Long> order = chapterKpMapper.selectList(new LambdaQueryWrapper<ChapterKp>()
+                        .eq(ChapterKp::getChapterId, kp.getChapterId()).orderByAsc(ChapterKp::getSortOrder))
+                .stream().map(ChapterKp::getId).toList();
+        Map<String, String> pointer = feynmanDraft.pointers(kp.getChapterId());
+        Map<String, String> texts = recognizer.segments(kp.getChapterId()).stream()
+                .collect(Collectors.toMap(KpRecognizer.Seg::key, x -> x.text().getContent(), (x, y) -> x));
+        // 每一轮换着题型排，第 2 轮从第 2 种开始
+        List<String> types = new ArrayList<>(REMEDY_TYPES);
+        java.util.Collections.rotate(types, -(Math.max(1, round) - 1));
+        List<String> assess = List.of("scenario", "concept");
+        Plan plan = plan(List.of(kp), count, types.subList(0, Math.min(count, types.size())), assess).get(0);
+        plan = new Plan(count, plan.types(), plan.assess());
+        Meter meter = new Meter();
+        List<ExerciseView> kept = new ArrayList<>();
+        for (int attempt = 0; attempt < 2 && kept.size() < 2; attempt++) {
+            JsonNode d = askQuestions(meter, course.getName(), kp, order.indexOf(kp.getId()) + 1, assess, types, plan,
+                    requirement, pointer, texts);
+            List<ExerciseView> made = new ArrayList<>();
+            for (JsonNode q : d.path("questions")) {
+                if (made.size() + kept.size() >= count) {
+                    break;
+                }
+                ExerciseSaveRequest r = toRequest(q, kp.getChapterId(), null, List.of(knowledgePointId));
+                if (!REMEDY_TYPES.contains(r.type())) {
+                    continue;
+                }
+                try {
+                    exerciseService.validate(r);
+                } catch (BusinessException e) {
+                    continue;
+                }
+                made.add(exerciseService.createRemedy(course.getId(), course.getTeacherId(), r));
+            }
+            for (ExerciseView e : made) {
+                if (solveFails(meter, e)) {
+                    exerciseMapper.deleteById(e.id()); // 有歧义的直接丢掉
+                } else {
+                    kept.add(e);
+                }
+            }
+        }
+        if (kept.isEmpty()) {
+            throw BusinessException.badRequest("补练题生成失败，请稍后再试");
+        }
+        return kept;
+    }
+
+    private com.se.platform.course.entity.Chapter chapterMapperOf(Long chapterId) {
+        return chapterService.require(chapterId);
+    }
+
+    /** AI 不看答案做这一道，做错了返回 true */
+    private boolean solveFails(Meter meter, ExerciseView e) {
+        return solveCheck(meter, List.of(e)) > 0;
+    }
+
+    /** 拼出题提示词、调 AI，返回 {"questions": [...]}；两次都失败抛错 */
+    private JsonNode askQuestions(Meter meter, String course, ChapterKp kp, int kpNo, List<String> assess,
+                                  List<String> types, Plan plan, String requirement, Map<String, String> pointer,
+                                  Map<String, String> texts) {
         List<KeyPoint> points = readList(kp.getKeyPoints(), new TypeReference<List<KeyPoint>>() { });
         List<String> mis = readList(kp.getMisconceptions(), new TypeReference<List<String>>() { });
         StringBuilder p = new StringBuilder();
@@ -295,6 +370,16 @@ public class ExerciseGenService {
         if (d == null) {
             throw BusinessException.badRequest("AI 出题失败（" + kp.getName() + "），请再试一次");
         }
+        return d;
+    }
+
+    private KpGen generateOne(Meter meter, ChapterItem item, String course, ChapterKp kp, int kpNo,
+                              List<String> assess, List<String> types, Plan plan, String requirement,
+                              Map<String, String> pointer, Map<String, String> texts) {
+        List<KeyPoint> points = readList(kp.getKeyPoints(), new TypeReference<List<KeyPoint>>() { });
+        List<String> mis = readList(kp.getMisconceptions(), new TypeReference<List<String>>() { });
+        boolean custom = !requirement.isEmpty();
+        JsonNode d = askQuestions(meter, course, kp, kpNo, assess, types, plan, requirement, pointer, texts);
         List<String> notes = new ArrayList<>();
         List<ExerciseView> created = new ArrayList<>();
         int dropped = 0;
@@ -356,11 +441,15 @@ public class ExerciseGenService {
                 coveredPoints.size() + "/" + points.size(), usedMis.size() + "/" + mis.size(), flagged, notes);
     }
 
-    /** 模型的一道题 → 保存请求（字段名和数据库一致，见 exercise_gen_v1 的输出格式） */
     private ExerciseSaveRequest toRequest(JsonNode q, ChapterItem item, List<Long> kpIds) {
+        return toRequest(q, item.getChapterId(), item.getId(), kpIds);
+    }
+
+    /** 模型的一道题 → 保存请求（字段名和数据库一致，见 exercise_gen_v1 的输出格式） */
+    private ExerciseSaveRequest toRequest(JsonNode q, Long chapterId, Long itemId, List<Long> kpIds) {
         Integer no = q.path("key_point_no").isInt() ? q.path("key_point_no").asInt() : null;
         Integer diff = q.path("difficulty").isInt() ? Math.max(1, Math.min(3, q.path("difficulty").asInt())) : 2;
-        return new ExerciseSaveRequest(item.getChapterId(), item.getId(), q.path("type").asText(Grader.SINGLE),
+        return new ExerciseSaveRequest(chapterId, itemId, q.path("type").asText(Grader.SINGLE),
                 q.path("assess_type").asText("concept"), no, q.path("stem").asText(""), strings(q.path("options")),
                 q.path("answer").asText(""), q.path("analysis").asText(null), strings(q.path("option_notes")),
                 strings(q.path("reasons")), q.path("reason_answer").asText(null), strings(q.path("reason_notes")),

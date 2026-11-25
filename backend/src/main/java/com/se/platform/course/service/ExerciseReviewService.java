@@ -62,7 +62,9 @@ public class ExerciseReviewService {
     /** 覆盖检查：本章每个知识点有几道题（已确认的），按考查类型、题型分开数 */
     public List<CoverageRow> coverage(Long chapterId) {
         chapterService.requireOwned(chapterId);
-        List<ExerciseView> all = exerciseService.list(chapterId, null);
+        // 小助手生成的个人补练题不算（没经过老师审核，只给一个学生）
+        List<ExerciseView> all = exerciseService.list(chapterId, null).stream()
+                .filter(e -> !ExerciseService.SOURCE_ASSISTANT.equals(e.source())).toList();
         List<CoverageRow> rows = new ArrayList<>();
         for (KnowledgePoint kp : kpMapper.selectList(new LambdaQueryWrapper<KnowledgePoint>()
                 .eq(KnowledgePoint::getChapterId, chapterId).orderByAsc(KnowledgePoint::getId))) {
