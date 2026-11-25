@@ -198,9 +198,11 @@ public class AssistantService {
         if (!practiced) {
             text = "还没做过这个知识点的练习。";
         } else if (MasteryService.GREEN.equals(color)) {
-            text = "第一次练习就掌握了。";
+            text = "第一次练习就掌握了。想挑战的话，可以来点更难的题。";
+            action = "extend";
         } else if (MasteryService.ORANGE.equals(color)) {
             text = (first == null ? "" : first + "，") + "补练后补回来了。这里曾经错过，复习时多留意。";
+            action = "extend";
         } else if (escalated) {
             text = "两轮补练还没补回来。先回去看看资料，再去 AI 对话把它讲一遍。";
             action = "dialogue";

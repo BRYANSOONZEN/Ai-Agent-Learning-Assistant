@@ -64,6 +64,7 @@ public class Exercise {
         // 小助手给某个学生当场生成的补练题只给他自己，不推荐给别人、不布置成干预
         // 老师全班推送的题（class）只给推送对象做
         return !Boolean.TRUE.equals(draft) && !"assistant".equals(source) && !"class".equals(source)
+                && !"extend".equals(source)
                 && (type == null || "single_choice".equals(type) || "judge".equals(type));
     }
 }

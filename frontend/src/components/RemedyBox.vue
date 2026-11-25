@@ -3,14 +3,20 @@
  * 补练题 inside the study assistant (automatic intervention, docs/模块说明/小助手-自动干预与聊天.md section 4).
  * The questions are generated on the spot from this student's own mistakes; the program grades them right away.
  * Only types with an exact answer the program can grade: single choice, judge, multiple.
+ * mode 'extend' (E1 拓展): a mastered point, harder questions of the assessment type the student picks;
+ * as many rounds as they like; does not change mastery.
  * Up to 2 rounds; recovered (>= 2 questions, average >= 0.8) turns the point from red to orange
  * (was wrong once, keep an eye on it); otherwise it goes to the teacher.
  */
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { startRemedy, submitRemedy } from '@/api/assistant'
+import { startExtend, startRemedy, submitExtend, submitRemedy } from '@/api/assistant'
 
-const props = defineProps({ kpId: { type: Number, required: true } })
+const props = defineProps({
+  kpId: { type: Number, required: true },
+  mode: { type: String, default: 'remedy' }, // 'remedy' 补练 | 'extend' 拓展
+  assessType: { type: String, default: 'scenario' },
+})
 const emit = defineEmits(['changed'])
 
 const view = ref(null)
@@ -27,7 +33,7 @@ async function start() {
   result.value = null
   for (const box of [choice, reason, multi]) Object.keys(box).forEach((k) => delete box[k])
   try {
-    view.value = await startRemedy(props.kpId)
+    view.value = props.mode === 'extend' ? await startExtend(props.kpId, props.assessType) : await startRemedy(props.kpId)
   } finally {
     loading.value = false
   }
@@ -51,7 +57,7 @@ async function submit() {
   loading.value = true
   try {
     const answers = Object.fromEntries(view.value.questions.map((q) => [q.id, answerOf(q)]))
-    result.value = await submitRemedy(props.kpId, answers)
+    result.value = props.mode === 'extend' ? await submitExtend(props.kpId, answers) : await submitRemedy(props.kpId, answers)
     emit('changed')
   } finally {
     loading.value = false
@@ -72,7 +78,7 @@ start()
   <div v-loading="loading" class="remedy" element-loading-text="正在根据你的错题出题……">
     <template v-if="view">
       <p class="say">{{ result ? result.text : view.text }}</p>
-      <p v-if="view.questions.length" class="muted">第 {{ view.round }} / {{ view.maxRounds }} 轮</p>
+      <p v-if="view.questions.length && mode !== 'extend'" class="muted">第 {{ view.round }} / {{ view.maxRounds }} 轮</p>
 
       <div v-for="(q, i) in view.questions" :key="q.id" class="q">
         <p class="stem">{{ i + 1 }}. {{ q.stem }}</p>
@@ -105,7 +111,7 @@ start()
 
       <div class="actions">
         <el-button v-if="view.questions.length && !result" type="primary" size="small" @click="submit">交补练题</el-button>
-        <el-button v-if="result?.canContinue" size="small" type="primary" plain @click="start">再来一轮</el-button>
+        <el-button v-if="result?.canContinue" size="small" type="primary" plain @click="start">{{ mode === 'extend' ? '再来一组' : '再来一轮' }}</el-button>
       </div>
     </template>
   </div>

@@ -20,6 +20,10 @@ public class RemedyRound {
     private Long id;
     private Long studentId;
     private Long knowledgePointId;
+    /** remedy 补练 / extend 拓展 */
+    private String kind;
+    /** 拓展：学生选的考查类型 */
+    private String assessType;
     private Integer roundNo;
     /** 这一轮的补练题 id，逗号分隔 */
     private String exerciseIds;

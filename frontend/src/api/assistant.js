@@ -48,3 +48,13 @@ export function submitPush(id, answers) {
 export function getNotices() {
   return request.get('/assistant/notices')
 }
+
+// ---- E1 拓展: harder questions for a mastered point, by the assessment type the student picks ----
+// POST /api/assistant/extend/{kpId}/start?assessType=scenario -> same shape as startRemedy
+export function startExtend(kpId, assessType) {
+  return request.post(`/assistant/extend/${kpId}/start`, null, { params: { assessType }, timeout: 120000 })
+}
+// POST /api/assistant/extend/{kpId}/submit { answers } -> same shape as submitRemedy (does not change mastery)
+export function submitExtend(kpId, answers) {
+  return request.post(`/assistant/extend/${kpId}/submit`, { answers })
+}

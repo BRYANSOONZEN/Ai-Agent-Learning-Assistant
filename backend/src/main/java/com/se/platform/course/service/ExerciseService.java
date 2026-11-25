@@ -231,6 +231,8 @@ public class ExerciseService {
 
     /** 老师全班干预推送用的新题：先是草稿，老师确认后推送才变成正式（来源 class，不属于任何练习） */
     public static final String SOURCE_CLASS = "class";
+    /** 小助手给已掌握的学生出的拓展题（E1 拓展）：只给他自己，不算进掌握度 */
+    public static final String SOURCE_EXTEND = "extend";
 
     public ExerciseView createRemedy(Long courseId, Long teacherId, ExerciseSaveRequest req) {
         return createOutside(courseId, teacherId, req, SOURCE_ASSISTANT, false);

@@ -261,6 +261,18 @@ public class ExerciseGenService {
         return generateOutside(knowledgePointId, types, List.of("scenario", "concept"), requirement, count, false);
     }
 
+    /** 拓展题（E1 拓展）：已掌握的学生要更难的题，按他选的考查类型当场出；有歧义的丢掉，来源 extend */
+    public List<ExerciseView> generateExtend(Long knowledgePointId, String assessType, String requirement, int count) {
+        extendMode.set(true);
+        try {
+            return generateOutside(knowledgePointId, REMEDY_TYPES, List.of(assessType), requirement, count, false);
+        } finally {
+            extendMode.remove();
+        }
+    }
+
+    private final ThreadLocal<Boolean> extendMode = new ThreadLocal<>();
+
     /**
      * 老师全班干预用的新题：只出这一种考查类型（单选、判断、多选），存成草稿（来源 class）给老师逐题确认；
      * AI 不看答案做错的不删，在检查说明里标出来给老师看。
@@ -309,6 +321,9 @@ public class ExerciseGenService {
                 made.add(forClass
                         ? exerciseService.createOutside(course.getId(), course.getTeacherId(), r,
                         ExerciseService.SOURCE_CLASS, true)
+                        : Boolean.TRUE.equals(extendMode.get())
+                        ? exerciseService.createOutside(course.getId(), course.getTeacherId(), r,
+                        ExerciseService.SOURCE_EXTEND, false)
                         : exerciseService.createRemedy(course.getId(), course.getTeacherId(), r));
             }
             if (forClass) {

@@ -587,7 +587,9 @@ CREATE TABLE remedy_round (
     id                 BIGINT       NOT NULL AUTO_INCREMENT,
     student_id         BIGINT       NOT NULL,
     knowledge_point_id BIGINT       NOT NULL,
-    round_no           INT          NOT NULL,              -- 第几轮（最多 2 轮）
+    kind               VARCHAR(16)  NOT NULL DEFAULT 'remedy', -- remedy 补练 / extend 拓展（E1，已掌握的学生要更难的题）
+    assess_type        VARCHAR(16),                        -- 拓展：学生选的考查类型
+    round_no           INT          NOT NULL,              -- 第几轮（补练最多 2 轮；拓展不限）
     exercise_ids       VARCHAR(255) NOT NULL,              -- 这一轮的补练题（小助手当场生成的），逗号分隔
     status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 还没交 / done 交了
     score              DOUBLE,                             -- 这一轮的平均分

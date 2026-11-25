@@ -44,9 +44,12 @@ public class MasteryService {
     private final AnswerRecordMapper answerMapper;
     private final ExerciseKnowledgePointMapper linkMapper;
     private final KnowledgePointMapper kpMapper;
+    private final com.se.platform.course.mapper.ExerciseMapper exerciseMapper;
 
     public MasteryService(MasteryMapper masteryMapper, AnswerRecordMapper answerMapper,
-                          ExerciseKnowledgePointMapper linkMapper, KnowledgePointMapper kpMapper) {
+                          ExerciseKnowledgePointMapper linkMapper, KnowledgePointMapper kpMapper,
+                          com.se.platform.course.mapper.ExerciseMapper exerciseMapper) {
+        this.exerciseMapper = exerciseMapper;
         this.masteryMapper = masteryMapper;
         this.answerMapper = answerMapper;
         this.linkMapper = linkMapper;
@@ -208,11 +211,19 @@ public class MasteryService {
         }
     }
 
-    /** 关联了这个知识点的题目 id */
+    /** 关联了这个知识点的题目 id（拓展题不算：E1 拓展做错了也不影响掌握度和画像） */
     public List<Long> exerciseIdsOf(Long kpId) {
-        return linkMapper.selectList(new LambdaQueryWrapper<ExerciseKnowledgePoint>()
+        List<Long> ids = linkMapper.selectList(new LambdaQueryWrapper<ExerciseKnowledgePoint>()
                         .eq(ExerciseKnowledgePoint::getKnowledgePointId, kpId))
                 .stream().map(ExerciseKnowledgePoint::getExerciseId).toList();
+        if (ids.isEmpty()) {
+            return ids;
+        }
+        java.util.Set<Long> extend = exerciseMapper.selectList(new LambdaQueryWrapper<com.se.platform.course.entity.Exercise>()
+                        .in(com.se.platform.course.entity.Exercise::getId, ids)
+                        .eq(com.se.platform.course.entity.Exercise::getSource, "extend"))
+                .stream().map(com.se.platform.course.entity.Exercise::getId).collect(Collectors.toSet());
+        return ids.stream().filter(id -> !extend.contains(id)).toList();
     }
 
     /** 学生在一个知识点上的全部作答（通过关联的题目），从早到晚 */

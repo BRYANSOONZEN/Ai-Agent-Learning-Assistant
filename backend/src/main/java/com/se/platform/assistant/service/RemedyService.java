@@ -122,6 +122,7 @@ public class RemedyService {
         RemedyRound r = new RemedyRound();
         r.setStudentId(studentId);
         r.setKnowledgePointId(kpId);
+        r.setKind("remedy");
         r.setRoundNo(roundNo);
         r.setExerciseIds(made.stream().map(e -> String.valueOf(e.id())).collect(Collectors.joining(",")));
         r.setStatus(RemedyRound.OPEN);
@@ -217,6 +218,96 @@ public class RemedyService {
                 !recovered && !escalated, text);
     }
 
+    // ------------------------------------------------------------------ 拓展（E1 Elaborate）
+
+    static final java.util.Map<String, String> ASSESS = java.util.Map.of("concept", "概念辨析", "scenario", "情境应用",
+            "data", "数据分析", "process", "流程步骤");
+
+    /**
+     * 拓展：已掌握（绿）或已补回来（橙）的知识点，学生想要更难的题，按他选的考查类型当场出 3 道。
+     * 自由的：想做多少轮都可以；拓展题不算进掌握度，做错了也不影响画像。
+     */
+    @Transactional
+    public RemedyView startExtend(long studentId, Long kpId, String assessType) {
+        KnowledgePoint kp = requireKp(kpId);
+        if (!submitted(studentId, kp.getChapterId())) {
+            throw BusinessException.badRequest("先完成本章的 AI 对话和练习");
+        }
+        String color = MasteryService.color(mastery(studentId, kpId));
+        if (!MasteryService.GREEN.equals(color) && !MasteryService.ORANGE.equals(color)) {
+            throw BusinessException.badRequest("先把这个知识点补回来，再挑战更难的题");
+        }
+        String assess = ASSESS.containsKey(assessType) ? assessType : "scenario";
+        List<RemedyRound> done = extendRounds(studentId, kpId);
+        RemedyRound open = done.stream().filter(r -> RemedyRound.OPEN.equals(r.getStatus())).findFirst().orElse(null);
+        if (open != null && assess.equals(open.getAssessType())) {
+            return view(kp, open, done.size(), "上次的拓展题还没做完，接着做吧。");
+        }
+        if (open != null) { // 换了考查类型：上一组没做的不要了
+            open.setStatus(RemedyRound.DONE);
+            open.setFinishedAt(LocalDateTime.now());
+            roundMapper.updateById(open);
+        }
+        List<String> stems = new ArrayList<>();
+        masteryService.answersOf(studentId, kpId).forEach(a -> {
+            Exercise e = exerciseMapper.selectById(a.getExerciseId());
+            if (e != null && stems.size() < 10 && !stems.contains(e.getStem())) {
+                stems.add(e.getStem());
+            }
+        });
+        StringBuilder req = new StringBuilder("这是给已经掌握这个知识点的学生的拓展题（第 ").append(done.size() + 1)
+                .append(" 组），要**比练习更难**：场景更复杂、要多想一步、需要把几条要点结合起来用，难度 difficulty 填 3。")
+                .append("考查类型都用【要考查的类型】里的那一种。不要和下面这些他做过的题重复：");
+        stems.forEach(x -> req.append("\n- ").append(x.length() > 60 ? x.substring(0, 60) + "…" : x));
+        List<ExerciseView> made = genService.generateExtend(kpId, assess, req.toString(), PER_ROUND);
+        RemedyRound r = new RemedyRound();
+        r.setStudentId(studentId);
+        r.setKnowledgePointId(kpId);
+        r.setKind("extend");
+        r.setAssessType(assess);
+        r.setRoundNo(done.size() + 1);
+        r.setExerciseIds(made.stream().map(e -> String.valueOf(e.id())).collect(Collectors.joining(",")));
+        r.setStatus(RemedyRound.OPEN);
+        r.setEscalated(false);
+        roundMapper.insert(r);
+        return new RemedyView(kpId, kp.getName(), r.getRoundNo(), 0, false, view(kp, r, 0, "").questions(),
+                "来 " + made.size() + " 道更难的「" + ASSESS.get(assess) + "」题。做错了也没关系，不影响你的掌握情况。");
+    }
+
+    @Transactional
+    public RemedyResult submitExtend(long studentId, Long kpId, Map<Long, String> answers) {
+        KnowledgePoint kp = requireKp(kpId);
+        RemedyRound r = extendRounds(studentId, kpId).stream().filter(x -> RemedyRound.OPEN.equals(x.getStatus()))
+                .findFirst().orElseThrow(() -> BusinessException.badRequest("没有要交的拓展题"));
+        List<Long> ids = ids(r);
+        if (answers == null || !answers.keySet().containsAll(ids)) {
+            throw BusinessException.badRequest("每道题都要作答");
+        }
+        List<QuestionResult> results = new ArrayList<>();
+        for (Long id : ids) {
+            Exercise e = exerciseMapper.selectById(id);
+            if (e != null) {
+                results.add(Grader.grade(exerciseService.toView(e), answers.get(id)));
+            }
+        }
+        recordService.saveAnswers(kp.getCourseId(), null, results); // 记进学习记录；拓展题不算进掌握度
+        double score = results.isEmpty() ? 0
+                : Math.round(results.stream().mapToDouble(QuestionResult::score).average().orElse(0) * 100) / 100.0;
+        r.setStatus(RemedyRound.DONE);
+        r.setScore(score);
+        r.setFinishedAt(LocalDateTime.now());
+        roundMapper.updateById(r);
+        String text = score >= 0.8 ? "很厉害！更难的题也做对了。想继续的话可以换一种考查类型再挑战。"
+                : "这组比较难，看看解析，想清楚了可以再来一组。";
+        return new RemedyResult(kpId, r.getRoundNo(), results, score, null, false, false, true, text);
+    }
+
+    private List<RemedyRound> extendRounds(long studentId, Long kpId) {
+        return roundMapper.selectList(new LambdaQueryWrapper<RemedyRound>()
+                .eq(RemedyRound::getStudentId, studentId).eq(RemedyRound::getKnowledgePointId, kpId)
+                .eq(RemedyRound::getKind, "extend").orderByAsc(RemedyRound::getRoundNo));
+    }
+
     // ------------------------------------------------------------------ 小工具
 
     /** 2 轮后还没补回来的（老师只能看到，不处理） */
@@ -230,6 +321,7 @@ public class RemedyService {
         return roundMapper.selectList(new LambdaQueryWrapper<RemedyRound>()
                 .eq(RemedyRound::getStudentId, studentId)
                 .eq(RemedyRound::getKnowledgePointId, kpId)
+                .eq(RemedyRound::getKind, "remedy")
                 .orderByAsc(RemedyRound::getRoundNo));
     }
 

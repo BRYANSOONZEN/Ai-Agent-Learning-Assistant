@@ -234,8 +234,9 @@ class AssistantAndAutoInterventionTest {
             finishItem(8, item);
         }
         summary(8).andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("green"))
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").doesNotExist())
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text").value("第一次练习就掌握了。"));
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").value("extend")) // E1 拓展：可以来点更难的题
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text",
+                        Matchers.startsWith("第一次练习就掌握了")));
     }
 
     @Test

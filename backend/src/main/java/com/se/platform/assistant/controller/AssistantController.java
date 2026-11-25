@@ -104,4 +104,17 @@ public class AssistantController {
     public Result<List<String>> notices() {
         return Result.ok(pushService.notices(recordService.currentStudentId()));
     }
+
+    /** POST /api/assistant/extend/{kpId}/start?assessType=scenario：拓展（E1），已掌握的知识点来点更难的题 */
+    @PostMapping("/extend/{kpId}/start")
+    public Result<RemedyView> startExtend(@PathVariable Long kpId,
+                                          @RequestParam(required = false) String assessType) {
+        return Result.ok(remedyService.startExtend(recordService.currentStudentId(), kpId, assessType));
+    }
+
+    /** POST /api/assistant/extend/{kpId}/submit：交拓展题（不算进掌握度） */
+    @PostMapping("/extend/{kpId}/submit")
+    public Result<RemedyResult> submitExtend(@PathVariable Long kpId, @RequestBody RemedySubmit body) {
+        return Result.ok(remedyService.submitExtend(recordService.currentStudentId(), kpId, body.answers()));
+    }
 }

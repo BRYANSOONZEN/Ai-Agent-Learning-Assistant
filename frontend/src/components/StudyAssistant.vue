@@ -41,6 +41,19 @@ const openPush = ref(null)
 const shownChapter = ref(null)
 const mode = ref('report') // 'report' 学习情况 | 'chat' 问问题
 const remedyKp = ref(null) // which knowledge point's 补练题 are open
+const extendKp = ref(null) // E1 拓展: which point's harder questions are open
+const extendType = ref('scenario')
+const EXTEND_TYPES = [
+  { value: 'scenario', label: '情境应用' },
+  { value: 'data', label: '数据分析' },
+  { value: 'concept', label: '概念辨析' },
+  { value: 'process', label: '流程步骤' },
+]
+function openExtend(p, type) {
+  extendType.value = type
+  extendKp.value = null
+  setTimeout(() => (extendKp.value = p.knowledgePointId)) // remount the box with the new type
+}
 
 const hidden = computed(() => studentBusy.value || route.name === 'dialogue')
 watch(hidden, (h) => {
@@ -291,7 +304,12 @@ function act(ch, p) {
                       </el-button>
                     </li>
                   </ol>
-                  <el-button v-else-if="p.action" size="small" type="primary" plain @click="act(current, p)">
+                  <div v-if="p.action === 'extend'" class="extend">
+                    <span>来点更难的：</span>
+                    <el-button v-for="t in EXTEND_TYPES" :key="t.value" size="small" :type="extendKp === p.knowledgePointId && extendType === t.value ? 'primary' : 'default'" plain @click="openExtend(p, t.value)">{{ t.label }}</el-button>
+                  </div>
+                  <RemedyBox v-if="extendKp === p.knowledgePointId" :key="'ex' + p.knowledgePointId + extendType" :kp-id="p.knowledgePointId" mode="extend" :assess-type="extendType" />
+                  <el-button v-if="p.action && p.action !== 'extend' && !p.plan?.length" size="small" type="primary" plain @click="act(current, p)">
                     {{ p.action === 'dialogue' ? '巩固一下（AI 对话）' : '做补练题' }}
                   </el-button>
                   <RemedyBox v-if="remedyKp === p.knowledgePointId" :key="'rm' + p.knowledgePointId" :kp-id="p.knowledgePointId" @changed="refresh" />
@@ -510,6 +528,17 @@ function act(ch, p) {
 }
 .points > li.v-red {
   border-left-color: var(--app-danger);
+}
+.extend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.extend .el-button + .el-button {
+  margin-left: 0;
 }
 .teacher {
   margin-bottom: 10px;
