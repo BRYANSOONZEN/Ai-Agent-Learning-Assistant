@@ -70,7 +70,7 @@ public class ExerciseReviewService {
                     .filter(e -> e.knowledgePoints().stream().anyMatch(k -> k.id().equals(kp.getId()))).toList();
             List<ExerciseView> live = mine.stream().filter(e -> !e.draft()).toList();
             Map<String, Integer> byAssess = new LinkedHashMap<>();
-            for (String a : List.of("concept", "scenario", "data", "process")) {
+            for (String a : List.of("concept", "scenario", "data", "process", Grader.CUSTOM)) {
                 byAssess.put(a, (int) live.stream().filter(e -> a.equals(e.assessType())).count());
             }
             Map<String, Integer> byType = new LinkedHashMap<>();
@@ -80,7 +80,7 @@ public class ExerciseReviewService {
             }
             int drafts = mine.size() - live.size();
             String warning = live.isEmpty() ? (drafts > 0 ? "有草稿，确认后才算" : "还没有题")
-                    : live.size() < MIN_PER_KP ? "少于 " + MIN_PER_KP + " 道，掌握度可信度低" : null;
+                    : live.size() < MIN_PER_KP ? "少于 " + MIN_PER_KP + " 道，可能有要点没考到" : null;
             rows.add(new CoverageRow(kp.getId(), kp.getName(), byAssess, byType, live.size(), drafts, warning));
         }
         return rows;

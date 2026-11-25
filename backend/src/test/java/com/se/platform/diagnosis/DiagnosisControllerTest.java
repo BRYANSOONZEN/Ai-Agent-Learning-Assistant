@@ -27,17 +27,9 @@ class DiagnosisControllerTest {
     @Test
     void masteryFormula() {
         assertThat(MasteryService.compute(List.of())).isNull();
-        // 少于 3 次要打折：做对 1 道只有 0.3333
-        assertThat(MasteryService.compute(List.of(true))).isEqualTo(0.3333);
-        // 先错后对：(0.8×0 + 1×1) / 1.8 × 2/3
-        assertThat(MasteryService.compute(List.of(false, true))).isEqualTo(0.3704);
-        // 越近的权重越大：最后错一次比最先错一次低
-        assertThat(MasteryService.compute(List.of(true, true, false)))
-                .isLessThan(MasteryService.compute(List.of(false, true, true)));
-        // 只看最近 10 次：很久以前的错不再影响
-        List<Boolean> old = new java.util.ArrayList<>(List.of(false, false, false));
-        old.addAll(java.util.Collections.nCopies(10, true));
-        assertThat(MasteryService.compute(old)).isEqualTo(1.0);
+        // 每道题最近一次的得分求平均，不加权、不打折
+        assertThat(MasteryService.compute(List.of(1.0))).isEqualTo(1.0);
+        assertThat(MasteryService.compute(List.of(0.0, 1.0, 1.0))).isEqualTo(0.6667);
         assertThat(MasteryService.level(0.59)).isEqualTo("weak");
         assertThat(MasteryService.level(0.6)).isEqualTo("medium");
         assertThat(MasteryService.level(0.8)).isEqualTo("good");
@@ -50,10 +42,12 @@ class DiagnosisControllerTest {
                 .andExpect(jsonPath("$.data.studentName").value("学生01"))
                 .andExpect(jsonPath("$.data.summary.total").value(2))
                 .andExpect(jsonPath("$.data.summary.weak").value(1))
-                .andExpect(jsonPath("$.data.summary.medium").value(1))
+                .andExpect(jsonPath("$.data.summary.medium").value(0))
                 .andExpect(jsonPath("$.data.weakPoints[0].name").value("边界测试值的选取"))
                 .andExpect(jsonPath("$.data.weakPoints[0].recent[0]").value(false))
                 .andExpect(jsonPath("$.data.weakPoints[0].recent[1]").value(true))
+                .andExpect(jsonPath("$.data.weakPoints[0].firstMastery").value(0.0))
+                .andExpect(jsonPath("$.data.weakPoints[0].remedyStatus").doesNotExist())
                 // 第一次选了 B，老师写的误解说明
                 .andExpect(jsonPath("$.data.weakPoints[0].misconception").value("把上下边界和中间值混在一起，没有取边界外侧的值"))
                 .andExpect(jsonPath("$.data.weakPoints[0].practiceItemId").value(2))
@@ -62,15 +56,32 @@ class DiagnosisControllerTest {
 
     @Test
     void submittingUpdatesMastery() throws Exception {
-        // 再全对一次：正确率 p = (0.64×0 + 0.8 + 1) / 2.44 = 0.7377；都是 4 选 1，蒙对概率 g = 0.25
-        // 掌握度 = (0.7377 − 0.25) / 0.75 = 0.6503（一般）。before 是交卷前存的旧值 0.3704
+        // 再交一次全对：掌握度只算第一次作答，重做不改，还是 0（薄弱）
         mockMvc.perform(post("/api/learn/items/2/submit").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"answers\": {\"1\": \"A\", \"2\": \"B\"}}"))
-                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].before").value(0.3704))
-                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].after").value(0.6503))
-                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].level").value("medium"));
+                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].before").value(0.0))
+                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].after").value(0.0))
+                .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].level").value("weak"));
 
-        mockMvc.perform(get("/api/diagnosis/me")).andExpect(jsonPath("$.data.summary.weak").value(0));
+        // 小助手推荐的新题（没做过的）：做对 1 道 → 补练中，当前掌握度还按第一次
+        String list = mockMvc.perform(get("/api/recommendations")).andReturn().getResponse().getContentAsString();
+        List<Integer> ids = com.jayway.jsonpath.JsonPath.read(list, "$.data.points[0].exercises[*].exerciseId");
+        java.util.Map<Integer, String> key = java.util.Map.of(3, "A", 4, "C", 5, "B", 7, "A", 8, "B", 9, "A");
+        mockMvc.perform(post("/api/recommendations/practice").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":{\"" + ids.get(0) + "\":\"" + key.get(ids.get(0)) + "\"}}"))
+                .andExpect(jsonPath("$.data.masteryChanges[0].after").value(0.0))
+                .andExpect(jsonPath("$.data.masteryChanges[0].remedyStatus").value("practicing"));
+        // 再做对 1 道：补练够 2 道、平均 1 ≥ 0.8 → 已补回来，当前掌握度 1（绿）；原始掌握度不改
+        mockMvc.perform(post("/api/recommendations/practice").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":{\"" + ids.get(1) + "\":\"" + key.get(ids.get(1)) + "\"}}"))
+                .andExpect(jsonPath("$.data.masteryChanges[0].after").value(1.0))
+                .andExpect(jsonPath("$.data.masteryChanges[0].level").value("good"))
+                .andExpect(jsonPath("$.data.masteryChanges[0].remedyStatus").value("recovered"));
+        mockMvc.perform(get("/api/diagnosis/me"))
+                .andExpect(jsonPath("$.data.summary.weak").value(0))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].firstMastery").value(0.0))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].firstLevel").value("weak"))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].remedyStatus").value("recovered"));
     }
 
     @Test
@@ -79,7 +90,8 @@ class DiagnosisControllerTest {
                 // 种子数据：学生01～07 做过练习（学生02～07 是干预的演示数据）
                 .andExpect(jsonPath("$.data.studentCount").value(7))
                 .andExpect(jsonPath("$.data.points.length()").value(2))
-                .andExpect(jsonPath("$.data.points[0].avgMastery").value(0.5345))
+                // 知识点 1 当前掌握度：学生01 0、02 0、03 0、04 1、05 1、06 1（补回来了）、07 0.5 → 3.5/7
+                .andExpect(jsonPath("$.data.points[0].avgMastery").value(0.5))
                 .andExpect(jsonPath("$.data.points[0].weakStudents").value(4))
                 .andExpect(jsonPath("$.data.points[0].misconceptions[0].note").value("只取了边界和内侧，缺少越过边界的值"))
                 .andExpect(jsonPath("$.data.points[0].misconceptions[0].count").value(7));

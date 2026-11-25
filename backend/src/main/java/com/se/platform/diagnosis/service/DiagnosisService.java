@@ -169,7 +169,10 @@ public class DiagnosisService {
         return new PointDiagnosis(kp.getId(), kp.getName(), kp.getCourseId(), ch.getId(), ch.getTitle(),
                 Boolean.TRUE.equals(kp.getIsKey()), Boolean.TRUE.equals(kp.getIsDifficult()), mastery,
                 MasteryService.level(mastery), m == null ? 0 : m.getAttemptCount(),
-                m == null ? 0 : m.getCorrectCount(), recent, misconception, practiceItemId);
+                m == null ? 0 : m.getCorrectCount(), recent, misconception, practiceItemId,
+                m == null ? null : m.getFirstMastery(), MasteryService.level(m == null ? null : m.getFirstMastery()),
+                m == null || m.getRemedyCount() == null ? 0 : m.getRemedyCount(), m == null ? null : m.getRemedy(),
+                m == null ? null : m.getRemedyStatus());
     }
 
     /** AI 对话里已经有结果的话题，最近的在前 */

@@ -112,8 +112,15 @@ function tag(r) {
   if (r.type === 'short_answer' && !r.correct) {
     return { type: r.score > 0 ? 'warning' : 'danger', text: `答到 ${Math.round(r.score * r.points.length)}/${r.points.length} 条要点` }
   }
+  if (r.type === 'multiple' && !r.correct && r.score > 0) return { type: 'warning', text: `少选，得 ${r.score} 分` }
   return r.correct ? { type: 'success', text: '答对' } : { type: 'danger', text: '答错' }
 }
+
+// total score: 1 per question, multiple partial 0.5, short answer by key points
+const scoreText = computed(() => {
+  const s = result.value?.score ?? result.value?.correct ?? 0
+  return Number.isInteger(s) ? String(s) : s.toFixed(1).replace(/\.0$/, '')
+})
 
 onMounted(load)
 
@@ -126,7 +133,7 @@ onBeforeUnmount(() => release(focusKey))
 <template>
   <div v-loading="loading" class="quiz">
     <div v-if="result" class="score" :class="{ full: result.correct === result.total }">
-      <div class="score-num">{{ result.correct }} / {{ result.total }}</div>
+      <div class="score-num">{{ scoreText }} / {{ result.total }} 分</div>
       <div>
         {{ result.correct === result.total ? '全部答对，继续下一项吧。' : '看看下面答错的题，读一下解析再试一次。' }}
         <span v-if="result.pending" class="muted">有 {{ result.pending }} 道简答两次判分不一致，等老师确认后再算进掌握度。</span>

@@ -78,7 +78,7 @@ class InterventionControllerTest {
     @Test
     void scanFindsABAndAB_onlyForTheRightStudents() throws Exception {
         board().andExpect(jsonPath("$.data.counts.open").value(3))
-                // 高级在前：学生03（A，掌握度 0.22 < 0.4）、学生07（AB），然后学生04（B）
+                // 高级在前：学生03（A，掌握度 0 < 0.4）、学生07（AB），然后学生04（B）
                 .andExpect(jsonPath("$.data.alerts[*].studentId", Matchers.contains(7, 11, 8)))
                 .andExpect(jsonPath("$.data.alerts[*].type", Matchers.contains("A", "AB", "B")))
                 .andExpect(jsonPath("$.data.alerts[*].level", Matchers.contains("high", "high", "medium")))
@@ -87,12 +87,13 @@ class InterventionControllerTest {
                 // A：两层证据、主要误解，建议先挑含这个误解选项的题
                 .andExpect(jsonPath("$.data.alerts[0].evidence.concept").value("good"))
                 .andExpect(jsonPath("$.data.alerts[0].evidence.application").value("bad"))
-                .andExpect(jsonPath("$.data.alerts[0].evidence.mastery").value(0.2168))
+                .andExpect(jsonPath("$.data.alerts[0].evidence.mastery").value(0.0))
                 .andExpect(jsonPath("$.data.alerts[0].evidence.misconception").value("只取了边界和内侧，缺少越过边界的值"))
                 .andExpect(jsonPath("$.data.alerts[0].evidence.recentAnswers.length()").value(4))
                 .andExpect(jsonPath("$.data.alerts[0].suggestion.type").value("PRACTICE"))
                 .andExpect(jsonPath("$.data.alerts[0].suggestion.status").value("pending"))
-                .andExpect(jsonPath("$.data.alerts[0].suggestion.exercises[*].exerciseId", Matchers.contains(1, 3, 5)))
+                // 只挑没做过的新题，含这个误解选项的（第 7、8 题）在前
+                .andExpect(jsonPath("$.data.alerts[0].suggestion.exercises[*].exerciseId", Matchers.contains(7, 8, 5)))
                 .andExpect(jsonPath("$.data.alerts[0].suggestion.note", Matchers.containsString("缺少越过边界的值")))
                 // AB：两次错因不同，留言用通用模板；先复习 + 对话，再练习
                 .andExpect(jsonPath("$.data.alerts[1].evidence.misconception").doesNotExist())
@@ -121,7 +122,7 @@ class InterventionControllerTest {
         mockMvc.perform(as(7, get("/api/interventions/mine")))
                 .andExpect(jsonPath("$.data.running.length()").value(1))
                 .andExpect(jsonPath("$.data.running[0].note", Matchers.containsString("缺少越过边界的值")))
-                .andExpect(jsonPath("$.data.running[0].exercises[*].exerciseId", Matchers.contains(1, 3, 5)))
+                .andExpect(jsonPath("$.data.running[0].exercises[*].exerciseId", Matchers.contains(7, 8, 5)))
                 .andExpect(jsonPath("$.data.running[0].exercises[0].recommendationId").isNumber())
                 .andExpect(jsonPath("$.data.running[0].exercises[0].answered").value(false));
         // 老师在干预这个知识点：系统推荐先让出来，按"老师布置"做
@@ -129,17 +130,18 @@ class InterventionControllerTest {
                 .andExpect(jsonPath("$.data.weakCount").value(1))
                 .andExpect(jsonPath("$.data.points.length()").value(0));
 
-        // 在推荐页做这 3 道（复用推荐的做题接口），全对 → 掌握度上升
+        // 在推荐页做这 3 道新题（复用推荐的做题接口），全对 → 有效（布置的新题平均 ≥ 0.8）
         mockMvc.perform(as(7, post("/api/recommendations/practice")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":{\"1\":\"A\",\"3\":\"A\",\"5\":\"B\"}}"))
+                        .content("{\"answers\":{\"7\":\"A\",\"8\":\"B\",\"5\":\"B\"}}"))
                 .andExpect(jsonPath("$.data.correct").value(3));
 
         board().andExpect(jsonPath("$.data.counts.open").value(2))
                 .andExpect(jsonPath("$.data.counts.done").value(1))
                 .andExpect(jsonPath("$.data.counts.effective").value(1))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].status").value("done"))
-                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].beforeValue").value("0.22"))
-                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].afterValue").value("0.60")) // 扣掉蒙对的部分后（g = 0.25）
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].beforeValue").value("0.00"))
+                // 当前掌握度 = 补练平均：之前的补练第 4、3 题错，这次 3 道对 → 3/5
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].afterValue").value("0.60"))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].effective").value(true));
         mockMvc.perform(as(7, get("/api/interventions/mine")))
                 .andExpect(jsonPath("$.data.running.length()").value(0))
@@ -202,11 +204,13 @@ class InterventionControllerTest {
                 .andExpect(jsonPath("$.data.running[0].step").value(2))
                 .andExpect(jsonPath("$.data.running[0].exercises.length()").value(3));
         mockMvc.perform(as(11, post("/api/recommendations/practice")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":{\"1\":\"B\",\"3\":\"A\",\"5\":\"B\"}}"))
+                        .content("{\"answers\":{\"5\":\"B\",\"7\":\"B\",\"8\":\"B\"}}"))
                 .andExpect(jsonPath("$.data.correct").value(2));
 
+        // 布置的 3 道新题对 2 道，平均 0.67 < 0.8 → 做完了，但没补回来（无效）
         board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 11)].status").value("done"))
-                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 11)].beforeValue").value("0.33"));
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 11)].beforeValue").value("0.50"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 11)].effective").value(Matchers.contains(false)));
     }
 
     @Test
@@ -430,7 +434,7 @@ class InterventionControllerTest {
         // 再改成过期，学生补做完：完成了，记为迟完成；完成后不能再改期限
         jdbc.update("UPDATE intervention SET due_at = ? WHERE id = ?", LocalDateTime.now().minusHours(2), id);
         mockMvc.perform(as(7, post("/api/recommendations/practice")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":{\"1\":\"A\",\"3\":\"A\",\"5\":\"B\"}}"))
+                        .content("{\"answers\":{\"7\":\"A\",\"8\":\"B\",\"5\":\"B\"}}"))
                 .andExpect(jsonPath("$.data.correct").value(3));
         board().andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].status").value(Matchers.contains("done")))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].late").value(Matchers.contains(true)))

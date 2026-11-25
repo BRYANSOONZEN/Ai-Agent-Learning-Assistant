@@ -11,10 +11,15 @@ public final class ExerciseToolDtos {
 
     /**
      * AI 出题：kpIds 是本章已确认的知识点（chapter_kp.id）；assessTypes 考查类型；types 题型；
-     * perKp 每个知识点出几道（1～6，默认 3）。
+     * perKp 每个知识点出几道（1～6，默认 3）；requirement 老师的其他要求（可选，最多 500 字），原样放进提示词。
      */
     public record GenRequest(Long itemId, List<Long> kpIds, List<String> assessTypes, List<String> types,
-                             Integer perKp) {
+                             Integer perKp, String requirement) {
+
+        public GenRequest(Long itemId, List<Long> kpIds, List<String> assessTypes, List<String> types,
+                          Integer perKp) {
+            this(itemId, kpIds, assessTypes, types, perKp, null);
+        }
     }
 
     /** 每个知识点的出题结果：出了几道、丢掉几道（格式不对）、要点覆盖、误解用上几个、几道可能有歧义 */

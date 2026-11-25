@@ -14,10 +14,17 @@ public class Mastery {
     private Long id;
     private Long studentId;
     private Long knowledgePointId;
-    /** 0～1，算法见 MasteryService */
+    /** 当前掌握度 0～1（画像颜色、推荐、干预都看它），算法见 MasteryService */
     private Double mastery;
     private Integer attemptCount;
     private Integer correctCount;
+    /** 原始掌握度：练习里每道题第一次作答的平均分，补练不改它 */
+    private Double firstMastery;
+    private Integer firstCount;
+    /** 补练新题第一次作答的平均分、题数、状态（recovered 已补回来 / practicing 补练中） */
+    private Double remedy;
+    private Integer remedyCount;
+    private String remedyStatus;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;

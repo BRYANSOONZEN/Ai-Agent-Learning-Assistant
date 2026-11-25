@@ -22,6 +22,7 @@ import com.se.platform.course.service.CourseService;
 import com.se.platform.course.service.ExerciseService;
 import com.se.platform.diagnosis.dto.DiagnosisDtos.ClassPoint;
 import com.se.platform.diagnosis.entity.Mastery;
+import com.se.platform.diagnosis.service.MasteryService;
 import com.se.platform.diagnosis.mapper.MasteryMapper;
 import com.se.platform.diagnosis.service.DiagnosisService;
 import com.se.platform.dialogue.entity.DialogueSession;
@@ -490,13 +491,9 @@ public class InterventionService {
         return exercises.values().stream()
                 .filter(e -> published.contains(e.getChapterId()))
                 .filter(Exercise::recommendable)
-                .filter(e -> latest.get(e.getId()) == null || !Boolean.TRUE.equals(latest.get(e.getId()).getIsCorrect()))
-                .sorted(Comparator.comparingInt((Exercise e) -> {
-                            if (misconception != null && notes(e).contains(misconception)) {
-                                return 0;
-                            }
-                            return latest.containsKey(e.getId()) ? 1 : 2;
-                        })
+                .filter(e -> latest.get(e.getId()) == null) // 只布置没做过的新题：掌握度只算第一次作答
+                .sorted(Comparator.comparingInt((Exercise e) ->
+                                misconception != null && notes(e).contains(misconception) ? 0 : 1)
                         .thenComparingInt(e -> e.getSortOrder() == null ? 0 : e.getSortOrder())
                         .thenComparingLong(Exercise::getId))
                 .limit(MAX_EXERCISES)
@@ -764,8 +761,21 @@ public class InterventionService {
         Mastery m = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
                 .eq(Mastery::getStudentId, iv.getStudentId())
                 .eq(Mastery::getKnowledgePointId, iv.getKnowledgePointId()));
+        // 有效 = 这次布置的新题（够 2 道）第一次作答平均 ≥ 0.8，和“已补回来”同一个标准
+        List<Double> scores = new ArrayList<>();
+        Set<Long> seen = new java.util.HashSet<>();
+        answerMapper.selectList(new LambdaQueryWrapper<AnswerRecord>()
+                        .eq(AnswerRecord::getStudentId, iv.getStudentId())
+                        .in(AnswerRecord::getExerciseId, split(iv.getExerciseIds()))
+                        .orderByAsc(AnswerRecord::getSubmittedAt).orderByAsc(AnswerRecord::getId))
+                .forEach(a -> {
+                    if (seen.add(a.getExerciseId()) && !"pending".equals(a.getStatus())) {
+                        scores.add(a.getScore() != null ? a.getScore() : Boolean.TRUE.equals(a.getIsCorrect()) ? 1.0 : 0.0);
+                    }
+                });
+        Double avg = MasteryService.compute(scores);
         finish(iv, masteryText(iv.getStudentId(), iv.getKnowledgePointId()),
-                m != null && m.getMastery() >= LayerService.PASS);
+                m != null && scores.size() >= MasteryService.MIN_REMEDY && avg >= MasteryService.RECOVERED);
     }
 
     private void finish(Intervention iv, String after, boolean effective) {

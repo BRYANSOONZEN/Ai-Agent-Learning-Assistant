@@ -201,7 +201,7 @@ class CourseContentControllerTest {
         mockMvc.perform(get("/api/chapters/1"))
                 .andExpect(jsonPath("$.data.itemCount").value(3))
                 .andExpect(jsonPath("$.data.knowledgePointCount").value(2))
-                .andExpect(jsonPath("$.data.exerciseCount").value(6)) // 练习里 2 道 + 题库 4 道
+                .andExpect(jsonPath("$.data.exerciseCount").value(9)) // 练习里 2 道 + 题库 4 道
                 .andExpect(jsonPath("$.data.topicCount").value(2));
         mockMvc.perform(get("/api/chapters/1/items"))
                 .andExpect(jsonPath("$.data[0].type").value("document"))

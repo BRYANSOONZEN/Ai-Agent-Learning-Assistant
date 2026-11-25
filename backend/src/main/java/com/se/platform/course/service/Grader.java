@@ -9,8 +9,9 @@ import java.util.Set;
 /**
  * 题型和客观题判分（设计见 docs/模块说明/练习与掌握度-设计.md）。
  *
- * <p>客观题（单选、两段式、多选、判断、填空）全部由程序判，只记对（1）或错（0），不给部分分；
- * 每道题再记一个“蒙对的概率 g”，算掌握度时扣掉（猜测校正）。简答题由 {@link ShortAnswerJudge} 判。
+ * <p>客观题（单选、两段式、多选、判断、填空）全部由程序判：答对 1 分，答错 0 分；
+ * 多选题少选（选的都对、但没选全）给 {@link #PARTIAL} 分，选了错的选项 0 分。
+ * 简答题由 {@link ShortAnswerJudge} 判。蒙对的概率 g 仍然记下来，但掌握度不再用它。
  */
 public final class Grader {
 
@@ -22,11 +23,15 @@ public final class Grader {
     public static final String SHORT = "short_answer";
     public static final Set<String> TYPES = Set.of(SINGLE, TWO_TIER, MULTIPLE, JUDGE, FILL, SHORT);
 
-    /** 考查类型（通用 4 种） */
-    public static final Set<String> ASSESS = Set.of("concept", "scenario", "data", "process");
+    /** 考查类型：通用 4 种，加上 custom（老师在“其他要求”里定制的考查方式） */
+    public static final String CUSTOM = "custom";
+    public static final Set<String> ASSESS = Set.of("concept", "scenario", "data", "process", CUSTOM);
 
     public static final String GRADED = "graded";
     public static final String PENDING = "pending";
+
+    /** 多选题少选的得分 */
+    public static final double PARTIAL = 0.5;
 
     /** 判断题固定的两个选项 */
     public static final List<String> JUDGE_OPTIONS = List.of("正确", "错误");
@@ -59,6 +64,7 @@ public final class Grader {
         String type = e.type() == null ? SINGLE : e.type();
         String input = raw == null ? null : raw.strip();
         boolean right;
+        double score = -1;
         String chosen = input;
         String reasonChosen = null;
         String note = null;
@@ -75,7 +81,13 @@ public final class Grader {
             }
             case MULTIPLE -> {
                 chosen = input == null ? null : sortLetters(input);
-                right = sortLetters(e.answer()).equals(chosen);
+                String key = sortLetters(e.answer());
+                right = key.equals(chosen);
+                if (!right && chosen != null && !chosen.isEmpty()
+                        && chosen.chars().allMatch(c -> key.indexOf(c) >= 0)) {
+                    score = PARTIAL; // 选的都对，只是没选全
+                    note = "少选了：选的都对，但还有正确选项没选";
+                }
             }
             case FILL -> right = input != null && e.accepts().stream().anyMatch(a -> normalize(a).equals(normalize(input)));
             default -> { // 单选、判断
@@ -85,7 +97,7 @@ public final class Grader {
             }
         }
         return new QuestionResult(e.id(), type, e.stem(), e.options(), chosen, e.answer(), right, e.analysis(),
-                right ? null : note, right ? 1 : 0, guess(e), 1, GRADED, e.reasons(), e.reasonAnswer(), reasonChosen,
+                right ? null : note, right ? 1 : score > 0 ? score : 0, guess(e), 1, GRADED, e.reasons(), e.reasonAnswer(), reasonChosen,
                 e.accepts(), null, null);
     }
 

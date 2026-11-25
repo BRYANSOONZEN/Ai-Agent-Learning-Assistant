@@ -489,9 +489,14 @@ CREATE TABLE mastery (
     id                 BIGINT       NOT NULL AUTO_INCREMENT,
     student_id         BIGINT       NOT NULL,
     knowledge_point_id BIGINT       NOT NULL,
-    mastery            DECIMAL(5,4) NOT NULL,              -- 0～1
-    attempt_count      INT          NOT NULL,              -- 该知识点累计作答次数
+    mastery            DECIMAL(5,4) NOT NULL,              -- 当前掌握度 0～1：补练够 2 道用补练平均分，否则用第一次的
+    attempt_count      INT          NOT NULL,              -- 算进来的题数（第一次作答 + 补练新题）
     correct_count      INT          NOT NULL,
+    first_mastery      DECIMAL(5,4),                       -- 原始掌握度：练习里每道题第一次作答的平均分，之后不改
+    first_count        INT          NOT NULL DEFAULT 0,
+    remedy             DECIMAL(5,4),                       -- 补练（小助手推荐、干预布置的新题）第一次作答的平均分
+    remedy_count       INT          NOT NULL DEFAULT 0,
+    remedy_status      VARCHAR(16),                        -- recovered 已补回来 / practicing 补练中
     updated_at         DATETIME,
     PRIMARY KEY (id),
     CONSTRAINT uk_mastery UNIQUE (student_id, knowledge_point_id)

@@ -41,21 +41,24 @@ public final class LearnDtos {
     }
 
     /**
-     * 提交后的结果。correct：得分为 1 的题数；pending：简答两次判分不一致、等老师确认的题数。
+     * 提交后的结果。correct：得分为 1 的题数；score：总得分（多选少选 0.5、简答按要点给分，等老师确认的不算）；
+     * pending：简答两次判分不一致、等老师确认的题数。
      * masteryChanges：这次交卷后各知识点掌握度的变化（学情诊断）
      */
     public record QuizResult(int total, int correct, List<QuestionResult> results,
-                             List<MasteryChange> masteryChanges, int pending) {
+                             List<MasteryChange> masteryChanges, int pending, double score) {
 
         public QuizResult(int total, int correct, List<QuestionResult> results, List<MasteryChange> masteryChanges) {
             this(total, correct, results, masteryChanges,
-                    (int) results.stream().filter(r -> "pending".equals(r.status())).count());
+                    (int) results.stream().filter(r -> "pending".equals(r.status())).count(),
+                    Math.round(results.stream().filter(r -> !"pending".equals(r.status()))
+                            .mapToDouble(QuestionResult::score).sum() * 100) / 100.0);
         }
     }
 
     /**
      * 一道题的判分结果。
-     * score 0～1；guess 蒙对的概率 g；reliability 可信度权重 r；status graded / pending。
+     * score 0～1；guess 蒙对的概率、reliability 可信度（只记录，掌握度不用）；status graded / pending。
      * 两段式：reasons、reasonAnswer、reasonChosen；填空：accepts；简答：reference、points（每条要点答到没有）。
      */
     public record QuestionResult(Long id, String type, String stem, List<String> options, String chosen,

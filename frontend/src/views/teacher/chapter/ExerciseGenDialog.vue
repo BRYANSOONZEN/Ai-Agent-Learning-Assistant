@@ -1,7 +1,8 @@
 <script setup>
 /*
  * Two ways to get questions into an exercise item (both end up as drafts the teacher confirms):
- *   AI 出题 — pick knowledge points, assessment types, question types and how many per point;
+ *   AI 出题 — pick knowledge points, assessment types, question types, how many per point, and optionally
+ *            write other requirements in the teacher's own words (passed into the prompt as is);
  *   上传已有题目 — a .txt / .md / .docx file or pasted text; the model labels knowledge point and type.
  * After running, shows per knowledge point what came out: created / dropped, key points covered,
  * misconceptions used, questions the AI could not solve without the answer (maybe ambiguous), time and cost.
@@ -26,6 +27,7 @@ const picked = ref([])
 const assess = ref(['concept', 'scenario'])
 const types = ref(['single_choice', 'two_tier'])
 const perKp = ref(3)
+const requirement = ref('')
 const file = ref(null)
 const pasted = ref('')
 const running = ref(false)
@@ -42,7 +44,8 @@ watch(visible, async (v) => {
   }
 })
 
-const estimate = computed(() => `${picked.value.length} 个知识点，约 ${picked.value.length * perKp.value} 道题，预计 ${Math.max(1, Math.round(picked.value.length * 0.5))}～${picked.value.length} 分钟`)
+const total = computed(() => kps.value.filter((k) => picked.value.includes(k.id)).reduce((n, k) => n + Math.min(8, perKp.value + (k.importance === '重点' ? 1 : 0)), 0))
+const estimate = computed(() => `${picked.value.length} 个知识点，约 ${total.value} 道题（重点知识点多 1 道），预计 ${Math.max(1, Math.round(picked.value.length * 0.5))}～${picked.value.length} 分钟`)
 
 function onFile(e) {
   file.value = e.target.files?.[0] || null
@@ -52,8 +55,8 @@ async function run() {
   running.value = true
   try {
     if (props.mode === 'ai') {
-      if (!picked.value.length || !assess.value.length || !types.value.length) {
-        return ElMessage.warning('知识点、考查类型、题型都至少选 1 个')
+      if (!picked.value.length || !types.value.length || (!assess.value.length && !requirement.value.trim())) {
+        return ElMessage.warning('知识点、题型至少选 1 个；考查类型至少选 1 种，或者在“其他要求”里写')
       }
       result.value = await generateExercises({
         itemId: props.itemId,
@@ -61,6 +64,7 @@ async function run() {
         assessTypes: assess.value,
         types: types.value,
         perKp: perKp.value,
+        requirement: requirement.value.trim(),
       })
     } else {
       if (!file.value && !pasted.value.trim()) return ElMessage.warning('上传文件或粘贴题目')
@@ -102,8 +106,13 @@ async function run() {
         </el-checkbox-group>
         <h4>④ 每个知识点几道</h4>
         <el-input-number v-model="perKp" :min="1" :max="6" />
-        <span class="muted">建议至少 3 道：掌握度不到 3 次作答可信度低</span>
-        <p class="muted">{{ estimate }}。出的题先是草稿，学生看不到；AI 还会不看答案做一遍，做不对的标出来给你检查。</p>
+        <span class="muted">建议至少 3 道：每个知识点最多 3 条要点，3 道才能每条都考到</span>
+        <h4>⑤ 其他要求 <small>可选，用自己的话写，会原样交给 AI；上面的考查类型不够用时也写在这里</small></h4>
+        <el-input
+          v-model="requirement" type="textarea" :rows="3" maxlength="500" show-word-limit
+          placeholder="例如：第 2 个知识点用简答考；重点考第 3 个知识点，多出 2 道；加一道“找出这段测试代码的错误”的题"
+        />
+        <p class="muted">{{ estimate }}。题型、考查类型在整章里轮流分配，数量相差不超过 1。出的题先是草稿，学生看不到；AI 还会不看答案做一遍，做不对的标出来给你检查。</p>
       </template>
       <template v-else>
         <p class="muted">

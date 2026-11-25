@@ -10,6 +10,10 @@ export const LEVELS = {
   none: { label: '未练习', cls: 'none' },
 }
 
+// remediation status (MasteryService): new questions from the assistant / interventions.
+// recovered = at least 2 new questions, average >= 0.8; the first-attempt mastery is never changed.
+export const REMEDY = { recovered: '已补回来', practicing: '补练中' }
+
 export const THRESHOLDS = [0.6, 0.8]
 
 export const percent = (m) => (m == null ? '-' : Math.round(m * 100) + '%')

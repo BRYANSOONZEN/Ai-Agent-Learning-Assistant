@@ -14,7 +14,6 @@ import com.se.platform.ai.client.FakeAiClient;
 import com.se.platform.course.dto.ExerciseView;
 import com.se.platform.course.service.Grader;
 import com.se.platform.diagnosis.service.MasteryService;
-import com.se.platform.diagnosis.service.MasteryService.Attempt;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,7 +86,9 @@ class ExerciseTypesTest {
 
         ExerciseView multi = view(Grader.MULTIPLE, four, "AC", List.of(), null, List.of());
         assertThat(Grader.grade(multi, "ca").correct()).isTrue();
-        assertThat(Grader.grade(multi, "A").correct()).isFalse(); // 少选也算错
+        assertThat(Grader.grade(multi, "A").correct()).isFalse();
+        assertThat(Grader.grade(multi, "A").score()).isEqualTo(0.5); // 少选：选的都对，没选全 → 0.5
+        assertThat(Grader.grade(multi, "AB").score()).isEqualTo(0); // 选了错的 → 0
         assertThat(Grader.guess(multi)).isEqualTo(1.0 / 15);
 
         ExerciseView judge = view(Grader.JUDGE, Grader.JUDGE_OPTIONS, "B", List.of(), null, List.of());
@@ -102,16 +103,9 @@ class ExerciseTypesTest {
 
     @Test
     void masteryFormula() {
-        // 设计文档的算例：单选对、单选对、简答 1/3（两次一致，r = 0.5）→ 0.789
-        Double m = MasteryService.computeAttempts(List.of(new Attempt(1, 0.25, 1), new Attempt(1, 0.25, 1),
-                new Attempt(1.0 / 3, 0, 0.5)));
-        assertThat(m).isEqualTo(0.789);
-        // 完全靠蒙：判断题正确率 0.5 → 掌握度 0
-        assertThat(MasteryService.computeAttempts(List.of(new Attempt(1, 0.5, 1), new Attempt(0, 0.5, 1),
-                new Attempt(1, 0.5, 1), new Attempt(0, 0.5, 1)))).isEqualTo(0.0);
-        // 判断对、判断对、单选错 → 0.32
-        assertThat(MasteryService.computeAttempts(List.of(new Attempt(1, 0.5, 1), new Attempt(1, 0.5, 1),
-                new Attempt(0, 0.25, 1)))).isEqualTo(0.3197);
+        // 单选对、多选少选、简答答到 1/3 → (1 + 0.5 + 0.3333) / 3
+        assertThat(MasteryService.compute(List.of(1.0, 0.5, 1.0 / 3))).isEqualTo(0.6111);
+        assertThat(MasteryService.compute(List.of(0.0, 1.0))).isEqualTo(0.5);
     }
 
     private long addShort() throws Exception {
@@ -221,6 +215,71 @@ class ExerciseTypesTest {
         mockMvc.perform(get("/api/learn/items/2/questions"))
                 .andExpect(jsonPath("$.data.length()").value(4))
                 .andExpect(jsonPath("$.data[3].type").value("fill"));
+    }
+
+    @Test
+    void planIsBalancedAcrossChapter() {
+        // 3 个知识点（第 1 个重点）、每个 3 道，题型 3 种、考查类型 2 种
+        java.util.List<com.se.platform.material.entity.ChapterKp> kps = new java.util.ArrayList<>();
+        for (String imp : java.util.List.of("重点", "一般", "一般")) {
+            var k = new com.se.platform.material.entity.ChapterKp();
+            k.setImportance(imp);
+            kps.add(k);
+        }
+        var plans = com.se.platform.course.service.ExerciseGenService.plan(kps, 3,
+                java.util.List.of("single_choice", "judge", "short_answer"), java.util.List.of("concept", "scenario"));
+        assertThat(plans.get(0).count()).isEqualTo(4); // 重点多 1 道
+        assertThat(plans.get(1).count()).isEqualTo(3);
+        assertThat(plans.get(0).types()).containsEntry("single_choice", 2).containsEntry("judge", 1)
+                .containsEntry("short_answer", 1);
+        // 整章 10 道：每种题型、考查类型的数量相差不超过 1
+        java.util.Map<String, Integer> types = new java.util.HashMap<>();
+        java.util.Map<String, Integer> assess = new java.util.HashMap<>();
+        plans.forEach(p -> {
+            p.types().forEach((t, n) -> types.merge(t, n, Integer::sum));
+            p.assess().forEach((t, n) -> assess.merge(t, n, Integer::sum));
+        });
+        assertThat(types.values()).containsExactlyInAnyOrder(4, 3, 3);
+        assertThat(assess.values()).containsExactlyInAnyOrder(5, 5);
+        assertThat(plans.get(0).text(3)).contains("一共出 4 道").contains("single_choice（单选）2 道")
+                .contains("3 条要点每条至少 1 道");
+    }
+
+    @Test
+    void teacherRequirementGoesIntoPrompt() throws Exception {
+        jdbc.update("""
+                INSERT INTO chapter_kp (chapter_id, sort_order, name, summary, importance, key_points, misconceptions,
+                  sources, edited, knowledge_point_id, created_at, updated_at)
+                VALUES (1, 0, '边界测试值的选取', '边界上、外、内各取值', '重点',
+                  '[{"text":"边界外的值也要测，比如 0","sources":[]}]', '[]', '[]', 0, 1, NOW(), NOW())""");
+        long kpId = jdbc.queryForObject("SELECT MAX(id) FROM chapter_kp", Long.class);
+        // 老师只选了单选，但在其他要求里要简答、要一道"找错"的题（老师定制的考查方式）
+        fake.reply("""
+                {"questions": [
+                  {"type": "short_answer", "assess_type": "custom", "key_point_no": 1,
+                   "stem": "下面这组测试值有什么问题：1、50、99？", "reference": "没有测边界外的 0 和 100",
+                   "key_points": ["指出缺少边界外的值"], "analysis": "边界外也要测"},
+                  {"type": "single_choice", "assess_type": "concept", "key_point_no": 1, "stem": "哪个值在边界外？",
+                   "options": ["0", "1", "50", "99"], "answer": "A", "option_notes": ["", "x", "y", "z"], "analysis": "0 小于 1"}]}""")
+                .then("{\"answers\": [\"A\"]}");
+        int before = fake.requests().size();
+        String body = "{\"itemId\": 2, \"kpIds\": [" + kpId + "], \"assessTypes\": [],"
+                + " \"types\": [\"single_choice\"], \"perKp\": 2, \"requirement\": \"用简答考，加一道找错的题\"}";
+        mockMvc.perform(post("/api/exercises/generate").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.data.created").value(2))
+                .andExpect(jsonPath("$.data.kps[0].notes[0]").value("按老师的其他要求用了题型：简答"));
+        String prompt = fake.requests().get(before).messages().toString();
+        assertThat(prompt).contains("【老师的其他要求】用简答考，加一道找错的题").contains("- custom：");
+        mockMvc.perform(get("/api/chapters/1/exercises").param("itemId", "2"))
+                .andExpect(jsonPath("$.data[2].assessType").value("custom"));
+
+        // 没选考查类型、也没写要求 → 不让出题；要求太长也不行
+        mockMvc.perform(post("/api/exercises/generate").contentType(MediaType.APPLICATION_JSON)
+                        .content(body.replace("用简答考，加一道找错的题", "")))
+                .andExpect(jsonPath("$.code").value(400));
+        mockMvc.perform(post("/api/exercises/generate").contentType(MediaType.APPLICATION_JSON)
+                        .content(body.replace("用简答考，加一道找错的题", "长".repeat(501))))
+                .andExpect(jsonPath("$.code").value(400));
     }
 
     @Test

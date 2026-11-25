@@ -8,7 +8,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MasteryMeter from './MasteryMeter.vue'
-import { LEVELS, TOPIC_RESULTS } from './levels'
+import { LEVELS, REMEDY, TOPIC_RESULTS, percent } from './levels'
 import { getMyDiagnosis } from '@/api/diagnosis'
 
 const router = useRouter()
@@ -85,6 +85,12 @@ onMounted(load)
               <span v-if="p.difficult" class="flag">难点</span>
             </div>
             <MasteryMeter :value="p.mastery" :level="p.level" />
+            <p v-if="p.firstMastery != null || p.remedyStatus" class="first-line">
+              第一次 {{ percent(p.firstMastery) }}（{{ LEVELS[p.firstLevel]?.label || '未练习' }}）
+              <span v-if="p.remedyStatus" class="remedy" :class="p.remedyStatus">
+                {{ REMEDY[p.remedyStatus] }}：补练 {{ p.remedyCount }} 道新题，平均 {{ percent(p.remedy) }}
+              </span>
+            </p>
             <div class="recent">
               <span class="recent-label">最近 {{ p.recent.length }} 次</span>
               <span
@@ -102,7 +108,7 @@ onMounted(load)
               <b>上次错在</b>{{ p.misconception }}
             </p>
             <el-button v-if="p.practiceItemId" type="primary" plain size="small" @click="practice(p)">
-              回去重做这组练习
+              回去看这组练习（重做不改掌握度）
             </el-button>
           </article>
         </div>
@@ -126,6 +132,7 @@ onMounted(load)
                 <span v-if="p.difficult" class="flag">难点</span>
               </div>
               <MasteryMeter :value="p.mastery" :level="p.level" />
+              <span v-if="p.remedyStatus" class="remedy" :class="p.remedyStatus">{{ REMEDY[p.remedyStatus] }}</span>
               <span class="point-count">
                 {{ p.attemptCount ? `对 ${p.correctCount} / ${p.attemptCount}` : '没有作答' }}
               </span>
@@ -171,6 +178,27 @@ onMounted(load)
 </template>
 
 <style scoped>
+.first-line {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.remedy {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.remedy.recovered {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.remedy.practicing {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
 .diagnosis {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

@@ -102,9 +102,25 @@ INSERT INTO exercise (course_id, chapter_id, item_id, type, stem, options, answe
  '["程序员常把 < 和 <= 写混","边界上的值用得最多","中间值不会被测试","编译器对边界值有特殊处理"]', 'A',
  '比较运算差一个等号、循环多一次少一次，错误都只在边界上才表现出来。',
  '["","边界值并不一定用得最多","中间值也会测，只是不容易发现错误","编译器不会特殊处理边界值"]',
- 2, 13, 2, NOW(), NOW());
+ 2, 13, 2, NOW(), NOW()),
+-- 补练用的新题（id 7～9）：掌握度只算每道题第一次作答，小助手和干预只布置学生没做过的题
+(1, 1, NULL, 'single_choice', '停车场每次可停 1～24 小时。测试上限时，下面哪组时长最合适？',
+ '["23、24、25","1、12、24","24、48、72","22、23、24"]', 'A',
+ '上限是 24：23 在边界内侧，24 在边界上，25 刚越过边界（应拒绝）。',
+ '["","把下边界、中间值和上边界混在一起，不是专门测上限","越过边界太远，测不出差 1 的错误","只取了边界和内侧，缺少越过边界的值"]',
+ 2, 14, 2, NOW(), NOW()),
+(1, 1, NULL, 'single_choice', '会员积分 0～9999 有效。测下限时，哪组积分值最合适？',
+ '["0、1、2","-1、0、1","0、5000、9999","-100、0、100"]', 'B',
+ '下限是 0：-1 刚越过边界（应拒绝），0 在边界上，1 在边界内侧。',
+ '["只取了边界和内侧，缺少越过边界的值","","把上下边界和中间值混在一起，不是专门测下限","离边界太远，测不出差 1 的错误"]',
+ 2, 15, 2, NOW(), NOW()),
+(1, 1, NULL, 'single_choice', '温度传感器只接受 -40～85 ℃。下面哪个测试值最能发现“> 85”错写成“>= 85”？',
+ '["85","60","0","-40"]', 'A',
+ '只有正好等于 85 时，> 和 >= 的结果才不同。',
+ '["","中间值在两种写法下结果相同，发现不了","中间值在两种写法下结果相同，发现不了","这是下边界，和上边界的判断无关"]',
+ 2, 16, 2, NOW(), NOW());
 
-INSERT INTO exercise_knowledge_point (exercise_id, knowledge_point_id) VALUES (1, 1), (2, 2), (3, 1), (4, 1), (5, 1), (6, 2);
+INSERT INTO exercise_knowledge_point (exercise_id, knowledge_point_id) VALUES (1, 1), (2, 2), (3, 1), (4, 1), (5, 1), (6, 2), (7, 1), (8, 1), (9, 1);
 
 -- ---------------------------------------------------------------------
 -- 对话话题示例：第 1 章"边界值分析"的 2 个话题（代替老师录入，方便直接看到效果；先只放两个，跑通为主）
@@ -151,22 +167,22 @@ INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, 
 (5, 1, 1, 2, 'A', 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW())),
 (5, 2, 1, 2, 'B', 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW()));
 
--- 上面两次交卷算出来的掌握度（公式见 docs/design.md 5.1，只做了 2 次所以都乘了 2/3）：
--- 知识点 1「边界测试值的选取」先错后对：(0.8×0 + 1×1) / 1.8 × 2/3 = 0.3704，薄弱
--- 知识点 2「边界错误的成因」两次都对：1 × 2/3 = 0.6667，一般
-INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, updated_at) VALUES
-(5, 1, 0.3704, 2, 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW())),
-(5, 2, 0.6667, 2, 2, TIMESTAMPADD(MINUTE, -1440 - 45, NOW()));
+-- 掌握度 = 每道题第一次作答的得分求平均（docs/模块说明/练习与掌握度-设计.md 第五节；启动时也会按作答重算）：
+-- 知识点 1「边界测试值的选取」第 1 题第一次错：0，薄弱（第二次做对只算练习）
+-- 知识点 2「边界错误的成因」第 2 题第一次对：1，掌握
+INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, first_mastery, first_count, updated_at) VALUES
+(5, 1, 0.0000, 1, 0, 0.0000, 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW())),
+(5, 2, 1.0000, 1, 1, 1.0000, 1, TIMESTAMPADD(MINUTE, -1440 - 45, NOW()));
 
 -- =====================================================================
 -- 「干」演示数据（docs/计划-干预A和B.md 第 2 步）
 -- 两层：概念层看 AI 对话话题结果（话题已关联知识点），应用层看掌握度。都在第 1 章知识点 1「边界测试值的选取」
 --   学生02（6）：练习 3 次全错，没做对话 → 概念层未测，属于"先补测"，这次不报警
---   学生03（7）：对话自己答出，练习掌握度 0.22，两次都选"缺少越过边界的值" → A
+--   学生03（7）：对话自己答出，练习掌握度 0（第一次 0，补练 2 道也都错），两次都选"缺少越过边界的值" → A
 --   学生04（8）：练习全对，对话里知识点 1 的话题系统讲解 → B
 --   学生05（9）、学生06（10）：两层都好 → 不报警（对照）
---   学生07（11）：对话系统讲解，练习掌握度 0.33 → A + B
---   学生01（5）：原有数据不动，练习只做 2 次、没做对话 → 不报警
+--   学生07（11）：对话系统讲解，练习掌握度 0.5（补练 2 道对 1 道） → A + B
+--   学生01（5）：练习只做了 1 道题、没做对话 → 不报警
 -- 题目正确答案：1 A、3 A、4 C、5 B
 -- =====================================================================
 INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, is_correct, submitted_at) VALUES
@@ -174,7 +190,7 @@ INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, 
 (6, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
 (6, 5, 1, NULL, 'A', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
 (7, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -4 * 1440 - 30, NOW())),
-(7, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
+(7, 4, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
 (7, 1, 1, 2, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
 (7, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
 (8, 1, 1, 2, 'A', 1, TIMESTAMPADD(MINUTE, -3 * 1440 - 30, NOW())),
@@ -191,14 +207,17 @@ INSERT INTO answer_record (student_id, exercise_id, course_id, item_id, answer, 
 (11, 4, 1, NULL, 'C', 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 30, NOW())),
 (11, 3, 1, NULL, 'D', 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW()));
 
--- 掌握度按上面的作答算好（公式见 docs/design.md 5.1），例如学生03：(0.64×1) / (0.512+0.64+0.8+1) = 0.2168
-INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, updated_at) VALUES
-(6, 1, 0.0000, 3, 0, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
-(7, 1, 0.2168, 4, 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
-(8, 1, 1.0000, 3, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
-(9, 1, 1.0000, 3, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
-(10, 1, 0.8266, 4, 3, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
-(11, 1, 0.3279, 3, 1, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW()));
+-- 掌握度（docs/模块说明/练习与掌握度-设计.md 第五节；启动时会按作答重算，这里的值只是对照）：
+--   第一次在练习里做的题（item_id 不为空）→ 原始掌握度；第一次在推荐 / 干预里做的新题（item_id 为空）→ 补练
+--   补练够 2 道：当前掌握度 = 补练平均分；否则 = 原始掌握度
+-- 例如学生03：第 1 题第一次错 → 原始 0；补练第 4、3 题都错 → 补练 0（补练中），当前 0
+INSERT INTO mastery (student_id, knowledge_point_id, mastery, attempt_count, correct_count, first_mastery, first_count, remedy, remedy_count, remedy_status, updated_at) VALUES
+(6, 1, 0.0000, 3, 0, 0.0000, 1, 0.0000, 2, 'practicing', TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(7, 1, 0.0000, 3, 0, 0.0000, 1, 0.0000, 2, 'practicing', TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(8, 1, 1.0000, 3, 3, 1.0000, 1, 1.0000, 2, NULL, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(9, 1, 1.0000, 3, 3, 1.0000, 1, 1.0000, 2, NULL, TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(10, 1, 1.0000, 3, 2, 0.0000, 1, 1.0000, 2, 'recovered', TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW())),
+(11, 1, 0.5000, 3, 1, 0.0000, 1, 0.5000, 2, 'practicing', TIMESTAMPADD(MINUTE, -2 * 1440 - 29, NOW()));
 
 -- 已结束的章节对话。手动指定 id（101 起），方便下面的话题进度引用；
 -- 实测 H2 会把自增计数器推到最大 id 之后，新开的对话从 106 开始编号

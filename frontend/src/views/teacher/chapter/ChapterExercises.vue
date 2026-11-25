@@ -20,7 +20,7 @@ import {
 import ExerciseGenDialog from './ExerciseGenDialog.vue'
 import ExerciseCoverage from './ExerciseCoverage.vue'
 import ShortAnswerReview from './ShortAnswerReview.vue'
-import { ASSESS_TYPES, QUESTION_TYPES, SOURCE_LABEL, assessLabel, typeLabel } from './exerciseLabels'
+import { ASSESS_TYPES, CUSTOM_ASSESS, QUESTION_TYPES, SOURCE_LABEL, assessLabel, typeLabel } from './exerciseLabels'
 
 const props = defineProps({
   chapter: { type: Object, required: true },
@@ -277,7 +277,7 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="考查类型" required>
             <el-select v-model="form.assessType">
-              <el-option v-for="a in ASSESS_TYPES" :key="a.value" :label="a.label + '：' + a.hint" :value="a.value" />
+              <el-option v-for="a in [...ASSESS_TYPES, CUSTOM_ASSESS]" :key="a.value" :label="a.label + '：' + a.hint" :value="a.value" />
             </el-select>
           </el-form-item>
         </div>

@@ -13,7 +13,13 @@ public final class DiagnosisDtos {
     }
 
     /** 交卷后一个知识点的掌握度变化；before 为空 = 第一次练到 */
-    public record MasteryChange(Long knowledgePointId, String name, Double before, Double after, String level) {
+    /** remedyStatus：recovered 已补回来 / practicing 补练中 / null 没补练 */
+    public record MasteryChange(Long knowledgePointId, String name, Double before, Double after, String level,
+                                String remedyStatus) {
+
+        public MasteryChange(Long knowledgePointId, String name, Double before, Double after, String level) {
+            this(knowledgePointId, name, before, after, level, null);
+        }
     }
 
     // ------------------------------------------------------------------ 学生诊断
@@ -39,7 +45,8 @@ public final class DiagnosisDtos {
     public record PointDiagnosis(Long knowledgePointId, String name, Long courseId, Long chapterId,
                                  String chapterTitle, boolean key, boolean difficult, Double mastery, String level,
                                  int attemptCount, int correctCount, List<Boolean> recent, String misconception,
-                                 Long practiceItemId) {
+                                 Long practiceItemId, Double firstMastery, String firstLevel, int remedyCount,
+                                 Double remedy, String remedyStatus) {
     }
 
     /** AI 对话里一个话题的结果：SELF_CORRECT / HINT_CORRECT / REVEALED_APPLIED / REVEALED / SKIPPED_IRRELEVANT */

@@ -40,7 +40,7 @@ import org.springframework.stereotype.Service;
 public class PracticeAnalysis {
 
     static final int MAX_REVIEW = 3;
-    static final Map<String, String> ASSESS = Map.of("concept", "概念辨析", "scenario", "情境应用",
+    static final Map<String, String> ASSESS = Map.of("custom", "老师定制", "concept", "概念辨析", "scenario", "情境应用",
             "data", "数据分析", "process", "流程步骤");
 
     private final AnswerRecordMapper answerMapper;

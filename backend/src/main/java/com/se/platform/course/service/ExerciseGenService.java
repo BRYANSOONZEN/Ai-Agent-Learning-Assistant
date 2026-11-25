@@ -31,6 +31,7 @@ import com.se.platform.material.service.KpRecognizer;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,6 +57,10 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExerciseGenService {
 
     static final Map<String, String> ASSESS_NAMES = new LinkedHashMap<>();
+    /** 老师的其他要求最多几个字 */
+    static final int MAX_REQUIREMENT = 500;
+    /** 按老师要求多出题时，每个知识点最多存几道 */
+    static final int MAX_PER_KP = 8;
     static final Map<String, String> TYPE_NAMES = new LinkedHashMap<>();
 
     static {
@@ -128,18 +133,91 @@ public class ExerciseGenService {
 
     // ------------------------------------------------------------------ AI 生成
 
+    /** 一个知识点的出题计划：几道、每种题型几道、每种考查类型几道（程序排好，交给 AI 照着出） */
+    public record Plan(int count, Map<String, Integer> types, Map<String, Integer> assess) {
+
+        public String text(int points) {
+            StringBuilder b = new StringBuilder("一共出 ").append(count).append(" 道。题型：");
+            b.append(types.entrySet().stream().map(e -> e.getKey() + "（" + TYPE_NAMES.get(e.getKey()).split("（")[0]
+                            + "）" + e.getValue() + " 道")
+                    .collect(Collectors.joining("、")));
+            if (!assess.isEmpty()) {
+                b.append("；考查类型：").append(assess.entrySet().stream()
+                        .map(e -> e.getKey() + "（" + assessName(e.getKey()) + "）" + e.getValue() + " 道")
+                        .collect(Collectors.joining("、")));
+            }
+            if (points > 0) {
+                b.append(count >= points ? "；" + points + " 条要点每条至少 1 道" : "；尽量考到不同的要点");
+            }
+            return b.append("。").toString();
+        }
+    }
+
+    /**
+     * 出题计划（整章一起排）：一般知识点 perKp 道，重点知识点多 1 道；
+     * 题型、考查类型按整章轮流分配（上一个知识点排到哪种，下一个从下一种接着排），整章每种的数量相差不超过 1。
+     */
+    public static List<Plan> plan(List<ChapterKp> kps, int perKp, List<String> types, List<String> assess) {
+        List<Plan> plans = new ArrayList<>();
+        int t = 0;
+        int a = 0;
+        for (ChapterKp kp : kps) {
+            int count = Math.min(MAX_PER_KP, perKp + ("重点".equals(kp.getImportance()) ? 1 : 0));
+            Map<String, Integer> byType = new LinkedHashMap<>();
+            Map<String, Integer> byAssess = new LinkedHashMap<>();
+            for (int i = 0; i < count; i++) {
+                byType.merge(types.get(t++ % types.size()), 1, Integer::sum);
+                if (!assess.isEmpty()) {
+                    byAssess.merge(assess.get(a++ % assess.size()), 1, Integer::sum);
+                }
+            }
+            plans.add(new Plan(count, byType, byAssess));
+        }
+        return plans;
+    }
+
+    /** 出出来的题和计划对不上的地方（只提醒老师，不丢题）；老师写了其他要求时，多出来的不算，只提醒少了的 */
+    static List<String> planGaps(Plan plan, List<ExerciseSaveRequest> got, boolean custom) {
+        List<String> gaps = new ArrayList<>();
+        Map<String, Long> byType = got.stream().collect(Collectors.groupingBy(ExerciseSaveRequest::type, Collectors.counting()));
+        Map<String, Long> byAssess = got.stream().collect(Collectors.groupingBy(ExerciseSaveRequest::assessType,
+                Collectors.counting()));
+        plan.types().forEach((k, v) -> {
+            long n = byType.getOrDefault(k, 0L);
+            if (custom ? n < v : n != v) {
+                gaps.add(TYPE_NAMES.get(k).split("（")[0] + " 计划 " + v + " 道，出了 " + n + " 道");
+            }
+        });
+        plan.assess().forEach((k, v) -> {
+            long n = byAssess.getOrDefault(k, 0L);
+            if (custom ? n < v : n != v) {
+                gaps.add(assessName(k) + " 计划 " + v + " 道，出了 " + n + " 道");
+            }
+        });
+        return gaps;
+    }
+
     public GenResult generate(GenRequest req) {
         ChapterItem item = requireExerciseItem(req.itemId());
         if (req.kpIds() == null || req.kpIds().isEmpty()) {
             throw BusinessException.badRequest("请至少选 1 个知识点");
         }
+        String requirement = req.requirement() == null ? "" : req.requirement().strip();
+        if (requirement.length() > MAX_REQUIREMENT) {
+            throw BusinessException.badRequest("其他要求最多 " + MAX_REQUIREMENT + " 字");
+        }
         List<String> assess = req.assessTypes() == null ? List.of() : req.assessTypes().stream()
                 .filter(ASSESS_NAMES::containsKey).distinct().toList();
         List<String> types = req.types() == null ? List.of() : req.types().stream()
                 .filter(TYPE_NAMES::containsKey).distinct().toList();
-        if (assess.isEmpty() || types.isEmpty()) {
-            throw BusinessException.badRequest("请至少选 1 种考查类型和 1 种题型");
+        if ((assess.isEmpty() && requirement.isEmpty()) || types.isEmpty()) {
+            throw BusinessException.badRequest("请至少选 1 种考查类型（或写其他要求）和 1 种题型");
         }
+        List<Long> order = chapterKpMapper.selectList(new LambdaQueryWrapper<ChapterKp>()
+                        .eq(ChapterKp::getChapterId, item.getChapterId()).orderByAsc(ChapterKp::getSortOrder))
+                .stream().map(ChapterKp::getId).toList();
+        // 按本章顺序排计划，题型、考查类型在整章里轮流分配
+        List<ChapterKp> chosen = new ArrayList<>();
         int perKp = req.perKp() == null ? 3 : Math.max(1, Math.min(6, req.perKp()));
         Course course = courseMapper.selectById(item.getCourseId());
         Map<String, String> pointer = feynmanDraft.pointers(item.getChapterId());
@@ -155,13 +233,21 @@ public class ExerciseGenService {
             if (kp.getKnowledgePointId() == null) {
                 throw BusinessException.badRequest("知识点“" + kp.getName() + "”还没确认，先在“知识点”里确认");
             }
-            out.add(generateOne(meter, item, course.getName(), kp, assess, types, perKp, pointer, texts));
+            chosen.add(kp);
+        }
+        chosen.sort(Comparator.comparingInt(k -> order.indexOf(k.getId())));
+        List<Plan> plans = plan(chosen, perKp, types, assess);
+        for (int i = 0; i < chosen.size(); i++) {
+            ChapterKp kp = chosen.get(i);
+            out.add(generateOne(meter, item, course.getName(), kp, order.indexOf(kp.getId()) + 1, assess, types,
+                    plans.get(i), requirement, pointer, texts));
         }
         return meter.result(out);
     }
 
-    private KpGen generateOne(Meter meter, ChapterItem item, String course, ChapterKp kp, List<String> assess,
-                              List<String> types, int perKp, Map<String, String> pointer, Map<String, String> texts) {
+    private KpGen generateOne(Meter meter, ChapterItem item, String course, ChapterKp kp, int kpNo,
+                              List<String> assess, List<String> types, Plan plan, String requirement,
+                              Map<String, String> pointer, Map<String, String> texts) {
         List<KeyPoint> points = readList(kp.getKeyPoints(), new TypeReference<List<KeyPoint>>() { });
         List<String> mis = readList(kp.getMisconceptions(), new TypeReference<List<String>>() { });
         StringBuilder p = new StringBuilder();
@@ -176,15 +262,22 @@ public class ExerciseGenService {
                 }
             }
         }
-        String prompt = genTemplate.render(Map.of("course", course, "name", kp.getName(),
-                "summary", kp.getSummary() == null ? "" : kp.getSummary(), "points", p.toString(),
-                "misconceptions", mis.isEmpty() ? "（无）" : mis.stream().map(m -> "- " + m)
-                        .collect(Collectors.joining("\n")),
-                "material", material.length() > 6000 ? material.substring(0, 6000) : material.toString(),
-                "assess", assess.stream().map(a -> "- " + a + "：" + ASSESS_NAMES.get(a))
-                        .collect(Collectors.joining("\n")),
-                "types", types.stream().map(t -> "- " + t + "：" + TYPE_NAMES.get(t)).collect(Collectors.joining("\n")),
-                "count", String.valueOf(perKp)));
+        boolean custom = !requirement.isEmpty();
+        List<String> assessLines = new ArrayList<>(assess.stream().map(a -> "- " + a + "：" + ASSESS_NAMES.get(a)).toList());
+        if (custom) {
+            assessLines.add("- " + Grader.CUSTOM + "：老师在【老师的其他要求】里提出的、不属于上面几种的考查方式（老师没提这类要求就不用，不算在“每种至少 1 道”里）");
+        }
+        String prompt = genTemplate.render(Map.ofEntries(Map.entry("course", course), Map.entry("name", kp.getName()),
+                Map.entry("kp_no", String.valueOf(kpNo)),
+                Map.entry("requirement", custom ? requirement : "（无）"),
+                Map.entry("summary", kp.getSummary() == null ? "" : kp.getSummary()), Map.entry("points", p.toString()),
+                Map.entry("misconceptions", mis.isEmpty() ? "（无）" : mis.stream().map(m -> "- " + m)
+                        .collect(Collectors.joining("\n"))),
+                Map.entry("material", material.length() > 6000 ? material.substring(0, 6000) : material.toString()),
+                Map.entry("assess", String.join("\n", assessLines)),
+                Map.entry("types", types.stream().map(t -> "- " + t + "：" + TYPE_NAMES.get(t))
+                        .collect(Collectors.joining("\n"))),
+                Map.entry("plan", plan.text(points.size()))));
         JsonNode d = null;
         for (int attempt = 0; attempt < 2 && d == null; attempt++) {
             try {
@@ -207,9 +300,17 @@ public class ExerciseGenService {
         int dropped = 0;
         Set<Integer> coveredPoints = new LinkedHashSet<>();
         Set<String> usedMis = new LinkedHashSet<>();
+        List<ExerciseSaveRequest> saved = new ArrayList<>();
         for (JsonNode q : d.path("questions")) {
             ExerciseSaveRequest r = toRequest(q, item, List.of(kp.getKnowledgePointId()));
-            if (!types.contains(r.type())) {
+            if (created.size() >= MAX_PER_KP) {
+                dropped++;
+                notes.add("丢掉 1 道：超过每个知识点最多 " + MAX_PER_KP + " 道");
+                continue;
+            }
+            if (custom && !types.contains(r.type()) && TYPE_NAMES.containsKey(r.type())) {
+                notes.add("按老师的其他要求用了题型：" + TYPE_NAMES.get(r.type()).split("（")[0]);
+            } else if (!types.contains(r.type())) {
                 dropped++;
                 notes.add("丢掉 1 道：题型不是老师选的（" + r.type() + "）");
                 continue;
@@ -221,6 +322,7 @@ public class ExerciseGenService {
                 notes.add("丢掉 1 道：" + e.getMessage());
                 continue;
             }
+            saved.add(r);
             String check = copyCheck(r, points);
             created.add(exerciseService.createDraft(item.getId(), r, "ai", check));
             if (r.keyPointNo() != null) {
@@ -231,6 +333,14 @@ public class ExerciseGenService {
                     usedMis.add(m);
                 }
             }
+        }
+        String reqNote = d.path("requirement_note").asText("").strip();
+        if (custom && !reqNote.isEmpty()) {
+            notes.add(0, "AI 说明怎么照做其他要求：" + reqNote);
+        }
+        List<String> gaps = planGaps(plan, saved, custom);
+        if (!gaps.isEmpty()) {
+            notes.add("和出题计划不一致：" + String.join("；", gaps));
         }
         int flagged = solveCheck(meter, created);
         if (coveredPoints.size() < points.size()) {
@@ -396,6 +506,7 @@ public class ExerciseGenService {
             case "scenario" -> "情境应用";
             case "data" -> "数据分析";
             case "process" -> "流程步骤";
+            case "custom" -> "老师定制";
             default -> "概念辨析";
         };
     }

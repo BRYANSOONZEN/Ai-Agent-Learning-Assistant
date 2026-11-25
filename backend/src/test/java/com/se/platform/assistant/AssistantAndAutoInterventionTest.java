@@ -89,7 +89,7 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 11)].step").value(1))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].type").value("PRACTICE"))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].auto").value(true))
-                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].beforeValue").value("0.22"))
+                .andExpect(jsonPath("$.data.interventions[?(@.studentId == 7)].beforeValue").value("0.00"))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].type").value("REVIEW"))
                 .andExpect(jsonPath("$.data.interventions[?(@.studentId == 8)].status").value("approved"));
         // A 的题已经在学生03 的推荐表里，标为老师布置
@@ -197,7 +197,7 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.chapters[0].report.good").value(0))
                 .andExpect(jsonPath("$.data.chapters[0].report.weak").value(1))
                 .andExpect(jsonPath("$.data.chapters[0].report.headline", Matchers.containsString("还需要补")))
-                // 知识点 1：对话自己讲出来了，练习 0.22，反复同一个误解 → 会讲不会用，去做题
+                // 知识点 1：对话自己讲出来了，练习 0，反复同一个误解 → 会讲不会用，去做题
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("apply"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].concept").value("good"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].application").value("bad"))

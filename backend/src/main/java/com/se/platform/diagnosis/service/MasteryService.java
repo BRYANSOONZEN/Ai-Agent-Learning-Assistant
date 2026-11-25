@@ -1,9 +1,7 @@
 package com.se.platform.diagnosis.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.se.platform.course.entity.Exercise;
 import com.se.platform.course.entity.ExerciseKnowledgePoint;
-import com.se.platform.course.mapper.ExerciseMapper;
 import com.se.platform.course.service.Grader;
 import com.se.platform.course.entity.KnowledgePoint;
 import com.se.platform.course.mapper.ExerciseKnowledgePointMapper;
@@ -21,100 +19,62 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
- * 知识点掌握度（docs/模块说明/练习与掌握度-设计.md 第五节）：加权近期正确率，再扣掉蒙对的部分。
+ * 知识点掌握度（docs/模块说明/练习与掌握度-设计.md 第五节）。每道题只算第一次作答，之后重做只是练习。
  * <pre>
- * 每次作答 i 的权重 Wᵢ = tᵢ × rᵢ
- *   tᵢ = 0.8^(n-i)：时间权重，最近一次 1，往前每次乘 0.8，只取最近 10 次
- *   rᵢ：可信度权重，程序判的 1，简答两次判分一致 0.5，老师确认过 1
- * 正确率   p = Σ Wᵢ × sᵢ / Σ Wᵢ        sᵢ = 这题得分 0～1
- * 蒙对概率 g = Σ Wᵢ × gᵢ / Σ Wᵢ        gᵢ = 这题蒙对的概率（单选 1/选项数，判断 0.5……）
- * 掌握度   m = max(0, (p − g) / (1 − g))
- * 作答少于 3 次：m 再乘 次数/3，避免做对 1 道就算掌握
+ * 每道题的得分 s：答对 1，答错 0；多选少选 0.5；简答 = 答到的要点数 / 要点总数
+ * 原始掌握度 first  = 第一次是在练习（内容项）里做的题，得分求平均；之后不再改
+ * 补练       remedy = 第一次是在小助手推荐、干预布置里做的题（都是没做过的新题），得分求平均
+ * 当前掌握度 m      = 补练够 2 道用 remedy，否则用 first（画像颜色、推荐、干预都看它）
+ * 补练状态（第一次 < 0.8 才有）：补练够 2 道且 remedy ≥ 0.8 → recovered 已补回来；做过补练但还没到 → practicing 补练中
  * </pre>
- * 等老师确认的简答（pending）不算。一道题可以关联几个知识点，它的每次作答都算进这几个知识点。
+ * 不加时间权重、不扣蒙对的部分、不打次数折扣。第一次是等老师确认的简答（pending），确认之前这道题先不算。
+ * 一道题可以关联几个知识点，它的作答都算进这几个知识点。
  */
 @Service
 public class MasteryService {
 
-    static final int WINDOW = 10;
-    static final double DECAY = 0.8;
-    static final int MIN_ATTEMPTS = 3;
+    /** 补练至少几道新题才算数 */
+    public static final int MIN_REMEDY = 2;
+    /** 补练平均分达到多少算“已补回来” */
+    public static final double RECOVERED = 0.8;
+    public static final String STATUS_RECOVERED = "recovered";
+    public static final String STATUS_PRACTICING = "practicing";
 
     private final MasteryMapper masteryMapper;
     private final AnswerRecordMapper answerMapper;
     private final ExerciseKnowledgePointMapper linkMapper;
     private final KnowledgePointMapper kpMapper;
-    private final ExerciseMapper exerciseMapper;
 
     public MasteryService(MasteryMapper masteryMapper, AnswerRecordMapper answerMapper,
-                          ExerciseKnowledgePointMapper linkMapper, KnowledgePointMapper kpMapper,
-                          ExerciseMapper exerciseMapper) {
-        this.exerciseMapper = exerciseMapper;
+                          ExerciseKnowledgePointMapper linkMapper, KnowledgePointMapper kpMapper) {
         this.masteryMapper = masteryMapper;
         this.answerMapper = answerMapper;
         this.linkMapper = linkMapper;
         this.kpMapper = kpMapper;
     }
 
-    /** 一次作答：得分 s、蒙对概率 g、可信度权重 r */
-    public record Attempt(double score, double guess, double reliability) {
-    }
-
-    /** 只有对错的作答（旧接口，g = 0、r = 1） */
-    public static Double compute(List<Boolean> results) {
-        return computeAttempts(results.stream()
-                .map(b -> new Attempt(Boolean.TRUE.equals(b) ? 1 : 0, 0, 1)).toList());
-    }
-
-    /** 按作答（从早到晚）算掌握度，0～1，保留 4 位小数；没作答返回 null */
-    public static Double computeAttempts(List<Attempt> all) {
-        if (all.isEmpty()) {
+    /** 每道题一个得分（0～1）→ 平均分，保留 4 位小数；没有作答返回 null */
+    public static Double compute(List<Double> scores) {
+        if (scores.isEmpty()) {
             return null;
         }
-        List<Attempt> recent = all.subList(Math.max(0, all.size() - WINDOW), all.size());
-        int n = recent.size();
-        double sum = 0;
-        double guess = 0;
-        double weights = 0;
-        for (int i = 0; i < n; i++) {
-            Attempt a = recent.get(i);
-            double w = Math.pow(DECAY, n - 1 - i) * a.reliability(); // 最近一次时间权重 1，往前每次乘 0.8
-            weights += w;
-            sum += w * a.score();
-            guess += w * a.guess();
-        }
-        if (weights == 0) {
-            return null;
-        }
-        double p = sum / weights;
-        double g = guess / weights;
-        double m = g >= 1 ? 0 : Math.max(0, (p - g) / (1 - g));
-        if (all.size() < MIN_ATTEMPTS) {
-            m = m * all.size() / MIN_ATTEMPTS;
-        }
-        return Math.round(m * 10000) / 10000.0;
+        double sum = scores.stream().mapToDouble(Double::doubleValue).sum();
+        return Math.round(sum / scores.size() * 10000) / 10000.0;
     }
 
-    /** 一条作答记录 → Attempt。旧记录没存得分、g、r：得分按对错，g 按题型算，r = 1 */
-    Attempt attemptOf(AnswerRecord a, Map<Long, Exercise> exercises) {
-        double score = a.getScore() != null ? a.getScore() : Boolean.TRUE.equals(a.getIsCorrect()) ? 1 : 0;
-        Double g = a.getGuess();
-        if (g == null) {
-            Exercise e = exercises.get(a.getExerciseId());
-            g = e == null ? 0 : Grader.guess(e.getType(), count(e.getOptions()), count(e.getReasons()));
-        }
-        return new Attempt(score, g, a.getReliability() == null ? 1 : a.getReliability());
+    /** 一条作答的得分。旧记录没存得分：按对错算 */
+    static double scoreOf(AnswerRecord a) {
+        return a.getScore() != null ? a.getScore() : Boolean.TRUE.equals(a.getIsCorrect()) ? 1 : 0;
     }
 
-    private static int count(String jsonArray) {
-        try {
-            return jsonArray == null || jsonArray.isBlank() ? 0 : JSON.readTree(jsonArray).size();
-        } catch (Exception e) {
-            return 0;
+    /** 每道题只留第一次的作答（records 从早到晚）；第一次还在等老师确认的，这道题先不算 */
+    static List<AnswerRecord> firstPerExercise(List<AnswerRecord> records) {
+        Map<Long, AnswerRecord> first = new java.util.LinkedHashMap<>();
+        for (AnswerRecord a : records) {
+            first.putIfAbsent(a.getExerciseId(), a);
         }
+        return first.values().stream().filter(a -> !Grader.PENDING.equals(a.getStatus())).toList();
     }
-
-    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /** good 掌握 / medium 一般 / weak 薄弱 / none 还没练过（阈值和 docs/api.md 一致） */
     public static String level(Double mastery) {
@@ -143,12 +103,6 @@ public class MasteryService {
             if (kp == null) {
                 continue; // 知识点已删除
             }
-            List<AnswerRecord> records = answersOf(studentId, kpId).stream()
-                    .filter(a -> !Grader.PENDING.equals(a.getStatus())).toList();
-            Map<Long, Exercise> exercises = records.isEmpty() ? Map.of()
-                    : exerciseMapper.selectByIds(records.stream().map(AnswerRecord::getExerciseId).distinct().toList())
-                    .stream().collect(Collectors.toMap(Exercise::getId, e -> e));
-            List<Attempt> attempts = records.stream().map(a -> attemptOf(a, exercises)).toList();
             Mastery row = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
                     .eq(Mastery::getStudentId, studentId)
                     .eq(Mastery::getKnowledgePointId, kpId));
@@ -158,17 +112,68 @@ public class MasteryService {
                 row.setStudentId(studentId);
                 row.setKnowledgePointId(kpId);
             }
-            row.setMastery(computeAttempts(attempts));
-            row.setAttemptCount(attempts.size());
-            row.setCorrectCount((int) attempts.stream().filter(x -> x.score() >= 1).count());
+            fill(row, answersOf(studentId, kpId));
             if (row.getId() == null) {
                 masteryMapper.insert(row);
             } else {
                 masteryMapper.updateById(row);
             }
-            changes.add(new MasteryChange(kpId, kp.getName(), before, row.getMastery(), level(row.getMastery())));
+            changes.add(new MasteryChange(kpId, kp.getName(), before, row.getMastery(), level(row.getMastery()),
+                    row.getRemedyStatus()));
         }
         return changes;
+    }
+
+    /** 按作答（从早到晚）填好一行：原始掌握度、补练、当前掌握度、补练状态；返回有没有变 */
+    static boolean fill(Mastery row, List<AnswerRecord> records) {
+        List<Double> first = new ArrayList<>();
+        List<Double> remedy = new ArrayList<>();
+        for (AnswerRecord a : firstPerExercise(records)) {
+            (a.getItemId() != null ? first : remedy).add(scoreOf(a)); // 练习里做的 / 推荐、干预里做的
+        }
+        Double f = compute(first);
+        Double r = compute(remedy);
+        Double m = remedy.size() >= MIN_REMEDY || f == null ? r : f;
+        // 第一次就掌握了（≥ 0.8）的不需要“补回来”，不标状态
+        String status = remedy.isEmpty() || f != null && f >= RECOVERED ? null
+                : remedy.size() >= MIN_REMEDY && r >= RECOVERED ? STATUS_RECOVERED : STATUS_PRACTICING;
+        int count = first.size() + remedy.size();
+        int correct = (int) java.util.stream.Stream.concat(first.stream(), remedy.stream()).filter(x -> x >= 1).count();
+        boolean changed = !java.util.Objects.equals(m, row.getMastery()) || !java.util.Objects.equals(f, row.getFirstMastery())
+                || !java.util.Objects.equals(r, row.getRemedy()) || !java.util.Objects.equals(status, row.getRemedyStatus())
+                || !java.util.Objects.equals(count, row.getAttemptCount())
+                || !java.util.Objects.equals(correct, row.getCorrectCount())
+                || !java.util.Objects.equals(first.size(), row.getFirstCount())
+                || !java.util.Objects.equals(remedy.size(), row.getRemedyCount());
+        row.setMastery(m == null ? 0.0 : m);
+        row.setFirstMastery(f);
+        row.setFirstCount(first.size());
+        row.setRemedy(r);
+        row.setRemedyCount(remedy.size());
+        row.setRemedyStatus(status);
+        row.setAttemptCount(count);
+        row.setCorrectCount(correct);
+        return changed;
+    }
+
+    /** 启动时按作答重算所有已有的掌握度（计分方法改过后，旧的值跟着更新）；返回改了几条 */
+    public int recomputeAll() {
+        int changed = 0;
+        for (Mastery row : masteryMapper.selectList(null)) {
+            if (fill(row, answersOf(row.getStudentId(), row.getKnowledgePointId()))) {
+                masteryMapper.updateById(row);
+                changed++;
+            }
+        }
+        return changed;
+    }
+
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void recomputeOnStartup() {
+        int n = recomputeAll();
+        if (n > 0) {
+            org.slf4j.LoggerFactory.getLogger(MasteryService.class).info("掌握度按新计分方法重算了 {} 条", n);
+        }
     }
 
     /** 关联了这个知识点的题目 id */

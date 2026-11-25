@@ -6,7 +6,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { getExerciseCoverage } from '@/api/teacherCourse'
-import { ASSESS_TYPES, QUESTION_TYPES } from './exerciseLabels'
+import { ASSESS_TYPES, CUSTOM_ASSESS, QUESTION_TYPES } from './exerciseLabels'
 
 const props = defineProps({ chapterId: { type: Number, required: true } })
 const rows = ref([])
@@ -30,7 +30,7 @@ function typesText(row) {
     </div>
     <el-table :data="rows" size="small" border>
       <el-table-column prop="name" label="知识点" min-width="150" show-overflow-tooltip />
-      <el-table-column v-for="a in ASSESS_TYPES" :key="a.value" :label="a.label" width="72" align="center">
+      <el-table-column v-for="a in [...ASSESS_TYPES, CUSTOM_ASSESS]" :key="a.value" :label="a.label" width="72" align="center">
         <template #default="{ row }">
           <span :class="{ zero: !row.byAssess[a.value] }">{{ row.byAssess[a.value] }}</span>
         </template>

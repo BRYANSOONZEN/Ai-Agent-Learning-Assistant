@@ -1,12 +1,12 @@
 // Labels shared by the teacher exercise pages (docs/模块说明/练习与掌握度-设计.md)
 
 export const QUESTION_TYPES = [
-  { value: 'single_choice', label: '单选', hint: '程序判；蒙对概率 1/选项数' },
-  { value: 'two_tier', label: '两段式单选', hint: '先选答案再选理由，两段都对才算对；能分出蒙对的' },
-  { value: 'multiple', label: '多选', hint: '全对才算对' },
-  { value: 'judge', label: '判断', hint: '蒙对概率 1/2，算掌握度时扣掉' },
+  { value: 'single_choice', label: '单选', hint: '程序判，对 1 分、错 0 分' },
+  { value: 'two_tier', label: '两段式单选', hint: '先选答案再选理由，两段都对才得分；能分出蒙对的' },
+  { value: 'multiple', label: '多选', hint: '全对 1 分；选的都对但没选全 0.5 分；选错 0 分' },
+  { value: 'judge', label: '判断', hint: '程序判，对 1 分、错 0 分（容易蒙对，别出太多）' },
   { value: 'fill', label: '填空', hint: '答案是一个词或短语，和标准说法对比' },
-  { value: 'short_answer', label: '简答', hint: 'AI 判两次，一致才采用，权重最低；不一致交给老师' },
+  { value: 'short_answer', label: '简答', hint: 'AI 判两次，一致才采用，按答到几条要点给分；不一致交给老师' },
 ]
 
 export const ASSESS_TYPES = [
@@ -17,5 +17,7 @@ export const ASSESS_TYPES = [
 ]
 
 export const typeLabel = (v) => QUESTION_TYPES.find((t) => t.value === v)?.label || '单选'
-export const assessLabel = (v) => ASSESS_TYPES.find((t) => t.value === v)?.label || '概念辨析'
+// custom: a way of assessing the teacher asked for in "其他要求" (not one of the 4 checkboxes)
+export const CUSTOM_ASSESS = { value: 'custom', label: '老师定制', hint: '按“其他要求”出的' }
+export const assessLabel = (v) => (v === 'custom' ? CUSTOM_ASSESS.label : ASSESS_TYPES.find((t) => t.value === v)?.label || '概念辨析')
 export const SOURCE_LABEL = { manual: '手写', upload: '上传识别', ai: 'AI 生成' }

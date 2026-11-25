@@ -47,9 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 学习推荐（docs/design.md 5.2）：取掌握度 < 0.6 的知识点，从低到高；
- * 每个知识点挑题，优先 上次做错的 > 没做过的 > 以前错过、后来做对的，同一档里难度接近知识点的在前；
+ * 每个知识点只挑学生没做过的新题（掌握度只算每道题第一次作答，重做旧题不改掌握度），难度接近知识点的在前；
  * 每个知识点最多 3 道，一共最多 5 道，每道写明理由。
- * 推荐过的题记在 recommendation 表：做对了是 done，点"换一道"是 dismissed，这两种以后都不再推。
+ * 推荐过的题记在 recommendation 表：做过了是 done，点"换一道"是 dismissed，这两种以后都不再推。
  * 在推荐页做题和交卷一样记进学习记录、重算掌握度，所以做完刷新，推荐会跟着变。
  * 老师正在干预的知识点（干预执行中）不在这里推，学生按"老师布置"的安排做，干预结束后再恢复。
  */
@@ -168,13 +168,9 @@ public class RecommendService {
             }
             List<Boolean> h = history.getOrDefault(e.getId(), List.of());
             if (h.isEmpty()) {
-                list.add(new Candidate(e, 1, "还没做过"));
-            } else if (!h.get(h.size() - 1)) {
-                list.add(new Candidate(e, 0, "上次做错了"));
-            } else if (h.contains(false)) {
-                list.add(new Candidate(e, 2, "以前做错过，再巩固一次"));
+                list.add(new Candidate(e, 1, "还没做过的新题"));
             }
-            // 一直都做对的题不推
+            // 做过的旧题不再推：掌握度只算第一次作答，重做不改
         }
         list.sort(Comparator.comparingInt(Candidate::rank)
                 .thenComparingInt(c -> Math.abs((c.exercise.getDifficulty() == null ? 2 : c.exercise.getDifficulty())
@@ -251,11 +247,8 @@ public class RecommendService {
             QuestionResult result = LearnService.grade(exerciseService.toView(e), a.getValue());
             results.add(result);
             byCourse.computeIfAbsent(e.getCourseId(), k -> new ArrayList<>()).add(result);
-            if (result.correct()) {
-                r.setStatus(Recommendation.DONE);
-            } else {
-                r.setReason("上次做错了");
-            }
+            // 做过就算完成：这道题的第一次作答已经算进补练，再做也不改掌握度
+            r.setStatus(Recommendation.DONE);
             recommendationMapper.updateById(r);
         }
         byCourse.forEach((courseId, list) -> recordService.saveAnswers(courseId, null, list));
