@@ -48,6 +48,8 @@ public class KpRecognizer {
 
     /** 一章的资料超过这么多字就不一次交给模型（第 6 章课件 + 图片 + 视频约 2.5 万字） */
     static final int MAX_MATERIAL_CHARS = 60000;
+    /** 每个知识点最多几条要点 */
+    public static final int MAX_KEY_POINTS = 3;
     /** 8192 时实测会被截断（模型的“思考”也算输出） */
     static final int MAX_TOKENS = 16384;
     static final double SAME_NAME = 0.4;
@@ -204,6 +206,9 @@ public class KpRecognizer {
                     continue;
                 }
                 all.addAll(src);
+                if (points.size() >= MAX_KEY_POINTS) {
+                    break;   // 每个知识点最多 3 条要点（对话里每条要点要走三级提示，10 句只够 3 条）
+                }
                 points.add(Map.of("text", p.path("text").asText().strip(), "sources", src));
             }
             k.path("sources").forEach(s -> {

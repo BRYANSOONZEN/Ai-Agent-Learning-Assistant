@@ -302,6 +302,10 @@ public class ChapterKpService {
             List<KeyPoint> points = req.keyPoints() == null ? List.of() : req.keyPoints().stream()
                     .filter(p -> p.text() != null && !p.text().isBlank())
                     .map(p -> new KeyPoint(p.text().strip(), p.sources() == null ? List.of() : p.sources())).toList();
+            if (points.size() > KpRecognizer.MAX_KEY_POINTS) {
+                throw BusinessException.badRequest("每个知识点最多 " + KpRecognizer.MAX_KEY_POINTS
+                        + " 条要点；内容多的拆成两个知识点");
+            }
             kp.setKeyPoints(json.writeValueAsString(points));
             kp.setMisconceptions(json.writeValueAsString(req.misconceptions() == null ? List.of()
                     : req.misconceptions().stream().filter(m -> m != null && !m.isBlank()).toList()));

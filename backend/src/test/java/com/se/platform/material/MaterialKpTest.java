@@ -77,12 +77,14 @@ class MaterialKpTest {
         }
     }
 
-    /** 模型的回复：2 个有出处的知识点；还有一个编出来的出处 D9-P1（要去掉），一个没有任何有效出处的知识点（要去掉） */
+    /** 模型的回复：2 个有出处的知识点（第 1 个写了 4 条要点，只留前 3 条）；还有一个编出来的出处 D9-P1（要去掉），一个没有任何有效出处的知识点（要去掉） */
     static final String KPS = """
             {"knowledge_points": [
               {"name": "边界测试值的选取", "summary": "边界上、外、内各取值", "importance": "重点",
                "key_points": [{"text": "边界外的值也要测", "sources": ["D1-P4", "D9-P1"]},
-                              {"text": "错误常在边界附近", "sources": ["V1-02"]}],
+                              {"text": "错误常在边界附近", "sources": ["V1-02"]},
+                              {"text": "边界上的值也要测", "sources": ["D1-P4"]},
+                              {"text": "第 4 条要截掉", "sources": ["D1-P4"]}],
                "misconceptions": ["测中间值最有代表性"], "sources": ["D1-P4", "V1-01"]},
               {"name": "失败后的处理", "summary": "不一致时先做根因分析", "importance": "一般",
                "key_points": [{"text": "不一致要做失败根因分析", "sources": ["D1-P13-图1"]}],
@@ -146,6 +148,8 @@ class MaterialKpTest {
                 .andExpect(jsonPath("$.data.kps[0].name").value("边界测试值的选取"))
                 // 编出来的出处 D9-P1 去掉了
                 .andExpect(jsonPath("$.data.kps[0].keyPoints[0].sources", Matchers.contains("D1-P4")))
+                // 每个知识点最多 3 条要点
+                .andExpect(jsonPath("$.data.kps[0].keyPoints.length()").value(3))
                 .andExpect(jsonPath("$.data.kps[1].sources", Matchers.contains("D1-P13-图1")));
 
         // 发给模型的资料带编号：老师写的文字 D1-T0、PDF 第 4 页 D1-P4、图 D1-P13-图1、视频 V1-01
@@ -197,6 +201,12 @@ class MaterialKpTest {
                         {"name": "边界测试值的选取（老师改）", "summary": "上、外、内", "importance": "重点",
                          "keyPoints": [{"text": "边界外的值", "sources": ["D1-P4"]}], "misconceptions": []}"""))
                 .andExpect(jsonPath("$.data.edited").value(true));
+        // 老师加到 4 条要点：不收
+        mockMvc.perform(put("/api/chapter-kps/" + first).contentType(MediaType.APPLICATION_JSON).content("""
+                        {"name": "边界测试值的选取（老师改）", "importance": "重点", "misconceptions": [],
+                         "keyPoints": [{"text": "一"}, {"text": "二"}, {"text": "三"}, {"text": "四"}]}"""))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("最多 3 条要点")));
         mockMvc.perform(delete("/api/chapter-kps/" + kps.get(1).path("id").asLong()));
         mockMvc.perform(post("/api/chapters/1/kps").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"等价类划分\", \"keyPoints\": [], \"misconceptions\": []}"));

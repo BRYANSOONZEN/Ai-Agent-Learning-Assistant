@@ -254,13 +254,16 @@ onBeforeUnmount(() => clearTimeout(timer))
             <el-radio value="一般">一般</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="要点（学生应该能用自己的话讲出来的内容）">
+        <el-form-item label="要点（最多 3 条；学生应该能用自己的话讲出来的内容）">
           <div class="point-edit">
             <div v-for="(p, j) in form.points" :key="j" class="point-row">
               <el-input v-model="p.text" type="textarea" autosize />
               <el-button link type="danger" icon="Delete" @click="form.points.splice(j, 1)" />
             </div>
-            <el-button link type="primary" icon="Plus" @click="form.points.push({ text: '', sources: [] })">
+            <el-button
+              link type="primary" icon="Plus" :disabled="form.points.length >= 3"
+              @click="form.points.push({ text: '', sources: [] })"
+            >
               加一条要点
             </el-button>
           </div>
