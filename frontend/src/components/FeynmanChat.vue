@@ -5,7 +5,8 @@
  * per key point, then points to the material, never gives the answer), ends by itself when everything is
  * explained or after 10 turns, recaps, fills in what was missing (only if the student really tried) and
  * suggests what to review.
- * No score: the summary says how each key point was explained. When done, `finished` is emitted
+ * No score. At the end the student sees a content summary (each knowledge point and its key points);
+ * how each key point went is kept on the server for the study assistant, not shown here. When done, `finished` is emitted
  * (the server has already recorded the item as finished, so the next item unlocks).
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
@@ -68,7 +69,7 @@ onMounted(() => run(() => startFeynman(props.itemId)))
       <span class="who"><span class="avatar">{{ peer.slice(-1) }}</span> {{ peer }} · 还没学过这一章的同学</span>
       <template v-if="kp && !done">
         <span class="sw-tag blue">知识点 {{ s.kpIdx + 1 }}/{{ s.kps.length }}：{{ kp.name }}</span>
-        <span class="muted">讲清 {{ kp.clear }}/{{ kp.total }} 条 · 第 {{ kp.turns }}/{{ kp.maxTurns }} 句</span>
+        <span class="muted">第 {{ kp.turns }}/{{ kp.maxTurns }} 句</span>
       </template>
       <span v-else-if="done" class="sw-tag teal">对话完成</span>
     </div>

@@ -50,8 +50,10 @@ public class FeynmanEngine {
 
     /** 每个知识点学生最多说几句，满了自动结束 */
     public static final int MAX_TURNS = 10;
-    /** 至少认真尝试几次，才会补充没讲清的要点 */
+    /** 至少认真尝试几次，才算“认真尝试过”（记在后台的学习情况里） */
     public static final int MIN_ATTEMPTS = 3;
+    /** 同一级提示：学生连续几次没进展才升一级 */
+    public static final int TRIES_PER_LEVEL = 2;
 
     private final FeynmanDraftService drafts;
     private final FeynmanSessionMapper sessionMapper;
@@ -84,6 +86,7 @@ public class FeynmanEngine {
     public static class Point {
         public String status = "none";
         public int level;
+        public int tries;          // 当前级别已经问了几次（同一级没进展最多问 2 次才升级）
         public String how;
         public String quote;
         public boolean exhausted;
@@ -102,7 +105,8 @@ public class FeynmanEngine {
         public boolean misconAsked;
         public boolean misconFixed;
         public boolean attempted;
-        public String review;       // 推荐复习哪里
+        public String review;       // 推荐复习哪里（后台）
+        public String statusSummary; // 学习情况小结（后台，不给学生看，以后给小助手用）
     }
 
     public static class State {
@@ -204,7 +208,6 @@ public class FeynmanEngine {
         boolean progress = apply(k, j.path("points"), said);
 
         String ack = cleanAck(j.path("ack").asText(""));
-        Integer before = k.target;
         boolean allClear = k.points.stream().allMatch(p -> "clear".equals(p.status));
         if (allClear || k.turns >= MAX_TURNS) {
             if (!ack.isEmpty()) {
@@ -220,12 +223,8 @@ public class FeynmanEngine {
         } else if (!k.misconAsked && k.turns >= 2 && !k.misconFixed) {
             k.misconAsked = true;   // 讲了两句以后，小林带着常见误解问一次：看学生能不能指出错在哪
             next = d.path("draft").path("misconception_probe").path("line").asText();
-        } else if (progress && before != null && target(k) == before
-                && !j.path("followup").asText("").isBlank()) {
-            // 这条要点有进展但还没讲清：按学生刚说的，追问还缺的部分（不原样重复同一级提示），级别不变
-            next = j.path("followup").asText().strip();
         } else {
-            next = nextQuestion(k, d, progress);
+            next = nextQuestion(k, d, progress, j.path("followup").asText("").strip());
             if (next == null) {   // 每条没讲清的要点都引导到头了
                 finish(s, st, k, d);
                 return view(s);
@@ -296,23 +295,41 @@ public class FeynmanEngine {
         return -1;
     }
 
-    /** 下一句追问：有进展就留在当前级别（第一次问这条要点从 L1 开始），没进展升一级；L3 之后指出资料 */
-    String nextQuestion(Kp k, JsonNode d, boolean progress) {
+    /**
+     * 下一句追问（每条要点各算各的）：
+     * 第一次问这条要点（或从别的要点转回来）：给当前级别的提示，第一次是 L1；
+     * 同一条要点、这一句有进展但还没讲清：级别不变、次数清零，用大模型写的针对性追问；
+     * 同一条要点、这一句没进展：同一级还没问满 2 次，就在这一级再问一次（用针对性追问换个说法，不原样重复）；
+     * 问满 2 次才升一级 L1 → L2 → L3；L3 也问满 2 次还没讲清：不给答案，指出资料，换下一条。
+     */
+    String nextQuestion(Kp k, JsonNode d, boolean progress, String followup) {
         int t = target(k);
         if (t < 0) {
             return null;
         }
         Point p = k.points.get(t);
         boolean sameTarget = k.target != null && k.target == t;
-        if (p.level == 0 || sameTarget) {   // 同一条要点再问一次就升一级，不原样重复
-            p.level++;
-        }
         k.target = t;
         JsonNode kp = keyPoint(d, t + 1);
+        if (p.level == 0 || !sameTarget) {
+            p.level = Math.max(p.level, 1);
+            p.tries = 1;
+            return kp.path("L" + p.level).asText();
+        }
+        if (progress) {
+            p.tries = 1;
+            return followup.isEmpty() ? "能再具体说说吗？" + kp.path("L" + p.level).asText() : followup;
+        }
+        if (p.tries < TRIES_PER_LEVEL) {
+            p.tries++;
+            return followup.isEmpty() ? "你再想想：" + kp.path("L" + p.level).asText() : followup;
+        }
+        p.level++;
+        p.tries = 1;
         if (p.level <= 3) {
             return kp.path("L" + p.level).asText();
         }
-        p.exhausted = true;   // 第 4 次：不给答案，指出资料；这条要点不再追问
+        p.exhausted = true;   // 不给答案，指出资料；这条要点不再追问
         String pointer = pointer(d, t);
         pointer = pointer.isEmpty() ? "资料里" : pointer;
         String more = nextQuestionAfterPointer(k, d);
@@ -326,6 +343,7 @@ public class FeynmanEngine {
         }
         Point p = k.points.get(t);
         p.level = Math.max(p.level, 1);
+        p.tries = 1;
         k.target = t;
         return "我们先说另一块：" + keyPoint(d, t + 1).path("L" + p.level).asText();
     }
@@ -363,7 +381,6 @@ public class FeynmanEngine {
         }
         k.attempted = k.attempted && k.attempts >= MIN_ATTEMPTS;
         java.util.LinkedHashSet<String> pointers = new java.util.LinkedHashSet<>();
-        List<String> supplements = new ArrayList<>();
         for (int i = 0; i < k.points.size(); i++) {
             Point p = k.points.get(i);
             if ("clear".equals(p.status)) {
@@ -376,32 +393,38 @@ public class FeynmanEngine {
             }
             if (k.attempted) {
                 p.how = "supplemented";
-                supplements.add(d.path("keyPoints").path(i).asText());
             }
         }
-        if (!supplements.isEmpty()) {
-            StringBuilder b = new StringBuilder("我刚去翻了资料，原来还有你没讲到的：");
-            for (int i = 0; i < supplements.size(); i++) {
-                b.append("\n").append(i + 1).append(". ").append(supplements.get(i));
-            }
-            say(s, st.idx, FeynmanMessage.AI, b.toString(), null, null);
-        }
+        // 学习情况（每条要点怎么讲清的、建议复习哪里）只记在后台，不给学生看，以后给小助手用
         if (!pointers.isEmpty()) {
             k.review = String.join("、", pointers);
-            say(s, st.idx, FeynmanMessage.SYSTEM, (k.attempted ? "" : "这几块你还没怎么讲，")
-                    + "建议接下来先看：" + k.review, null, null);
         }
+        k.statusSummary = summary(k, d);
         k.phase = "done";
-        say(s, st.idx, FeynmanMessage.SYSTEM, summary(k, d), null, null);
         if (st.idx + 1 < st.kps.size()) {
             st.idx++;
             opening(s, st, drafts.drafts(drafts.find(s.getItemId())).get(st.idx), st.idx);
         } else {
             s.setStatus(FeynmanSession.DONE);
+            // 给学生看的总结：这次讲了哪几个知识点、每个知识点有哪几条要点（老师确认的原文，程序直接写，不调模型）
+            say(s, st.idx, FeynmanMessage.SYSTEM, contentSummary(drafts.drafts(drafts.find(s.getItemId()))), null, null);
             say(s, st.idx, FeynmanMessage.SYSTEM, "对话完成了，下一项已经解锁。", null, null);
             finishItem(s);
         }
         save(s, st);
+    }
+
+    /** 对话总结（给学生看）：每个知识点和它的全部要点 */
+    static String contentSummary(List<JsonNode> all) {
+        StringBuilder b = new StringBuilder("对话总结：这次讲了 " + all.size() + " 个知识点");
+        for (JsonNode n : all) {
+            b.append("\n\n「").append(n.path("name").asText()).append("」的要点：");
+            JsonNode pts = n.path("keyPoints");
+            for (int i = 0; i < pts.size(); i++) {
+                b.append("\n").append(i + 1).append(". ").append(pts.get(i).asText());
+            }
+        }
+        return b.toString();
     }
 
     /** 短反应只是“嗯，我在听”的作用：去掉里面的问句和开头的对错评判 */

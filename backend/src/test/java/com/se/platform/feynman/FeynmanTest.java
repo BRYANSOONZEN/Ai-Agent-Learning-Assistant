@@ -159,17 +159,23 @@ class FeynmanTest {
                 "为什么边界比中间更重要？"));
         Assertions.assertTrue(lastAi(say(sid, "测50没用，边界比较重要")).endsWith("为什么边界比中间更重要？"));
 
-        // 第 4 句：模型说讲清了要点 2，但摘的不是学生原话 → 不算，同一条要点再问就升级（L2）
+        // 第 4 句：模型说讲清了要点 2，但摘的不是学生原话 → 不算；同一级没进展第 1 次 → 还在这一级，换个说法再问（不升级）
         fake.reply(turn("explain", true, "[{\"no\":2,\"status\":\"clear\",\"quote\":\"错误常发生在边界附近\"}]", false, "嗯"));
-        Assertions.assertTrue(lastAi(say(sid, "可能发现不了吧")).endsWith("程序员把 ≥1 写成 >1，测 50 能发现吗？"));
+        Assertions.assertTrue(lastAi(say(sid, "可能发现不了吧")).endsWith("你再想想：为什么挑这些？"));
 
-        // 第 5 句：没进展 → L3；第 6 句：没进展 → 不给答案，指出资料
+        // 第 5 句：同一级连续 2 次没进展 → 升到 L2
         fake.reply(turn("explain", true, "[]", false, "好"));
-        Assertions.assertTrue(lastAi(say(sid, "出在代码里？")).endsWith("错误一般出在哪里？"));
+        Assertions.assertTrue(lastAi(say(sid, "出在代码里？")).endsWith("程序员把 ≥1 写成 >1，测 50 能发现吗？"));
+        // 第 6 句：L2 第 1 次没进展 → 用模型的针对性追问换个角度
+        fake.reply(turn("explain", true, "[]", false, "好", "如果只测 50，>1 写错了会暴露吗？"));
+        Assertions.assertTrue(lastAi(say(sid, "不太确定")).endsWith("如果只测 50，>1 写错了会暴露吗？"));
+        // 第 7 句：L3；第 8 句：L3 再问一次；第 9 句：不给答案，指出资料
         fake.reply(turn("explain", true, "[]", false, "好"));
-        Assertions.assertTrue(lastAi(say(sid, "不太确定")).contains("课件第 5 页"));
+        Assertions.assertTrue(lastAi(say(sid, "应该不会")).endsWith("错误一般出在哪里？"));
+        Assertions.assertTrue(lastAi(say(sid, "代码里吧")).endsWith("你再想想：错误一般出在哪里？"));
+        Assertions.assertTrue(lastAi(say(sid, "不知道")).contains("课件第 5 页"));
 
-        // 第 7 句：要点 2 引导到头 → 自动收尾：总评、复述、补充（认真尝试了 5 次）、建议复习、小结、对话完成
+        // 第 10 句：满 10 句自动收尾：总评、复述；学生只看到对话总结（知识点和全部要点），学习情况记在后台
         fake.reply(turn("explain", true, "[]", false, "明白"))
                 .then("{\"points\":[{\"no\":1,\"status\":\"clear\",\"quote\":\"要测0\"},{\"no\":2,\"status\":\"partial\",\"quote\":\"边界比较重要\"}],"
                         + "\"attempted\":true,\"misconception_fixed\":true,\"recap\":\"我记住啦：测下限要测 0\"}");
@@ -180,10 +186,15 @@ class FeynmanTest {
                 .andExpect(jsonPath("$.data.kps[0].misconceptionFixed").value(true));
         String all = r.andReturn().getResponse().getContentAsString();
         Assertions.assertTrue(all.contains("我理解一下：测下限要测 0"));        // 去掉了重复的“我记住啦”
-        Assertions.assertTrue(all.contains("错误常发生在边界附近"));            // 补充用的是老师确认的要点原文
-        Assertions.assertTrue(all.contains("建议接下来先看：课件第 5 页"));
-        Assertions.assertFalse(all.contains("考考我"));                         // 已去掉“考一考”
-        Assertions.assertTrue(all.contains("要点 2：讲了一部分，阿哲补充了"));
+        Assertions.assertTrue(all.contains("对话总结：这次讲了 1 个知识点"));
+        Assertions.assertTrue(all.contains("1. 边界外的值也要测，比如 0"));     // 要点原文（老师确认的）
+        Assertions.assertTrue(all.contains("2. 错误常发生在边界附近"));
+        Assertions.assertFalse(all.contains("小结："));                         // 学习情况不给学生看
+        Assertions.assertFalse(all.contains("我刚去翻了资料"));
+        Assertions.assertFalse(all.contains("建议接下来先看"));
+        String state = jdbc.queryForObject("SELECT state FROM feynman_session WHERE id = ?", String.class, sid);
+        Assertions.assertTrue(state.contains("要点 2：讲了一部分，阿哲补充了"));   // 记在后台
+        Assertions.assertTrue(state.contains("课件第 5 页"));
         say(sid, "还能说吗").andExpect(jsonPath("$.code").value(400));
         mockMvc.perform(get("/api/learn/courses/1")).andExpect(jsonPath("$.data.doneItemIds", Matchers.hasItem(3)));
     }
@@ -197,7 +208,7 @@ class FeynmanTest {
         long sid = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start"))
                 .andReturn().getResponse().getContentAsString()).path("data").path("id").asLong();
 
-        // 一直闲聊：L1～L3、指出资料都走完，第 8 句左右自动收尾；几乎没尝试 → 不补充，只推荐复习
+        // 一直闲聊：每一级问 2 次才升级，10 句用完自动收尾；学生看到的总结一样是知识点和全部要点
         fake.reply(turn("chat", false, "[]", false, "哈哈"));
         String last = "";
         for (int i = 0; i < 10; i++) {
@@ -209,7 +220,10 @@ class FeynmanTest {
         }
         Assertions.assertFalse(last.isEmpty(), "10 句以内应该自动收尾");
         Assertions.assertFalse(last.contains("我刚去翻了资料"));
-        Assertions.assertTrue(last.contains("这几块你还没怎么讲"));
+        Assertions.assertTrue(last.contains("对话总结：这次讲了 1 个知识点"));
+        Assertions.assertTrue(last.contains("2. 错误常发生在边界附近"));
+        String state = jdbc.queryForObject("SELECT state FROM feynman_session WHERE id = ?", String.class, sid);
+        Assertions.assertTrue(state.contains("\"attempted\":false"));
     }
 
     @Test
