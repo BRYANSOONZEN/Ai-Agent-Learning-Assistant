@@ -125,8 +125,12 @@ public class FeynmanEngine {
         return new Availability(true, d.size(), d.stream().map(n -> n.path("name").asText()).toList());
     }
 
-    /** 开始，或接着上次没聊完的 */
+    /** 开始，或接着上次没聊完的；已经完成过的，默认显示上一次（again = true 才重新开始一次） */
     public SessionView start(Long itemId) {
+        return start(itemId, false);
+    }
+
+    public SessionView start(Long itemId, boolean again) {
         long student = CurrentUser.studentId();
         ChapterItem item = itemMapper.selectById(itemId);
         if (item == null) {
@@ -139,6 +143,14 @@ public class FeynmanEngine {
                 .eq(FeynmanSession::getStatus, FeynmanSession.OPEN).last("LIMIT 1"));
         if (open != null) {
             return view(open);
+        }
+        if (!again) {
+            FeynmanSession last = sessionMapper.selectOne(new LambdaQueryWrapper<FeynmanSession>()
+                    .eq(FeynmanSession::getStudentId, student).eq(FeynmanSession::getItemId, itemId)
+                    .eq(FeynmanSession::getStatus, FeynmanSession.DONE).orderByDesc(FeynmanSession::getId).last("LIMIT 1"));
+            if (last != null) {
+                return view(last);   // 上一次的对话和总结都保留，学生可以选“再讲一次”
+            }
         }
         FeynmanSetup setup = drafts.find(itemId);
         if (setup == null || !FeynmanSetup.CONFIRMED.equals(setup.getStatus())) {
@@ -407,21 +419,31 @@ public class FeynmanEngine {
         } else {
             s.setStatus(FeynmanSession.DONE);
             // 给学生看的总结：这次讲了哪几个知识点、每个知识点有哪几条要点（老师确认的原文，程序直接写，不调模型）
-            say(s, st.idx, FeynmanMessage.SYSTEM, contentSummary(drafts.drafts(drafts.find(s.getItemId()))), null, null);
+            say(s, st.idx, FeynmanMessage.SYSTEM, contentSummary(drafts.drafts(drafts.find(s.getItemId())), st), null, null);
             say(s, st.idx, FeynmanMessage.SYSTEM, "对话完成了，下一项已经解锁。", null, null);
             finishItem(s);
         }
         save(s, st);
     }
 
-    /** 对话总结（给学生看）：每个知识点和它的全部要点 */
-    static String contentSummary(List<JsonNode> all) {
+    /**
+     * 对话总结（给学生看）：每个知识点和它的全部要点（老师确认的原文）。
+     * 这次没讲清的要点，后面提醒去哪里复习（课件第几页、视频几分几秒）；讲得怎么样的细节不在这里，记在后台给小助手。
+     */
+    static String contentSummary(List<JsonNode> all, State st) {
         StringBuilder b = new StringBuilder("对话总结：这次讲了 " + all.size() + " 个知识点");
-        for (JsonNode n : all) {
+        for (int k = 0; k < all.size(); k++) {
+            JsonNode n = all.get(k);
+            Kp kp = st != null && k < st.kps.size() ? st.kps.get(k) : null;
             b.append("\n\n「").append(n.path("name").asText()).append("」的要点：");
             JsonNode pts = n.path("keyPoints");
             for (int i = 0; i < pts.size(); i++) {
                 b.append("\n").append(i + 1).append(". ").append(pts.get(i).asText());
+                boolean clear = kp != null && i < kp.points.size() && "clear".equals(kp.points.get(i).status);
+                String where = pointer(n, i);
+                if (kp != null && !clear && !where.isBlank()) {
+                    b.append("\n   这一条这次还没讲清，可以复习：").append(where);
+                }
             }
         }
         return b.toString();

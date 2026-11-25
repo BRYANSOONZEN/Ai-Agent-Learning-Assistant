@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 费曼式 AI 对话。老师：选知识点、生成草稿、确认；学生：开始、说话 */
@@ -61,10 +62,13 @@ public class FeynmanController {
         return Result.ok(engine.availability(id));
     }
 
-    /** POST /api/learn/items/{id}/feynman/start：开始，或接着上次没聊完的 */
+    /**
+     * POST /api/learn/items/{id}/feynman/start：开始，或接着上次没聊完的；完成过的显示上一次。
+     * ?again=true：再讲一次（上一次的保留）
+     */
     @PostMapping("/api/learn/items/{id}/feynman/start")
-    public Result<SessionView> start(@PathVariable Long id) {
-        return Result.ok(engine.start(id));
+    public Result<SessionView> start(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean again) {
+        return Result.ok(engine.start(id, again));
     }
 
     @GetMapping("/api/learn/feynman/{sessionId}")

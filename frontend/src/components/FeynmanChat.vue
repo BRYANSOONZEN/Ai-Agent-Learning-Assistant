@@ -34,7 +34,7 @@ async function run(fn) {
   try {
     const before = s.value?.status
     s.value = await fn()
-    if (s.value.status === 'done' && before !== 'done') emit('finished')
+    if (s.value.status === 'done' && before && before !== 'done') emit('finished') // only when it ends here, not when reopening
   } finally {
     sending.value = false
     scroll()
@@ -52,6 +52,11 @@ async function send() {
   })
 }
 
+
+// try again: a new conversation; the previous one is kept on the server
+function again() {
+  run(() => startFeynman(props.itemId, true))
+}
 
 function onKey(e) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -100,7 +105,10 @@ onMounted(() => run(() => startFeynman(props.itemId)))
       />
       <el-button type="primary" :loading="sending" :disabled="!text.trim()" @click="send">发送</el-button>
     </div>
-    <div v-else class="done">对话完成，下一项已解锁。</div>
+    <div v-else class="done">
+      对话完成，下一项已解锁。上一次的对话和总结会一直保留在这里。
+      <el-button size="small" type="primary" plain :loading="sending" @click="again">再讲一次</el-button>
+    </div>
   </div>
 </template>
 
@@ -189,6 +197,10 @@ onMounted(() => run(() => startFeynman(props.itemId)))
   align-items: flex-end;
 }
 .done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   color: #2b9c72;
   font-size: 13px;
 }

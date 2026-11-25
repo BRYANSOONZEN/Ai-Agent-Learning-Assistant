@@ -79,8 +79,9 @@ export function getFeynman(itemId) {
 }
 
 // start, or continue the open one -> { id, status, kpIdx, waitingCheck, kps: [...], messages: [{ role, content, kpIdx }] }
-export function startFeynman(itemId) {
-  return request.post(`/learn/items/${itemId}/feynman/start`)
+// a finished dialogue comes back as it was (with its summary); again = true starts a new attempt
+export function startFeynman(itemId, again = false) {
+  return request.post(`/learn/items/${itemId}/feynman/start`, null, { params: again ? { again: true } : {} })
 }
 
 export function feynmanReply(sessionId, text) {

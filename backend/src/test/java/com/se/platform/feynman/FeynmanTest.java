@@ -189,6 +189,9 @@ class FeynmanTest {
         Assertions.assertTrue(all.contains("对话总结：这次讲了 1 个知识点"));
         Assertions.assertTrue(all.contains("1. 边界外的值也要测，比如 0"));     // 要点原文（老师确认的）
         Assertions.assertTrue(all.contains("2. 错误常发生在边界附近"));
+        // 没讲清的要点提醒去哪里复习；讲清的不提醒
+        Assertions.assertTrue(all.contains("这一条这次还没讲清，可以复习：课件第 5 页"));
+        Assertions.assertFalse(all.contains("可以复习：课件第 4 页"));
         Assertions.assertFalse(all.contains("小结："));                         // 学习情况不给学生看
         Assertions.assertFalse(all.contains("我刚去翻了资料"));
         Assertions.assertFalse(all.contains("建议接下来先看"));
@@ -197,6 +200,18 @@ class FeynmanTest {
         Assertions.assertTrue(state.contains("课件第 5 页"));
         say(sid, "还能说吗").andExpect(jsonPath("$.code").value(400));
         mockMvc.perform(get("/api/learn/courses/1")).andExpect(jsonPath("$.data.doneItemIds", Matchers.hasItem(3)));
+
+        // 再打开：显示上一次的对话和总结；点“再讲一次”才开始新的，上一次保留
+        mockMvc.perform(post("/api/learn/items/3/feynman/start"))
+                .andExpect(jsonPath("$.data.id").value(sid))
+                .andExpect(jsonPath("$.data.status").value("done"));
+        long again = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start").param("again", "true"))
+                .andReturn().getResponse().getContentAsString()).path("data").path("id").asLong();
+        Assertions.assertNotEquals(sid, again);
+        mockMvc.perform(get("/api/learn/feynman/" + sid)).andExpect(jsonPath("$.data.status").value("done"));
+        mockMvc.perform(post("/api/learn/items/3/feynman/start"))
+                .andExpect(jsonPath("$.data.id").value(again))       // 没讲完的新一次优先
+                .andExpect(jsonPath("$.data.status").value("open"));
     }
 
     @Test
