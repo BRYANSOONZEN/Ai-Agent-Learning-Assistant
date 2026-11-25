@@ -19,6 +19,7 @@ STYLE = {
     "e": ("940B01", "940B01"),     # 开始 / 结束（实心）
     "f": ("FFFFFF", "8C8C8C"),     # 公式 / 说明（虚线）
     "db": ("F5F5F5", "595959"),    # 数据
+    "io": ("FFFFFF", "262626"),    # 输入 / 输出（平行四边形）
 }
 
 
@@ -41,7 +42,8 @@ def _font(run, size, color="262626", bold=False):
 
 def node(slide, cx, cy, w, h, text, kind="p", size=8, bold_first=True):
     fill, line = STYLE[kind]
-    shape = {"d": MSO_SHAPE.DIAMOND, "e": MSO_SHAPE.FLOWCHART_TERMINATOR, "db": MSO_SHAPE.CAN}.get(kind, MSO_SHAPE.RECTANGLE)
+    shape = {"d": MSO_SHAPE.DIAMOND, "e": MSO_SHAPE.FLOWCHART_TERMINATOR, "db": MSO_SHAPE.CAN,
+             "io": MSO_SHAPE.FLOWCHART_DATA}.get(kind, MSO_SHAPE.RECTANGLE)
     sp = slide.shapes.add_shape(shape, Inches(cx - w / 2), Inches(cy - h / 2), Inches(w), Inches(h))
     sp.fill.solid()
     sp.fill.fore_color.rgb = _rgb(fill)
@@ -149,6 +151,18 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
             seg(slide, ax, by, bx - sgn * bw_ / 2, by, True, dash)
             if lab:
                 label(slide, ax, (y1 + by) / 2, lab)
+    if legend == "std":  # 标准流程图符号
+        lx, ly = 4.45, 4.86
+        for i, (k, t) in enumerate([("e", "开始 / 结束"), ("p", "处理（程序）"), ("t", "老师操作"), ("ai", "大模型"),
+                                    ("d", "判断"), ("io", "输入 / 输出"), ("db", "数据")]):
+            node(slide, lx + i * 0.76, ly, 0.22, 0.14 if k != "d" else 0.17, "", k, 6)
+            sp = slide.shapes.add_textbox(Inches(lx + i * 0.76 + 0.14), Inches(ly - 0.09), Inches(0.62), Inches(0.18))
+            tf = sp.text_frame
+            tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+            r = tf.paragraphs[0].add_run()
+            r.text = t
+            _font(r, 6.5, "595959")
+        return pos
     if legend:
         lx, ly = 7.05, 4.86
         for i, (k, t) in enumerate([("p", "程序"), ("t", "老师"), ("ai", "大模型"), ("d", "判断")]):
