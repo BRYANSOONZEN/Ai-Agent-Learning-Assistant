@@ -186,6 +186,13 @@ public class FeynmanEngine {
         m.setJudgment(j.toString());
         messageMapper.updateById(m);
 
+        if (j.path("failed").asBoolean(false)) {
+            // 判断失败：这一句不算进 10 句、不算认真回答、不升提示级别，请学生再说一遍
+            k.turns--;
+            say(s, st.idx, FeynmanMessage.AI, "抱歉，我刚才没听清，你能再说一遍吗？", null, null);
+            save(s, st);
+            return view(s);
+        }
         String kind = j.path("kind").asText("explain");
         if (j.path("attempt").asBoolean(false)) {
             k.attempts++;
@@ -447,8 +454,9 @@ public class FeynmanEngine {
                     new ChatRequest(List.of(ChatMessage.user(prompt)), 0.2, 4096, true));
             return json.readTree(r.result().content());
         } catch (Exception e) {
+            // 判断失败（超时、格式错）：这一句不算认真回答，也不更新要点，免得没怎么尝试的学生也拿到补充答案
             log.warn("费曼对话判断失败", e);
-            return json.createObjectNode().put("kind", "explain").put("attempt", true).put("ack", "嗯，我在听。");
+            return json.createObjectNode().put("kind", "explain").put("attempt", false).put("failed", true);
         }
     }
 

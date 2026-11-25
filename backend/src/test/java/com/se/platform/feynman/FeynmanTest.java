@@ -72,6 +72,15 @@ class FeynmanTest {
                   '[{"text":"边界外的值也要测，比如 0","sources":[]},{"text":"错误常发生在边界附近","sources":[]}]',
                   '["测中间值最有代表性"]', '[]', 0, NOW(), NOW())""");
         kpId = jdbc.queryForObject("SELECT MAX(id) FROM chapter_kp", Long.class);
+        confirmKps();
+    }
+
+    /** 第 1 章的知识点标成老师已确认（生成对话草稿的前提） */
+    private void confirmKps() {
+        jdbc.update("DELETE FROM chapter_kp_state WHERE chapter_id = 1");
+        jdbc.update("""
+                INSERT INTO chapter_kp_state (chapter_id, upload_done, status, message, created_at, updated_at)
+                VALUES (1, 1, 'confirmed', '已确认', NOW(), NOW())""");
     }
 
     private String turn(String kind, boolean attempt, String points, boolean fixed, String ack) {
@@ -200,5 +209,61 @@ class FeynmanTest {
         Assertions.assertFalse(last.isEmpty(), "10 句以内应该自动收尾");
         Assertions.assertFalse(last.contains("我刚去翻了资料"));
         Assertions.assertTrue(last.contains("这几块你还没怎么讲"));
+    }
+
+    @Test
+    void draftNeedsConfirmedKps_andStaleDraftCannotBeConfirmed() throws Exception {
+        // 知识点还没确认：不能生成
+        jdbc.update("UPDATE chapter_kp_state SET status = 'draft' WHERE chapter_id = 1");
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpIds\": [" + kpId + "]}"))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("知识点还没确认")));
+        mockMvc.perform(get("/api/chapter-items/3/feynman")).andExpect(jsonPath("$.data.kpStatus").value("draft"));
+
+        // 确认后可以生成，草稿和知识点一致
+        confirmKps();
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpIds\": [" + kpId + "]}"))
+                .andExpect(jsonPath("$.data.status").value("draft"))
+                .andExpect(jsonPath("$.data.stale.length()").value(0));
+
+        // 老师之后改了要点：提示草稿过时，不能确认
+        jdbc.update("UPDATE chapter_kp SET key_points = ? WHERE id = ?",
+                "[{\"text\":\"边界外的值也要测，比如 0 和 100\",\"sources\":[]},{\"text\":\"错误常发生在边界附近\",\"sources\":[]}]", kpId);
+        mockMvc.perform(get("/api/chapter-items/3/feynman"))
+                .andExpect(jsonPath("$.data.stale[0]").value("边界测试值的选取：要点改过"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("请重新生成草稿")));
+
+        // 重新生成后恢复正常
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kpIds\": [" + kpId + "]}"))
+                .andExpect(jsonPath("$.data.stale.length()").value(0));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm")).andExpect(jsonPath("$.data.status").value("confirmed"));
+    }
+
+    @Test
+    void judgeFailure_notCountedAsAttemptOrTurn() throws Exception {
+        fake.reply(DRAFT);
+        mockMvc.perform(post("/api/chapter-items/3/feynman/draft").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kpIds\": [" + kpId + "]}"));
+        mockMvc.perform(post("/api/chapter-items/3/feynman/confirm"));
+        long sid = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start"))
+                .andReturn().getResponse().getContentAsString()).path("data").path("id").asLong();
+
+        fake.fail("timeout");
+        ResultActions r = say(sid, "要测0吧")
+                .andExpect(jsonPath("$.data.kps[0].turns").value(0));
+        Assertions.assertEquals("抱歉，我刚才没听清，你能再说一遍吗？", lastAi(r));
+        Long attempts = jdbc.queryForObject("SELECT COUNT(*) FROM feynman_session WHERE id = ? AND state LIKE '%\"attempts\":0%'",
+                Long.class, sid);
+        Assertions.assertEquals(1L, attempts);
+
+        // 下一句正常判断：从 L1 开始，没有因为失败的那句升级
+        fake.reply(turn("explain", true, "[]", false, "嗯"));
+        Assertions.assertTrue(lastAi(say(sid, "要测0吧")).endsWith("还有吗？"));
     }
 }

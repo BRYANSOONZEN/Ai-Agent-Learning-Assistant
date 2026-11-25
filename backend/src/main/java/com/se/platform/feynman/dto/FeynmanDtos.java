@@ -13,9 +13,13 @@ public final class FeynmanDtos {
     public record Candidate(Long id, String name, String importance) {
     }
 
-    /** 老师看到的设置：选了哪些知识点、每个的草稿。status：none 还没生成 / draft 待确认 / confirmed 已确认 */
+    /**
+     * 老师看到的设置：选了哪些知识点、每个的草稿。status：none 还没生成 / draft 待确认 / confirmed 已确认。
+     * kpStatus：这一章知识点识别的状态，不是 confirmed 时不能生成草稿。
+     * stale：草稿生成之后，老师又改过（或删了）的知识点，例如“边界测试值的选取：要点改过”；要重新生成草稿。
+     */
     public record SetupView(Long itemId, String status, List<Long> kpIds, List<JsonNode> drafts,
-                            List<Candidate> candidates, int maxKps) {
+                            List<Candidate> candidates, int maxKps, String kpStatus, List<String> stale) {
     }
 
     public record DraftRequest(List<Long> kpIds) {

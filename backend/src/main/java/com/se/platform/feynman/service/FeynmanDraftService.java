@@ -23,6 +23,8 @@ import com.se.platform.feynman.mapper.FeynmanSetupMapper;
 import com.se.platform.material.dto.KpDtos.KeyPoint;
 import com.se.platform.material.entity.ChapterKp;
 import com.se.platform.material.mapper.ChapterKpMapper;
+import com.se.platform.material.mapper.ChapterKpStateMapper;
+import com.se.platform.material.entity.ChapterKpState;
 import com.se.platform.material.service.KpRecognizer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,19 +55,22 @@ public class FeynmanDraftService {
     private final ChapterService chapterService;
     private final ChapterKpMapper kpMapper;
     private final FeynmanSetupMapper setupMapper;
+    private final ChapterKpStateMapper stateMapper;
     private final KpRecognizer recognizer;
     private final AiCallLogService callLog;
     private final ObjectMapper json;
     private final PromptTemplate template = PromptTemplate.load("feynman_draft_v1");
 
     public FeynmanDraftService(ChapterItemMapper itemMapper, CourseMapper courseMapper, ChapterService chapterService,
-                               ChapterKpMapper kpMapper, FeynmanSetupMapper setupMapper, KpRecognizer recognizer,
+                               ChapterKpMapper kpMapper, FeynmanSetupMapper setupMapper,
+                               ChapterKpStateMapper stateMapper, KpRecognizer recognizer,
                                AiCallLogService callLog, ObjectMapper json) {
         this.itemMapper = itemMapper;
         this.courseMapper = courseMapper;
         this.chapterService = chapterService;
         this.kpMapper = kpMapper;
         this.setupMapper = setupMapper;
+        this.stateMapper = stateMapper;
         this.recognizer = recognizer;
         this.callLog = callLog;
         this.json = json;
@@ -77,10 +82,55 @@ public class FeynmanDraftService {
         List<Candidate> candidates = kpMapper.selectList(new LambdaQueryWrapper<ChapterKp>()
                         .eq(ChapterKp::getChapterId, item.getChapterId()).orderByAsc(ChapterKp::getSortOrder))
                 .stream().map(k -> new Candidate(k.getId(), k.getName(), k.getImportance())).toList();
+        String kpStatus = kpStatus(item.getChapterId());
         if (s == null) {
-            return new SetupView(itemId, "none", List.of(), List.of(), candidates, MAX_KPS);
+            return new SetupView(itemId, "none", List.of(), List.of(), candidates, MAX_KPS, kpStatus, List.of());
         }
-        return new SetupView(itemId, s.getStatus(), ids(s.getKpIds()), drafts(s), candidates, MAX_KPS);
+        List<JsonNode> d = drafts(s);
+        return new SetupView(itemId, s.getStatus(), ids(s.getKpIds()), d, candidates, MAX_KPS, kpStatus, stale(d));
+    }
+
+    /** 这一章知识点识别的状态：none / waiting / recognizing / draft / confirmed / failed */
+    String kpStatus(Long chapterId) {
+        ChapterKpState st = stateMapper.selectOne(new LambdaQueryWrapper<ChapterKpState>()
+                .eq(ChapterKpState::getChapterId, chapterId));
+        return st == null ? ChapterKpState.NONE : st.getStatus();
+    }
+
+    /**
+     * 草稿里存的是生成那一刻的要点和误解（补充给学生的标准答案就是它）。
+     * 老师之后在“知识点”里改了，草稿不会跟着变：这里逐个比较，列出改过或删掉的知识点。
+     */
+    List<String> stale(List<JsonNode> drafts) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode n : drafts) {
+            String name = n.path("name").asText();
+            ChapterKp kp = kpMapper.selectById(n.path("kpId").asLong());
+            if (kp == null) {
+                out.add(name + "：知识点已删除");
+                continue;
+            }
+            try {
+                List<String> points = json.readValue(kp.getKeyPoints(), POINTS).stream().map(KeyPoint::text).toList();
+                List<String> mis = json.readValue(kp.getMisconceptions(), new TypeReference<List<String>>() {
+                });
+                List<String> what = new ArrayList<>();
+                if (!points.equals(json.convertValue(n.path("keyPoints"), new TypeReference<List<String>>() {
+                }))) {
+                    what.add("要点");
+                }
+                if (!mis.equals(json.convertValue(n.path("misconceptions"), new TypeReference<List<String>>() {
+                }))) {
+                    what.add("常见误解");
+                }
+                if (!what.isEmpty()) {
+                    out.add(kp.getName() + "：" + String.join("、", what) + "改过");
+                }
+            } catch (Exception e) {
+                out.add(name + "：读不出知识点内容");
+            }
+        }
+        return out;
     }
 
     /** 生成（或重新生成）草稿：每个知识点调一次模型 */
@@ -91,6 +141,10 @@ public class FeynmanDraftService {
         }
         if (kpIds.size() > MAX_KPS) {
             throw BusinessException.badRequest("一次对话最多 " + MAX_KPS + " 个知识点，选最难理解的");
+        }
+        if (!ChapterKpState.CONFIRMED.equals(kpStatus(item.getChapterId()))) {
+            // 要点是对话里判断学生、最后补充给学生的标准答案，必须老师先确认过
+            throw BusinessException.badRequest("这一章的知识点还没确认（或改过之后还没再确认）：先到“知识点”里确认，再生成对话草稿");
         }
         Course course = courseMapper.selectById(item.getCourseId());
         Map<String, String> pointer = pointers(item.getChapterId());
@@ -128,6 +182,10 @@ public class FeynmanDraftService {
         FeynmanSetup s = find(itemId);
         if (s == null) {
             throw BusinessException.badRequest("还没有草稿");
+        }
+        List<String> stale = stale(drafts(s));
+        if (!stale.isEmpty()) {
+            throw BusinessException.badRequest("草稿生成之后知识点改过了（" + String.join("；", stale) + "），请重新生成草稿");
         }
         s.setStatus(FeynmanSetup.CONFIRMED);
         setupMapper.updateById(s);

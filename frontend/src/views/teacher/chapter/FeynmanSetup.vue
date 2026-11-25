@@ -17,6 +17,9 @@ const drafting = ref(false)
 
 const STATUS = { none: '还没生成', draft: '待确认', confirmed: '已确认，学生可以用' }
 const changed = computed(() => setup.value && picked.value.join(',') !== setup.value.kpIds.join(','))
+// 知识点要老师先确认：对话里的标准答案就是确认过的要点原文
+const kpReady = computed(() => setup.value?.kpStatus === 'confirmed')
+const stale = computed(() => setup.value?.stale || [])
 
 async function load() {
   setup.value = await getFeynmanSetup(props.item.id)
@@ -62,7 +65,11 @@ onMounted(load)
       description="这一章还没有识别出知识点：先在“知识点”里上传资料、确认知识点"
       :image-size="60"
     />
-    <div v-else class="kps">
+    <el-alert
+      v-if="setup.candidates.length && !kpReady" type="warning" :closable="false" show-icon
+      title="这一章的知识点还没确认（或改过之后还没再确认）：先到“知识点”里确认，再生成对话草稿。对话里判断学生、最后补充给学生的标准答案，就是确认过的要点原文。"
+    />
+    <div v-if="setup.candidates.length" class="kps">
       <button
         v-for="(c, i) in setup.candidates"
         :key="c.id"
@@ -77,7 +84,7 @@ onMounted(load)
       </button>
     </div>
     <div class="actions">
-      <el-button type="primary" :loading="drafting" :disabled="!picked.length" @click="draft">
+      <el-button type="primary" :loading="drafting" :disabled="!picked.length || !kpReady" @click="draft">
         {{ setup.drafts.length ? '重新生成草稿' : '生成对话草稿' }}
       </el-button>
       <span class="muted">{{ drafting ? 'AI 正在起草，每个知识点约 15 秒…' : '每个知识点约 15 秒' }}</span>
@@ -89,6 +96,10 @@ onMounted(load)
         <span class="sw-tag" :class="setup.status === 'confirmed' ? 'teal' : 'orange'">{{ STATUS[setup.status] }}</span>
         <span v-if="changed" class="muted">选的知识点改了，请重新生成</span>
       </div>
+      <el-alert
+        v-if="stale.length" type="error" :closable="false" show-icon
+        :title="`草稿生成之后知识点改过了：${stale.join('；')}。草稿里还是改之前的内容，请先确认知识点，再重新生成草稿${setup.status === 'confirmed' ? '（学生现在用的还是旧草稿）' : ''}。`"
+      />
       <article v-for="d in setup.drafts" :key="d.kpId" class="card">
         <header>
           <strong>{{ d.name }}</strong>
@@ -119,7 +130,7 @@ onMounted(load)
         </div>
       </article>
       <div class="actions">
-        <el-button v-if="setup.status !== 'confirmed'" type="primary" :disabled="changed" @click="confirm">
+        <el-button v-if="setup.status !== 'confirmed'" type="primary" :disabled="changed || stale.length > 0" @click="confirm">
           确认草稿
         </el-button>
         <span class="muted">规则：每个知识点学生最多说 10 句，自动结束；认真尝试过但没讲清的，AI 同学会补充并推荐复习；对话结果只给学生看</span>
