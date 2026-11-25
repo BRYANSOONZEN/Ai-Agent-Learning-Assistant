@@ -256,10 +256,26 @@ public class ExerciseGenService {
      * AI 不看答案做一遍，做错的（可能有歧义）直接删掉；可用的少于 2 道就再生成一次。
      */
     public List<ExerciseView> generateRemedy(Long knowledgePointId, String requirement, int count, int round) {
+        List<String> types = new ArrayList<>(REMEDY_TYPES);
+        java.util.Collections.rotate(types, -(Math.max(1, round) - 1)); // 每一轮换着题型排
+        return generateOutside(knowledgePointId, types, List.of("scenario", "concept"), requirement, count, false);
+    }
+
+    /**
+     * 老师全班干预用的新题：只出这一种考查类型（单选、判断、多选），存成草稿（来源 class）给老师逐题确认；
+     * AI 不看答案做错的不删，在检查说明里标出来给老师看。
+     */
+    public List<ExerciseView> generateForClass(Long knowledgePointId, String assessType, String requirement,
+                                               int count) {
+        return generateOutside(knowledgePointId, REMEDY_TYPES, List.of(assessType), requirement, count, true);
+    }
+
+    private List<ExerciseView> generateOutside(Long knowledgePointId, List<String> types, List<String> assess,
+                                               String requirement, int count, boolean forClass) {
         ChapterKp kp = chapterKpMapper.selectOne(new LambdaQueryWrapper<ChapterKp>()
                 .eq(ChapterKp::getKnowledgePointId, knowledgePointId).last("LIMIT 1"));
         if (kp == null) {
-            throw BusinessException.badRequest("这个知识点没有识别资料，没法生成补练题");
+            throw BusinessException.badRequest("这个知识点没有识别资料，没法出题");
         }
         com.se.platform.course.entity.Chapter chapter = chapterMapperOf(kp.getChapterId());
         Course course = courseMapper.selectById(chapter.getCourseId());
@@ -269,10 +285,6 @@ public class ExerciseGenService {
         Map<String, String> pointer = feynmanDraft.pointers(kp.getChapterId());
         Map<String, String> texts = recognizer.segments(kp.getChapterId()).stream()
                 .collect(Collectors.toMap(KpRecognizer.Seg::key, x -> x.text().getContent(), (x, y) -> x));
-        // 每一轮换着题型排，第 2 轮从第 2 种开始
-        List<String> types = new ArrayList<>(REMEDY_TYPES);
-        java.util.Collections.rotate(types, -(Math.max(1, round) - 1));
-        List<String> assess = List.of("scenario", "concept");
         Plan plan = plan(List.of(kp), count, types.subList(0, Math.min(count, types.size())), assess).get(0);
         plan = new Plan(count, plan.types(), plan.assess());
         Meter meter = new Meter();
@@ -294,18 +306,26 @@ public class ExerciseGenService {
                 } catch (BusinessException e) {
                     continue;
                 }
-                made.add(exerciseService.createRemedy(course.getId(), course.getTeacherId(), r));
+                made.add(forClass
+                        ? exerciseService.createOutside(course.getId(), course.getTeacherId(), r,
+                        ExerciseService.SOURCE_CLASS, true)
+                        : exerciseService.createRemedy(course.getId(), course.getTeacherId(), r));
+            }
+            if (forClass) {
+                solveCheck(meter, made); // 有歧义的标出来给老师看，不删
+                kept.addAll(made.stream().map(e -> exerciseService.toView(exerciseMapper.selectById(e.id()))).toList());
+                break;
             }
             for (ExerciseView e : made) {
                 if (solveFails(meter, e)) {
-                    exerciseMapper.deleteById(e.id()); // 有歧义的直接丢掉
+                    exerciseMapper.deleteById(e.id()); // 个人补练：有歧义的直接丢掉
                 } else {
                     kept.add(e);
                 }
             }
         }
         if (kept.isEmpty()) {
-            throw BusinessException.badRequest("补练题生成失败，请稍后再试");
+            throw BusinessException.badRequest("出题失败，请稍后再试");
         }
         return kept;
     }

@@ -34,3 +34,17 @@ export function getChat(chapterId) {
 export function sendChat(chapterId, message) {
   return request.post('/assistant/chat', { chapterId, message }, { timeout: 60000 })
 }
+
+// ---- teacher's class intervention, seen by the student (docs/模块说明/老师干预-全班分析.md) ----
+// GET /api/assistant/pushes -> [{ id, knowledgePointName, keyPoints, assessLabel, explanation, dueAt, done, questions }]
+export function getMyPushes() {
+  return request.get('/assistant/pushes')
+}
+// POST /api/assistant/pushes/{id}/submit { answers } -> { results, score, changes }
+export function submitPush(id, answers) {
+  return request.post(`/assistant/pushes/${id}/submit`, { answers })
+}
+// GET /api/assistant/notices -> ['老师提醒：……']
+export function getNotices() {
+  return request.get('/assistant/notices')
+}

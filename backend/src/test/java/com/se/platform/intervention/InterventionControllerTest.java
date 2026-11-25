@@ -31,7 +31,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 干预 A、B（docs/计划-干预A和B.md）。演示数据：学生03（id 7）→ A，学生04（8）→ B，学生07（11）→ AB；
  * 学生01、02、05、06 不报警。学生端用请求头 X-Demo-Student-Id 切换演示学生。
  */
-@SpringBootTest(properties = "platform.intervention.auto-approve=false")
+@SpringBootTest(properties = {"platform.intervention.auto-approve=false",
+        "platform.intervention.personal-alerts=true"}) // 旧的个人预警 A、B、AB
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class InterventionControllerTest {

@@ -19,7 +19,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAssistantSummary } from '@/api/assistant'
+import { getAssistantSummary, getMyPushes, getNotices } from '@/api/assistant'
+import PushBox from './PushBox.vue'
 import RemedyBox from './RemedyBox.vue'
 import AssistantChat from './AssistantChat.vue'
 import { getMyAssignments } from '@/api/intervention'
@@ -34,6 +35,9 @@ const loading = ref(false)
 const summary = ref(null) // { chapters, focusChapterId }
 const running = ref([]) // interventions in progress for me
 const deadlines = ref([]) // items due soon or overdue: the assistant reminds (no teacher involved)
+const pushes = ref([]) // 老师补充讲解 (class intervention) pushed to me
+const notices = ref([]) // 老师提醒
+const openPush = ref(null)
 const shownChapter = ref(null)
 const mode = ref('report') // 'report' 学习情况 | 'chat' 问问题
 const remedyKp = ref(null) // which knowledge point's 补练题 are open
@@ -53,6 +57,15 @@ async function refresh() {
     summary.value = await getAssistantSummary()
     running.value = (await getMyAssignments()).running || []
     deadlines.value = ((await getMyDeadlines()) || []).filter((d) => d.kind === 'item' && d.state !== 'later')
+    pushes.value = (await getMyPushes()) || []
+    notices.value = (await getNotices()) || []
+    // a new push I have not done yet: open by itself
+    if (pushes.value.some((p) => !p.done && !seen.value.includes('push:' + p.id)) && !hidden.value) {
+      open.value = true
+      mode.value = 'report'
+      openPush.value = pushes.value.find((p) => !p.done)?.id ?? null
+      markSeen() // pops up once; after the student closes it, only the badge stays
+    }
     if (!summary.value.chapters.some((c) => c.chapterId === shownChapter.value)) {
       shownChapter.value = summary.value.focusChapterId
     }
@@ -101,6 +114,8 @@ const newKeys = computed(() => [
   ...chapters.value.filter((c) => c.completed).map((c) => 'ch:' + c.chapterId),
   ...running.value.map((iv) => 'iv:' + iv.id),
   ...deadlines.value.map((d) => `dl:${d.itemId}:${d.state}`),
+  ...pushes.value.filter((p) => !p.done).map((p) => 'push:' + p.id),
+  ...notices.value.map((n, i) => 'note:' + i + ':' + n.length),
 ].filter((k) => !seen.value.includes(k)))
 
 function markSeen() {
@@ -200,6 +215,20 @@ function act(ch, p) {
           <div v-if="summary && !chapters.length" class="empty">
             <p>你还没开始学习。选一门课，从第一章开始吧。</p>
             <el-button type="primary" size="small" @click="router.push({ name: 'courses' }); open = false">去选课</el-button>
+          </div>
+
+          <!-- 老师补充讲解 (class intervention) and 老师提醒 -->
+          <div v-if="pushes.length || notices.length" class="teacher">
+            <h4>老师给你的</h4>
+            <p v-for="(n, i) in notices.slice(0, 3)" :key="'n' + i" class="notice">{{ n }}</p>
+            <div v-for="p in pushes" :key="p.id" class="push-item">
+              <div class="push-head" @click="openPush = openPush === p.id ? null : p.id">
+                <b>老师补充讲解：「{{ p.knowledgePointName }}」</b>
+                <el-tag size="small" :type="p.done ? 'success' : 'warning'">{{ p.done ? '已完成' : '待完成' }}</el-tag>
+              </div>
+              <small>{{ p.keyPoints.join('；') }}<template v-if="p.dueAt"> · 期限 {{ String(p.dueAt).slice(5, 16) }}</template></small>
+              <PushBox v-if="openPush === p.id" :push="p" @changed="refresh" />
+            </div>
           </div>
 
           <!-- deadline reminders: due within a few days, or overdue -->
@@ -481,6 +510,31 @@ function act(ch, p) {
 }
 .points > li.v-red {
   border-left-color: var(--app-danger);
+}
+.teacher {
+  margin-bottom: 10px;
+}
+.notice {
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--el-color-warning-light-9);
+  font-size: 13px;
+}
+.push-item {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 8px;
+}
+.push-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+.push-item small {
+  color: var(--el-text-color-secondary);
 }
 .due {
   margin-bottom: 10px;

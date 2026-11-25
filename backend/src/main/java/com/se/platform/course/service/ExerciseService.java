@@ -229,13 +229,21 @@ public class ExerciseService {
     /** 小助手生成的补练题：不属于任何一次练习（item_id 为空），不是草稿，不经过老师审核，来源 assistant */
     public static final String SOURCE_ASSISTANT = "assistant";
 
+    /** 老师全班干预推送用的新题：先是草稿，老师确认后推送才变成正式（来源 class，不属于任何练习） */
+    public static final String SOURCE_CLASS = "class";
+
     public ExerciseView createRemedy(Long courseId, Long teacherId, ExerciseSaveRequest req) {
+        return createOutside(courseId, teacherId, req, SOURCE_ASSISTANT, false);
+    }
+
+    public ExerciseView createOutside(Long courseId, Long teacherId, ExerciseSaveRequest req, String source,
+                                      boolean draft) {
         Exercise exercise = new Exercise();
         exercise.setCourseId(courseId);
         exercise.setChapterId(req.chapterId());
         exercise.setItemId(null);
-        exercise.setSource(SOURCE_ASSISTANT);
-        exercise.setDraft(false);
+        exercise.setSource(source);
+        exercise.setDraft(draft);
         exercise.setCreatedBy(teacherId);
         exercise.setSortOrder(1000);
         copy(req, exercise);

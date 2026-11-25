@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 知识点 1 有 7 人练过，其中 4 人薄弱（5、6、7、11）→ 全班预警。
  */
 @SpringBootTest
+@org.springframework.test.context.TestPropertySource(properties = "platform.intervention.personal-alerts=true") // 旧的个人预警 A、B、AB
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class AssistantAndAutoInterventionTest {

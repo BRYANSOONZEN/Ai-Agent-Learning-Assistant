@@ -88,8 +88,15 @@ public class ClassAnalysisService {
     private final AnswerRecordMapper answerMapper;
     private final UserMapper userMapper;
     private final CourseService courseService;
+    private final com.se.platform.course.mapper.CourseMapper courseMapper;
     private final MasteryService masteryService;
     private final ObjectMapper json;
+    /** 已推送的干预（由 ClassPushService 注册，避免两个服务互相注入） */
+    private java.util.function.Function<Long, List<com.se.platform.intervention.dto.ClassAnalysisDtos.PushView>> pushViews;
+
+    public void setPushViews(java.util.function.Function<Long, List<com.se.platform.intervention.dto.ClassAnalysisDtos.PushView>> f) {
+        this.pushViews = f;
+    }
 
     public ClassAnalysisService(@Value("${platform.class-analysis.min-submit-ratio:0.8}") double minSubmitRatio,
                                 ItemAnalysisMapper analysisMapper, ClassIssueMapper issueMapper,
@@ -97,7 +104,9 @@ public class ClassAnalysisService {
                                 ExerciseMapper exerciseMapper, ExerciseKnowledgePointMapper linkMapper,
                                 KnowledgePointMapper kpMapper, ChapterKpMapper chapterKpMapper,
                                 AnswerRecordMapper answerMapper, UserMapper userMapper, CourseService courseService,
+                                com.se.platform.course.mapper.CourseMapper courseMapper,
                                 MasteryService masteryService, ObjectMapper json) {
+        this.courseMapper = courseMapper;
         this.minSubmitRatio = minSubmitRatio;
         this.analysisMapper = analysisMapper;
         this.issueMapper = issueMapper;
@@ -136,7 +145,7 @@ public class ClassAnalysisService {
     ItemBoard itemBoard(Chapter ch, ChapterItem it, List<User> students, LocalDateTime now) {
         if (it.getDueAt() == null) {
             return new ItemBoard(it.getId(), it.getTitle(), ch.getId(), ch.getTitle(), null, students.size(), 0,
-                    "nodue", List.of(), List.of());
+                    "nodue", List.of(), List.of(), List.of());
         }
         Map<Long, Map<Long, AnswerRecord>> firsts = firstAttempts(it, students);
         Set<Long> submitted = new LinkedHashSet<>();
@@ -144,7 +153,7 @@ public class ClassAnalysisService {
         boolean ready = !now.isBefore(it.getDueAt()) || submitted.size() >= students.size() && !students.isEmpty();
         if (!ready) {
             return new ItemBoard(it.getId(), it.getTitle(), ch.getId(), ch.getTitle(), it.getDueAt(), students.size(),
-                    submitted.size(), "waiting", List.of(), List.of());
+                    submitted.size(), "waiting", List.of(), List.of(), List.of());
         }
         ItemAnalysis a = analysisMapper.selectOne(new LambdaQueryWrapper<ItemAnalysis>()
                 .eq(ItemAnalysis::getItemId, it.getId()).orderByDesc(ItemAnalysis::getId).last("LIMIT 1"));
@@ -155,16 +164,31 @@ public class ClassAnalysisService {
             List<StudentRef> missing = students.stream().filter(s -> !submitted.contains(s.getId()))
                     .map(s -> new StudentRef(s.getId(), s.getName())).toList();
             return new ItemBoard(it.getId(), it.getTitle(), ch.getId(), ch.getTitle(), it.getDueAt(), students.size(),
-                    a.getSubmitted(), ItemAnalysis.VOID, missing, List.of());
+                    a.getSubmitted(), ItemAnalysis.VOID, missing, List.of(), List.of());
         }
         return new ItemBoard(it.getId(), it.getTitle(), ch.getId(), ch.getTitle(), it.getDueAt(), students.size(),
-                a.getSubmitted(), ItemAnalysis.DONE, List.of(), groups(a.getId()));
+                a.getSubmitted(), ItemAnalysis.DONE, List.of(), groups(a.getId()),
+                pushViews == null ? List.of() : pushViews.apply(it.getId()));
+    }
+
+    /** 侧边栏数字：当前老师所有课程里，分析作废的练习 + 待处理的卡片 */
+    @Transactional
+    public int openCount() {
+        int n = 0;
+        for (Course c : courseMapper.selectList(new LambdaQueryWrapper<Course>()
+                .eq(Course::getTeacherId, courseService.currentTeacherId()))) {
+            for (ItemBoard it : board(c.getId()).items()) {
+                n += ItemAnalysis.VOID.equals(it.status()) ? 1 : (int) it.groups().stream()
+                        .flatMap(g -> g.issues().stream()).filter(i -> ClassIssue.OPEN.equals(i.status())).count();
+            }
+        }
+        return n;
     }
 
     // ------------------------------------------------------------------ 分析
 
     /** 截止前每道题每个学生的第一次作答：题目 id → 学生 id → 作答 */
-    Map<Long, Map<Long, AnswerRecord>> firstAttempts(ChapterItem it, List<User> students) {
+    public Map<Long, Map<Long, AnswerRecord>> firstAttempts(ChapterItem it, List<User> students) {
         List<Long> ids = questions(it.getId()).stream().map(Exercise::getId).toList();
         Map<Long, Map<Long, AnswerRecord>> out = new LinkedHashMap<>();
         if (ids.isEmpty()) {
@@ -351,7 +375,7 @@ public class ClassAnalysisService {
         return out;
     }
 
-    IssueView view(ClassIssue i) {
+    public IssueView view(ClassIssue i) {
         double rate = i.getAttempts() == 0 ? 0 : Math.round(100.0 * i.getWrong() / i.getAttempts()) / 100.0;
         String assess = i.getAssessType() == null ? "concept" : i.getAssessType();
         String stem = null;

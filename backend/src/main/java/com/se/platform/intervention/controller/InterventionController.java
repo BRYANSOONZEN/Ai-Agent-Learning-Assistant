@@ -7,6 +7,7 @@ import com.se.platform.intervention.dto.InterventionDtos.DueRequest;
 import com.se.platform.intervention.dto.InterventionDtos.InterventionView;
 import com.se.platform.intervention.dto.InterventionDtos.MyAssignments;
 import com.se.platform.intervention.dto.InterventionDtos.ReviewRequest;
+import com.se.platform.intervention.service.ClassAnalysisService;
 import com.se.platform.intervention.service.InterventionService;
 import com.se.platform.record.service.RecordService;
 import java.util.Map;
@@ -29,10 +30,13 @@ public class InterventionController {
 
     private final InterventionService service;
     private final RecordService recordService;
+    private final ClassAnalysisService classAnalysis;
 
-    public InterventionController(InterventionService service, RecordService recordService) {
+    public InterventionController(InterventionService service, RecordService recordService,
+                                  ClassAnalysisService classAnalysis) {
         this.service = service;
         this.recordService = recordService;
+        this.classAnalysis = classAnalysis;
     }
 
     /** GET /api/interventions/board?courseId=1：扫描生成新预警，返回待处理预警（带系统建议）和干预列表 */
@@ -47,7 +51,8 @@ public class InterventionController {
     @GetMapping("/interventions/open-count")
     public Result<Integer> openCount() {
         synchronized (InterventionService.SCAN_LOCK) {
-            return Result.ok(service.openCount());
+            // 旧的个人预警关掉后，数字 = 全班分析里待老师处理的（作废的练习 + 待处理的卡片）
+            return Result.ok(service.personalAlerts() ? service.openCount() : classAnalysis.openCount());
         }
     }
 

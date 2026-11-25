@@ -65,6 +65,7 @@ public final class AccessRules {
             rule("/api/interventions/**", TEACHER),
             rule("/api/class-analysis/**", TEACHER),
             rule("/api/class-issues/**", TEACHER),
+            rule("/api/class-pushes/**", TEACHER),
             rule("/api/alerts/**", TEACHER));
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();

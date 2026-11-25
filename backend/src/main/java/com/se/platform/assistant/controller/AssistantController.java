@@ -8,6 +8,10 @@ import com.se.platform.assistant.dto.AssistantDtos.RemedySubmit;
 import com.se.platform.assistant.dto.AssistantDtos.RemedyView;
 import com.se.platform.assistant.dto.AssistantDtos.Summary;
 import com.se.platform.assistant.service.AssistantChatService;
+import com.se.platform.intervention.dto.ClassAnalysisDtos.MyPush;
+import com.se.platform.intervention.dto.ClassAnalysisDtos.PushResult;
+import com.se.platform.intervention.dto.ClassAnalysisDtos.PushSubmit;
+import com.se.platform.intervention.service.ClassPushService;
 import com.se.platform.assistant.service.RemedyService;
 import java.util.List;
 import com.se.platform.assistant.service.AssistantService;
@@ -35,10 +39,12 @@ public class AssistantController {
     private final RecordService recordService;
     private final RemedyService remedyService;
     private final AssistantChatService chatService;
+    private final ClassPushService pushService;
 
     public AssistantController(AssistantService assistantService, InterventionService interventionService,
                                RecordService recordService, RemedyService remedyService,
-                               AssistantChatService chatService) {
+                               AssistantChatService chatService, ClassPushService pushService) {
+        this.pushService = pushService;
         this.chatService = chatService;
         this.remedyService = remedyService;
         this.assistantService = assistantService;
@@ -79,5 +85,23 @@ public class AssistantController {
     @PostMapping("/chat")
     public Result<ChatReply> chat(@RequestBody ChatSend body) {
         return Result.ok(chatService.chat(recordService.currentStudentId(), body.chapterId(), body.message()));
+    }
+
+    /** GET /api/assistant/pushes：老师推给我的补充讲解 + 新题 */
+    @GetMapping("/pushes")
+    public Result<List<MyPush>> pushes() {
+        return Result.ok(pushService.mine(recordService.currentStudentId()));
+    }
+
+    /** POST /api/assistant/pushes/{id}/submit：做老师推送的新题（算进补练，只算第一次） */
+    @PostMapping("/pushes/{id}/submit")
+    public Result<PushResult> submitPush(@PathVariable Long id, @RequestBody PushSubmit body) {
+        return Result.ok(pushService.submit(recordService.currentStudentId(), id, body.answers()));
+    }
+
+    /** GET /api/assistant/notices：老师的提醒（最近 10 条） */
+    @GetMapping("/notices")
+    public Result<List<String>> notices() {
+        return Result.ok(pushService.notices(recordService.currentStudentId()));
     }
 }

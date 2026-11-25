@@ -106,7 +106,7 @@ export const layoutChildren = [
   {
     path: 'intervention',
     name: 'intervention',
-    component: () => import('@/views/intervention/InterventionView.vue'),
+    component: () => import('@/views/intervention/ClassAnalysisView.vue'), // 全班分析；旧的个人预警页 InterventionView.vue 不再使用
     meta: {
       eyebrow: 'INTERVENTION', title: '干预管理',
       icon: 'Bell',

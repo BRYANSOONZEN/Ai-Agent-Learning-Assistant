@@ -652,3 +652,37 @@ CREATE TABLE class_issue (
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_class_issue_item ON class_issue (item_id);
+
+-- 老师确认后推给做错的学生：补充讲解 + 新题（docs/模块说明/老师干预-全班分析.md 第四、五节）
+DROP TABLE IF EXISTS class_push;
+CREATE TABLE class_push (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    course_id          BIGINT       NOT NULL,
+    item_id            BIGINT       NOT NULL,              -- 哪一次练习的分析
+    issue_ids          VARCHAR(255) NOT NULL,              -- 处理的卡片（同一个知识点的几张可以合并），逗号分隔
+    knowledge_point_id BIGINT,
+    assess_type        VARCHAR(16),
+    explanation        TEXT,                               -- 补充讲解（大模型起草、老师改过，或老师自己写的）
+    explanation_by     VARCHAR(16),                        -- ai 大模型起草 / teacher 老师写的
+    exercise_ids       VARCHAR(255),                       -- 新题（来源 class），逗号分隔
+    student_ids        VARCHAR(2000) NOT NULL,             -- 推送对象：做错的学生
+    before_rate        DOUBLE,                             -- 推送前的错误率（卡片上的）
+    status             VARCHAR(16)  NOT NULL DEFAULT 'draft', -- draft 老师还在改 / pushed 已推送
+    due_at             DATETIME,
+    pushed_at          DATETIME,
+    created_at         DATETIME,
+    updated_at         DATETIME,
+    PRIMARY KEY (id)
+);
+
+-- 老师给学生的提醒（分析作废时提醒没交的学生），显示在学生的小助手里
+DROP TABLE IF EXISTS assistant_notice;
+CREATE TABLE assistant_notice (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    student_id         BIGINT       NOT NULL,
+    item_id            BIGINT,
+    content            VARCHAR(500) NOT NULL,
+    created_at         DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_assistant_notice ON assistant_notice (student_id);

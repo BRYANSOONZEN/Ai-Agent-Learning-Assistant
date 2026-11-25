@@ -162,6 +162,22 @@ public class InterventionService {
         this.dueDays = dueDays;
     }
 
+    /**
+     * 旧的个人预警 A、B、AB（靠 AI 对话的“概念层”）：2026-11-25 起不用了，默认关掉。
+     * 个人交给小助手，老师只看全班（ClassAnalysisService，docs/模块说明/老师干预-全班分析.md）。
+     * 旧的测试打开它继续验证老代码。
+     */
+    private boolean personalAlerts = false;
+
+    @Value("${platform.intervention.personal-alerts:false}")
+    public void setPersonalAlerts(boolean personalAlerts) {
+        this.personalAlerts = personalAlerts;
+    }
+
+    public boolean personalAlerts() {
+        return personalAlerts;
+    }
+
     /** application.yml：platform.intervention.auto-approve，不写就是 true */
     @Value("${platform.intervention.auto-approve:true}")
     public void setAutoApprove(boolean autoApprove) {
@@ -247,6 +263,9 @@ public class InterventionService {
 
     /** 课程里每个学生 × 每个知识点按两层判断；有新问题就建预警和系统建议 */
     void scan(Long courseId) {
+        if (!personalAlerts) {
+            return;
+        }
         List<KnowledgePoint> kps = kpMapper.selectList(new LambdaQueryWrapper<KnowledgePoint>()
                 .eq(KnowledgePoint::getCourseId, courseId)
                 .orderByAsc(KnowledgePoint::getSortOrder)
@@ -274,6 +293,9 @@ public class InterventionService {
      */
     @Transactional
     public void scanStudent(long studentId) {
+        if (!personalAlerts) {
+            return;
+        }
         List<Long> courseIds = courseMapper.selectList(new LambdaQueryWrapper<Course>()
                         .eq(Course::getStatus, "published"))
                 .stream().map(Course::getId).toList();
