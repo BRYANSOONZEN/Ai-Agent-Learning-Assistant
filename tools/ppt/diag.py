@@ -78,21 +78,23 @@ def seg(slide, x1, y1, x2, y2, head=False, dash=False, color="595959"):
     return c
 
 
-def label(slide, x, y, text, size=7, color="262626"):
-    sp = slide.shapes.add_textbox(Inches(x - 0.5), Inches(y - 0.11), Inches(1.0), Inches(0.22))
+def label(slide, x, y, text, size=7, color="262626", anchor="above"):
+    """线旁边的“是 / 否”等小字：不填底色、不压在线上。
+    anchor='above'：放在 (x, y) 正上方（横线用）；anchor='right'：左边缘在 x、竖直居中于 y（竖线用）"""
+    width = 0.1 * len(text) + 0.02
+    if anchor == "right":
+        left, top = x, y - 0.09
+    else:
+        left, top = x - width / 2, y - 0.2
+    sp = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(0.18))
     tf = sp.text_frame
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    tf.word_wrap = False
     p = tf.paragraphs[0]
-    p.alignment = PP_ALIGN.CENTER
+    p.alignment = PP_ALIGN.LEFT if anchor == "right" else PP_ALIGN.CENTER
     r = p.add_run()
     r.text = text
     _font(r, size, color, bold=True)
-    sp.fill.solid()
-    sp.fill.fore_color.rgb = _rgb("FFFFFF")
-    # 宽度贴字：大约每个字 0.11 英寸
-    width = max(0.25, 0.075 * len(text) + 0.08)
-    sp.left = Inches(x - width / 2)
-    sp.width = Inches(width)
 
 
 def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=0.5, size=8, legend=True):
@@ -116,6 +118,23 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
         ax, ay, aw, ah = pos[a]
         bx, by, bw_, bh_ = pos[b]
         dash = o.get("dash", False)
+        if "out" in o:  # 指定出口、入口和中间拐点（网格坐标），每条线走自己的路，不和别的线重叠
+            def side(cx, cy, w, h, sd):
+                return {"t": (cx, cy - h / 2), "b": (cx, cy + h / 2), "l": (cx - w / 2, cy), "r": (cx + w / 2, cy)}[sd]
+            pts = [side(ax, ay, aw, ah, o["out"])]
+            for (c, r) in o.get("via_pts", []):
+                pts.append((x0 + c * cw + cw / 2, y0 + r * rh + rh / 2))
+            pts.append(side(bx, by, bw_, bh_, o["in"]))
+            for i in range(len(pts) - 1):
+                seg(slide, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], i == len(pts) - 2, dash)
+            if lab:
+                (px, py), (qx, qy) = pts[0], pts[1]
+                # 字放在第一段线的中点旁边：竖线放右边、横线放上方，不压线、不碰框
+                if abs(px - qx) < 0.01:
+                    label(slide, px + 0.05, (py + qy) / 2, lab, anchor="right")
+                else:
+                    label(slide, (px + qx) / 2, py - 0.03, lab)
+            continue
         if abs(ay - by) < 0.05:  # 同一行
             sgn = 1 if bx > ax else -1
             x1, x2 = ax + sgn * aw / 2, bx - sgn * bw_ / 2
@@ -127,7 +146,7 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
             y1, y2 = ay + sgn * ah / 2, by - sgn * bh_ / 2
             seg(slide, ax, y1, bx, y2, True, dash)
             if lab:
-                label(slide, ax + 0.02, (y1 + y2) / 2, lab)
+                label(slide, ax + 0.06, (y1 + y2) / 2, lab, anchor="right")
         elif o.get("via", "v") == "h":  # 先横后竖
             sgn = 1 if bx > ax else -1
             x1 = ax + sgn * aw / 2
@@ -143,10 +162,10 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
             seg(slide, ax, y1, ax, by, False, dash)
             seg(slide, ax, by, bx - sgn * bw_ / 2, by, True, dash)
             if lab:
-                label(slide, ax, (y1 + by) / 2, lab)
+                label(slide, ax + 0.06, (y1 + by) / 2, lab, anchor="right")
     if legend == "std":  # 标准流程图符号
         lx, ly = 4.45, 4.86
-        lx = 5.6
+        lx, ly = 0.45, 4.72  # 放左下角空白处，不碰框
         for i, (k, t) in enumerate([("e", "开始 / 结束"), ("p", "处理"), ("d", "判断"), ("io", "输入 / 输出"), ("db", "数据")]):
             node(slide, lx + i * 0.76, ly, 0.22, 0.14 if k != "d" else 0.17, "", k, 6)
             sp = slide.shapes.add_textbox(Inches(lx + i * 0.76 + 0.14), Inches(ly - 0.09), Inches(0.62), Inches(0.18))
