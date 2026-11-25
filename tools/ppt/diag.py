@@ -1,0 +1,170 @@
+# -*- coding: utf-8 -*-
+"""原生 PowerPoint 流程图：按网格放节点，自动画直线 / 折线箭头。坐标单位：英寸（10 × 5.625 的模板）。
+颜色约定（每张图右下角有图例）：红框 = 程序，绿框 = 老师，灰框 = 大模型，菱形 = 判断，虚线框 = 公式 / 说明。
+"""
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.oxml.ns import qn
+from lxml import etree
+
+FONT = "Microsoft YaHei"
+STYLE = {
+    "p": ("FBECEA", "940B01"),     # 程序
+    "t": ("E6F2EF", "2F7D6D"),     # 老师
+    "ai": ("EFEFEF", "595959"),    # 大模型
+    "s": ("FFFFFF", "262626"),     # 学生 / 一般
+    "d": ("FFF4E5", "C77A1F"),     # 判断（菱形）
+    "e": ("940B01", "940B01"),     # 开始 / 结束（实心）
+    "f": ("FFFFFF", "8C8C8C"),     # 公式 / 说明（虚线）
+    "db": ("F5F5F5", "595959"),    # 数据
+}
+
+
+def _rgb(h):
+    return RGBColor.from_string(h)
+
+
+def _font(run, size, color="262626", bold=False):
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    run.font.color.rgb = _rgb(color)
+    run.font.name = FONT
+    rPr = run._r.get_or_add_rPr()
+    for tag in ("a:ea", "a:cs"):
+        el = rPr.find(qn(tag))
+        if el is None:
+            el = etree.SubElement(rPr, qn(tag))
+        el.set("typeface", FONT)
+
+
+def node(slide, cx, cy, w, h, text, kind="p", size=8, bold_first=True):
+    fill, line = STYLE[kind]
+    shape = {"d": MSO_SHAPE.DIAMOND, "e": MSO_SHAPE.FLOWCHART_TERMINATOR, "db": MSO_SHAPE.CAN}.get(kind, MSO_SHAPE.RECTANGLE)
+    sp = slide.shapes.add_shape(shape, Inches(cx - w / 2), Inches(cy - h / 2), Inches(w), Inches(h))
+    sp.fill.solid()
+    sp.fill.fore_color.rgb = _rgb(fill)
+    sp.line.color.rgb = _rgb(line)
+    sp.line.width = Pt(1)
+    if kind == "f":
+        sp.line.dash_style = 4  # dash
+    sp.shadow.inherit = False
+    tf = sp.text_frame
+    tf.word_wrap = True
+    for side in ("margin_left", "margin_right"):
+        setattr(tf, side, Inches(0.04))
+    tf.margin_top = tf.margin_bottom = Inches(0.02)
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    lines = text.split("\n")
+    for i, ln in enumerate(lines):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = PP_ALIGN.LEFT if kind == "f" else PP_ALIGN.CENTER
+        r = p.add_run()
+        r.text = ln
+        color = "FFFFFF" if kind == "e" else ("262626" if i or kind == "f" else line if kind in ("p", "t", "d") else "262626")
+        _font(r, size if i else size + (0.5 if bold_first and kind != "f" else 0), color,
+              bold=(i == 0 and bold_first and kind != "f") or kind == "e")
+    return sp
+
+
+def seg(slide, x1, y1, x2, y2, head=False, dash=False, color="595959"):
+    c = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+    c.line.color.rgb = _rgb(color)
+    c.line.width = Pt(1.1)
+    if dash:
+        c.line.dash_style = 4
+    if head:
+        ln = c.line._get_or_add_ln()
+        t = etree.SubElement(ln, qn("a:tailEnd"))
+        t.set("type", "triangle")
+        t.set("w", "sm")
+        t.set("len", "sm")
+    return c
+
+
+def label(slide, x, y, text, size=7, color="940B01"):
+    sp = slide.shapes.add_textbox(Inches(x - 0.5), Inches(y - 0.11), Inches(1.0), Inches(0.22))
+    tf = sp.text_frame
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    r = p.add_run()
+    r.text = text
+    _font(r, size, color, bold=True)
+    sp.fill.solid()
+    sp.fill.fore_color.rgb = _rgb("FFFFFF")
+    # 宽度贴字：大约每个字 0.11 英寸
+    width = max(0.25, 0.075 * len(text) + 0.08)
+    sp.left = Inches(x - width / 2)
+    sp.width = Inches(width)
+
+
+def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=0.5, size=8, legend=True):
+    """nodes: [(id, col, row, text, kind, {w,h})]；edges: [(a, b, label, opts)]，opts 可含 dash、via（'h' 先横后竖 / 'v' 先竖后横）"""
+    pos = {}
+    for n in nodes:
+        nid, c, r, text, kind = n[:5]
+        o = n[5] if len(n) > 5 else {}
+        w = o.get("w", bw * (1.15 if kind == "d" else 1))
+        h = o.get("h", bh * (1.35 if kind == "d" else 1))
+        # 公式框从格子左边开始放；所有框都不能超出幻灯片（左右各留 0.25 英寸）
+        cx = x0 + c * cw + (w / 2 if kind == "f" else cw / 2)
+        cx = min(max(cx, 0.25 + w / 2), 9.75 - w / 2)
+        cy = y0 + r * rh + rh / 2
+        node(slide, cx, cy, w, h, text, kind, o.get("size", size))
+        pos[nid] = (cx, cy, w, h)
+    for e in edges:
+        a, b = e[0], e[1]
+        lab = e[2] if len(e) > 2 else ""
+        o = e[3] if len(e) > 3 else {}
+        ax, ay, aw, ah = pos[a]
+        bx, by, bw_, bh_ = pos[b]
+        dash = o.get("dash", False)
+        if abs(ay - by) < 0.05:  # 同一行
+            sgn = 1 if bx > ax else -1
+            x1, x2 = ax + sgn * aw / 2, bx - sgn * bw_ / 2
+            seg(slide, x1, ay, x2, by, True, dash)
+            if lab:
+                label(slide, (x1 + x2) / 2, ay - 0.09, lab)
+        elif abs(ax - bx) < 0.05:  # 同一列
+            sgn = 1 if by > ay else -1
+            y1, y2 = ay + sgn * ah / 2, by - sgn * bh_ / 2
+            seg(slide, ax, y1, bx, y2, True, dash)
+            if lab:
+                label(slide, ax + 0.02, (y1 + y2) / 2, lab)
+        elif o.get("via", "v") == "h":  # 先横后竖
+            sgn = 1 if bx > ax else -1
+            x1 = ax + sgn * aw / 2
+            sy = 1 if by > ay else -1
+            seg(slide, x1, ay, bx, ay, False, dash)
+            seg(slide, bx, ay, bx, by - sy * bh_ / 2, True, dash)
+            if lab:
+                label(slide, (x1 + bx) / 2, ay - 0.09, lab)
+        else:  # 先竖后横
+            sy = 1 if by > ay else -1
+            y1 = ay + sy * ah / 2
+            sgn = 1 if bx > ax else -1
+            seg(slide, ax, y1, ax, by, False, dash)
+            seg(slide, ax, by, bx - sgn * bw_ / 2, by, True, dash)
+            if lab:
+                label(slide, ax, (y1 + by) / 2, lab)
+    if legend:
+        lx, ly = 7.05, 4.86
+        for i, (k, t) in enumerate([("p", "程序"), ("t", "老师"), ("ai", "大模型"), ("d", "判断")]):
+            node(slide, lx + i * 0.68, ly, 0.2, 0.12 if k != "d" else 0.16, "", k, 6)
+            sp = slide.shapes.add_textbox(Inches(lx + i * 0.68 + 0.13), Inches(ly - 0.09), Inches(0.5), Inches(0.18))
+            tf = sp.text_frame
+            tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+            r = tf.paragraphs[0].add_run()
+            r.text = t
+            _font(r, 7, "595959")
+    return pos
+
+
+def formula(slide, x, y, w, h, lines, title="公式", size=8):
+    """虚线框里的公式 / 规则；lines 每项一行"""
+    sp = node(slide, x + w / 2, y + h / 2, w, h, "\n".join([title] + lines), "f", size, bold_first=False)
+    r = sp.text_frame.paragraphs[0].runs[0]
+    _font(r, size + 0.5, "940B01", bold=True)
+    return sp
