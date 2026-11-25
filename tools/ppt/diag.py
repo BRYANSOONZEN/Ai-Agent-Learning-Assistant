@@ -10,17 +10,10 @@ from pptx.oxml.ns import qn
 from lxml import etree
 
 FONT = "Microsoft YaHei"
-STYLE = {
-    "p": ("FBECEA", "940B01"),     # 程序
-    "t": ("E6F2EF", "2F7D6D"),     # 老师
-    "ai": ("EFEFEF", "595959"),    # 大模型
-    "s": ("FFFFFF", "262626"),     # 学生 / 一般
-    "d": ("FFF4E5", "C77A1F"),     # 判断（菱形）
-    "e": ("940B01", "940B01"),     # 开始 / 结束（实心）
-    "f": ("FFFFFF", "8C8C8C"),     # 公式 / 说明（虚线）
-    "db": ("F5F5F5", "595959"),    # 数据
-    "io": ("FFFFFF", "262626"),    # 输入 / 输出（平行四边形）
-}
+# 黑白：所有框白底黑框黑字，只靠形状区分（标准流程图符号）；公式 / 说明用灰色虚线框
+INK_ = "262626"
+STYLE = {k: ("FFFFFF", INK_) for k in ("p", "t", "ai", "s", "d", "e", "io", "db")}
+STYLE["f"] = ("FFFFFF", "8C8C8C")
 
 
 def _rgb(h):
@@ -64,7 +57,7 @@ def node(slide, cx, cy, w, h, text, kind="p", size=8, bold_first=True):
         p.alignment = PP_ALIGN.LEFT if kind == "f" else PP_ALIGN.CENTER
         r = p.add_run()
         r.text = ln
-        color = "FFFFFF" if kind == "e" else ("262626" if i or kind == "f" else line if kind in ("p", "t", "d") else "262626")
+        color = "262626"
         _font(r, size if i else size + (0.5 if bold_first and kind != "f" else 0), color,
               bold=(i == 0 and bold_first and kind != "f") or kind == "e")
     return sp
@@ -85,7 +78,7 @@ def seg(slide, x1, y1, x2, y2, head=False, dash=False, color="595959"):
     return c
 
 
-def label(slide, x, y, text, size=7, color="940B01"):
+def label(slide, x, y, text, size=7, color="262626"):
     sp = slide.shapes.add_textbox(Inches(x - 0.5), Inches(y - 0.11), Inches(1.0), Inches(0.22))
     tf = sp.text_frame
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
@@ -153,8 +146,8 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
                 label(slide, ax, (y1 + by) / 2, lab)
     if legend == "std":  # 标准流程图符号
         lx, ly = 4.45, 4.86
-        for i, (k, t) in enumerate([("e", "开始 / 结束"), ("p", "处理（程序）"), ("t", "老师操作"), ("ai", "大模型"),
-                                    ("d", "判断"), ("io", "输入 / 输出"), ("db", "数据")]):
+        lx = 5.6
+        for i, (k, t) in enumerate([("e", "开始 / 结束"), ("p", "处理"), ("d", "判断"), ("io", "输入 / 输出"), ("db", "数据")]):
             node(slide, lx + i * 0.76, ly, 0.22, 0.14 if k != "d" else 0.17, "", k, 6)
             sp = slide.shapes.add_textbox(Inches(lx + i * 0.76 + 0.14), Inches(ly - 0.09), Inches(0.62), Inches(0.18))
             tf = sp.text_frame
@@ -180,5 +173,5 @@ def formula(slide, x, y, w, h, lines, title="公式", size=8):
     """虚线框里的公式 / 规则；lines 每项一行"""
     sp = node(slide, x + w / 2, y + h / 2, w, h, "\n".join([title] + lines), "f", size, bold_first=False)
     r = sp.text_frame.paragraphs[0].runs[0]
-    _font(r, size + 0.5, "940B01", bold=True)
+    _font(r, size + 0.5, "262626", bold=True)
     return sp
