@@ -615,3 +615,40 @@ CREATE TABLE assistant_message (
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_assistant_message ON assistant_message (student_id, chapter_id);
+
+-- ---------------------------------------------------------------------
+-- 老师干预：每次练习的全班分析（docs/模块说明/老师干预-全班分析.md）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS item_analysis;
+CREATE TABLE item_analysis (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    item_id            BIGINT       NOT NULL,
+    due_at             DATETIME     NOT NULL,              -- 按哪一个截止时间分析的（延期后会重新分析）
+    status             VARCHAR(16)  NOT NULL,              -- done 已分析 / void 交卷人数不够，作废
+    students           INT          NOT NULL,              -- 全班人数
+    submitted          INT          NOT NULL,              -- 截止前交卷的人数
+    analyzed_at        DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_item_analysis ON item_analysis (item_id);
+
+DROP TABLE IF EXISTS class_issue;
+CREATE TABLE class_issue (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    analysis_id        BIGINT       NOT NULL,
+    item_id            BIGINT       NOT NULL,
+    course_id          BIGINT       NOT NULL,
+    kind               VARCHAR(16)  NOT NULL,              -- question 题目检查 / cell 要点 × 考查类型
+    knowledge_point_id BIGINT,
+    key_point_no       INT,                                -- 第几条要点；没标要点的旧题为空（按知识点 × 考查类型算）
+    assess_type        VARCHAR(16),
+    exercise_id        BIGINT,                             -- question：哪一道题
+    attempts           INT          NOT NULL,              -- 作答人次（question：作答人数）
+    wrong              INT          NOT NULL,              -- 做错的人次
+    student_ids        VARCHAR(2000),                      -- 做错的学生，逗号分隔（推送对象）
+    status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 待处理 / ok 题目没问题 / fixed 已修改 / voided 已作废 / ignored 忽略 / pushed 已推送
+    created_at         DATETIME,
+    updated_at         DATETIME,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_class_issue_item ON class_issue (item_id);

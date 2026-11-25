@@ -132,6 +132,16 @@ public class ChapterService {
         chapter.setTitle(req.title().trim());
         chapter.setIntro(req.intro());
         chapter.setStatus(req.status() == null ? "draft" : req.status());
+        // 发布前：每次练习都要设截止时间（到截止才做全班分析，docs/模块说明/老师干预-全班分析.md 第二节）
+        if ("published".equals(chapter.getStatus()) && chapter.getId() != null) {
+            List<String> noDue = itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
+                            .eq(ChapterItem::getChapterId, chapter.getId()).eq(ChapterItem::getType, "exercise")
+                            .isNull(ChapterItem::getDueAt))
+                    .stream().map(ChapterItem::getTitle).toList();
+            if (!noDue.isEmpty()) {
+                throw BusinessException.badRequest("发布前请给每次练习设截止时间：" + String.join("、", noDue));
+            }
+        }
     }
 
     private ChapterView toView(Chapter c) {

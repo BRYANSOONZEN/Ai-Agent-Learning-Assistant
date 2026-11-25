@@ -104,6 +104,18 @@ public class MasteryService {
         return mastery >= 0.8 ? "good" : mastery >= 0.6 ? "medium" : "weak";
     }
 
+    /** 直接重算一个学生的这几个知识点（例如老师作废了一道题之后） */
+    public void updateKps(long studentId, Collection<Long> kpIds) {
+        for (Long kpId : kpIds) {
+            Mastery row = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
+                    .eq(Mastery::getStudentId, studentId).eq(Mastery::getKnowledgePointId, kpId));
+            if (row != null) {
+                fill(row, answersOf(studentId, kpId));
+                masteryMapper.updateById(row);
+            }
+        }
+    }
+
     /** 交卷后：重算这几道题关联的知识点，返回每个知识点前后的变化 */
     public List<MasteryChange> update(long studentId, Collection<Long> exerciseIds) {
         if (exerciseIds.isEmpty()) {
