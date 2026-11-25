@@ -54,7 +54,7 @@ public final class AssistantDtos {
      * @param firstMastery  第一次练习的掌握度（不改）
      * @param remedyStatus  recovered 已补回来 / practicing 补练中 / 空
      * @param remedyRounds  小助手补练做了几轮（含没交的）
-     * @param escalated     2 轮后还没补回来，已经转给老师
+     * @param escalated     2 轮补练做完还没补回来（建议看资料、去 AI 对话）
      * @param misconception 这个学生在这个知识点上最常见的误解
      * @param verdict       同 level（没练过为 none），兼容旧前端
      * @param text          给学生看的一句话
@@ -84,7 +84,7 @@ public final class AssistantDtos {
     /**
      * 一轮补练：题目不带答案。
      *
-     * @param escalated 已经做完 2 轮还没补回来，转给老师了（这时没有题）
+     * @param escalated 已经做完 2 轮还没补回来（这时没有题，建议看资料、去 AI 对话）
      * @param text      小助手说的话
      */
     public record RemedyView(Long knowledgePointId, String name, int round, int maxRounds, boolean escalated,

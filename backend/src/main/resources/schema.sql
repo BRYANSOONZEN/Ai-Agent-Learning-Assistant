@@ -591,7 +591,7 @@ CREATE TABLE remedy_round (
     exercise_ids       VARCHAR(255) NOT NULL,              -- 这一轮的补练题（小助手当场生成的），逗号分隔
     status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 还没交 / done 交了
     score              DOUBLE,                             -- 这一轮的平均分
-    escalated          TINYINT(1)   NOT NULL DEFAULT 0,    -- 2 轮后还没补回来 → 转给老师
+    escalated          TINYINT(1)   NOT NULL DEFAULT 0,    -- 2 轮做完还没补回来（只记录，老师能看到，不转给老师处理）
     created_at         DATETIME,
     finished_at        DATETIME,
     PRIMARY KEY (id)

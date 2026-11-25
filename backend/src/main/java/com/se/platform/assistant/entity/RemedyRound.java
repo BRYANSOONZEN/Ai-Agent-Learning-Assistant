@@ -27,7 +27,7 @@ public class RemedyRound {
     private String status;
     /** 这一轮做完后：平均分 */
     private Double score;
-    /** 2 轮后还没补回来，转给老师 */
+    /** 2 轮补练做完还没补回来（只记录，老师能看到；2026-11-25 起不转给老师处理） */
     private Boolean escalated;
 
     @TableField(fill = FieldFill.INSERT)

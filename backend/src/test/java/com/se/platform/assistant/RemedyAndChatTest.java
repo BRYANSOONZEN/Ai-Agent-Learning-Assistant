@@ -155,7 +155,7 @@ class RemedyAndChatTest {
         int before = fake.requests().size();
         submit(5, "B").andExpect(jsonPath("$.data.escalated").value(true))
                 .andExpect(jsonPath("$.data.canContinue").value(false))
-                .andExpect(jsonPath("$.data.text", Matchers.containsString("告诉老师")));
+                .andExpect(jsonPath("$.data.text", Matchers.containsString("AI 对话")));
         assertThat(fake.requests().get(before).messages().toString()).contains("第 2 轮");
         start(5).andExpect(jsonPath("$.data.escalated").value(true))
                 .andExpect(jsonPath("$.data.questions.length()").value(0));

@@ -44,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>根据这个学生自己的错题（考第几条要点、选错的选项对应的误解），大模型当场生成 3 道补练题（单选、判断、多选），
  *       不经过老师审核</li>
  *   <li>学生在小助手里做，程序判分，算进补练；够 2 道、平均 ≥ 0.8 → 已补回来（画像从红变橙，不变绿）</li>
- *   <li>最多 2 轮；2 轮后还没补回来 → 转给老师</li>
+ *   <li>最多 2 轮；2 轮后还没补回来 → 建议看资料、去 AI 对话讲一遍（老师不插手，只能看到补练情况）</li>
  * </ol>
  */
 @Service
@@ -114,7 +114,7 @@ public class RemedyService {
         }
         if (rounds.size() >= MAX_ROUNDS) {
             return new RemedyView(kpId, kp.getName(), rounds.size(), MAX_ROUNDS, true, List.of(),
-                    "两轮补练做完了，这个知识点我已经告诉老师，老师会再帮你。也可以先去 AI 对话把它讲一遍。");
+                    "两轮补练做完了还没补回来。先回去看看资料，再去 AI 对话把这个知识点讲一遍，理清楚了再复习。");
         }
         int roundNo = rounds.size() + 1;
         List<ExerciseView> made = genService.generateRemedy(kpId, requirement(studentId, kpId, roundNo), PER_ROUND,
@@ -211,7 +211,7 @@ public class RemedyService {
         r.setFinishedAt(LocalDateTime.now());
         roundMapper.updateById(r);
         String text = recovered ? "补回来了！这个知识点从红色变成橙色：说明你曾经在这里错过，复习时多留意。"
-                : escalated ? "这一轮还没补回来。我已经告诉老师，老师会再帮你；你也可以先去 AI 对话把这个知识点讲一遍。"
+                : escalated ? "两轮补练做完了还没补回来。先回去看看资料，再去 AI 对话把这个知识点讲一遍。"
                 : "这一轮还差一点。先看看解析和资料，再来第 2 轮。";
         return new RemedyResult(kpId, r.getRoundNo(), results, score, change, recovered, escalated,
                 !recovered && !escalated, text);
@@ -219,7 +219,7 @@ public class RemedyService {
 
     // ------------------------------------------------------------------ 小工具
 
-    /** 转给老师的：2 轮后还没补回来（老师手动干预用） */
+    /** 2 轮后还没补回来的（老师只能看到，不处理） */
     public List<RemedyRound> escalated(Long kpId) {
         return roundMapper.selectList(new LambdaQueryWrapper<RemedyRound>()
                 .eq(RemedyRound::getEscalated, true)

@@ -202,7 +202,7 @@ public class AssistantService {
         } else if (MasteryService.ORANGE.equals(color)) {
             text = (first == null ? "" : first + "，") + "补练后补回来了。这里曾经错过，复习时多留意。";
         } else if (escalated) {
-            text = "两轮补练还没补回来，已经告诉老师了。也可以先去 AI 对话把它讲一遍。";
+            text = "两轮补练还没补回来。先回去看看资料，再去 AI 对话把它讲一遍。";
             action = "dialogue";
         } else {
             text = (first == null ? "" : first + "，") + "还没掌握"

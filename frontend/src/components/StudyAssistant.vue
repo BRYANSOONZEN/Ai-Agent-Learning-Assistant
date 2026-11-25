@@ -23,6 +23,7 @@ import { getAssistantSummary } from '@/api/assistant'
 import RemedyBox from './RemedyBox.vue'
 import AssistantChat from './AssistantChat.vue'
 import { getMyAssignments } from '@/api/intervention'
+import { getMyDeadlines } from '@/api/learn'
 import { studentBusy } from '@/stores/assistantFocus'
 
 const route = useRoute()
@@ -32,6 +33,7 @@ const open = ref(false)
 const loading = ref(false)
 const summary = ref(null) // { chapters, focusChapterId }
 const running = ref([]) // interventions in progress for me
+const deadlines = ref([]) // items due soon or overdue: the assistant reminds (no teacher involved)
 const shownChapter = ref(null)
 const mode = ref('report') // 'report' 学习情况 | 'chat' 问问题
 const remedyKp = ref(null) // which knowledge point's 补练题 are open
@@ -50,6 +52,7 @@ async function refresh() {
     // one after the other: both make the backend scan this student
     summary.value = await getAssistantSummary()
     running.value = (await getMyAssignments()).running || []
+    deadlines.value = ((await getMyDeadlines()) || []).filter((d) => d.kind === 'item' && d.state !== 'later')
     if (!summary.value.chapters.some((c) => c.chapterId === shownChapter.value)) {
       shownChapter.value = summary.value.focusChapterId
     }
@@ -97,6 +100,7 @@ const seen = ref(readSeen())
 const newKeys = computed(() => [
   ...chapters.value.filter((c) => c.completed).map((c) => 'ch:' + c.chapterId),
   ...running.value.map((iv) => 'iv:' + iv.id),
+  ...deadlines.value.map((d) => `dl:${d.itemId}:${d.state}`),
 ].filter((k) => !seen.value.includes(k)))
 
 function markSeen() {
@@ -137,6 +141,11 @@ function goItem(ch, itemId) {
     params: { id: ch.courseId },
     query: { chapter: ch.chapterId, view: itemId ? 'item:' + itemId : 'intro' },
   })
+}
+
+function dueText(d) {
+  const h = Math.max(0, Math.round(d.minutesLeft / 60))
+  return h < 24 ? `还剩 ${h} 小时截止` : `还剩 ${Math.round(h / 24)} 天截止`
 }
 
 function goPractice() {
@@ -191,6 +200,19 @@ function act(ch, p) {
           <div v-if="summary && !chapters.length" class="empty">
             <p>你还没开始学习。选一门课，从第一章开始吧。</p>
             <el-button type="primary" size="small" @click="router.push({ name: 'courses' }); open = false">去选课</el-button>
+          </div>
+
+          <!-- deadline reminders: due within a few days, or overdue -->
+          <div v-if="deadlines.length" class="due">
+            <h4>截止提醒</h4>
+            <div v-for="d in deadlines" :key="d.itemId" class="due-row" :class="d.state">
+              <span>
+                <b>{{ d.title }}</b>
+                <small>{{ d.chapterTitle }} · {{ d.state === 'overdue' ? (d.allowLate ? '已过期，还可以补做（算迟交）' : '已过期') : dueText(d) }}</small>
+              </span>
+              <el-button v-if="d.state === 'soon' || d.allowLate" size="small" type="primary" link
+                @click="goItem({ courseId: d.courseId, chapterId: d.chapterId }, d.itemId)">去做</el-button>
+            </div>
           </div>
 
           <!-- chapter tabs, when the student has more than one -->
@@ -459,6 +481,26 @@ function act(ch, p) {
 }
 .points > li.v-red {
   border-left-color: var(--app-danger);
+}
+.due {
+  margin-bottom: 10px;
+}
+.due-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: var(--el-color-warning-light-9);
+}
+.due-row.overdue {
+  background: var(--el-color-danger-light-9);
+}
+.due-row small {
+  display: block;
+  color: var(--el-text-color-secondary);
 }
 .modes {
   display: flex;
