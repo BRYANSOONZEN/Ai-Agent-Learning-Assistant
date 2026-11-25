@@ -172,7 +172,7 @@ public class DiagnosisService {
                 m == null ? 0 : m.getCorrectCount(), recent, misconception, practiceItemId,
                 m == null ? null : m.getFirstMastery(), MasteryService.level(m == null ? null : m.getFirstMastery()),
                 m == null || m.getRemedyCount() == null ? 0 : m.getRemedyCount(), m == null ? null : m.getRemedy(),
-                m == null ? null : m.getRemedyStatus());
+                m == null ? null : m.getRemedyStatus(), MasteryService.color(m));
     }
 
     /** AI 对话里已经有结果的话题，最近的在前 */

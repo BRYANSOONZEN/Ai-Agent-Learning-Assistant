@@ -247,8 +247,8 @@ public class ExerciseGenService {
 
     // ------------------------------------------------------------------ 小助手的个人补练题
 
-    /** 补练题只出程序能马上判的题型 */
-    public static final List<String> REMEDY_TYPES = List.of(Grader.SINGLE, Grader.TWO_TIER, Grader.JUDGE, Grader.MULTIPLE);
+    /** 补练题只出有标准答案、程序能马上判的：单选、判断、多选（2026-11-25 组内决定，不出简答、两段式） */
+    public static final List<String> REMEDY_TYPES = List.of(Grader.SINGLE, Grader.JUDGE, Grader.MULTIPLE);
 
     /**
      * 给一个学生当场生成补练题（docs/模块说明/小助手-自动干预与聊天.md 第四节）：不属于任何练习、不是草稿、不经过老师审核。

@@ -2,8 +2,9 @@
 /*
  * 补练题 inside the study assistant (automatic intervention, docs/模块说明/小助手-自动干预与聊天.md section 4).
  * The questions are generated on the spot from this student's own mistakes; the program grades them right away.
- * Only types the program can grade: single choice, judge, multiple, two-tier.
- * Up to 2 rounds; recovered (>= 2 questions, average >= 0.8) turns the point green; otherwise it goes to the teacher.
+ * Only types with an exact answer the program can grade: single choice, judge, multiple.
+ * Up to 2 rounds; recovered (>= 2 questions, average >= 0.8) turns the point from red to orange
+ * (was wrong once, keep an eye on it); otherwise it goes to the teacher.
  */
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'

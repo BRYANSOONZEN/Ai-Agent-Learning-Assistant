@@ -116,14 +116,21 @@ class RemedyAndChatTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM exercise WHERE source = 'assistant' AND item_id IS NULL",
                 Integer.class)).isEqualTo(3);
 
-        // 全对：补练 3 道平均 1 → 已补回来（绿）
+        // 全对：补练 3 道平均 1 → 已补回来；画像从红变橙（曾经错过，要留意），不变绿
         submit(5, "A").andExpect(jsonPath("$.data.recovered").value(true))
                 .andExpect(jsonPath("$.data.change.remedyStatus").value("recovered"))
+                .andExpect(jsonPath("$.data.change.color").value("orange"))
                 .andExpect(jsonPath("$.data.change.level").value("good"))
                 .andExpect(jsonPath("$.data.results[0].analysis").isNotEmpty())
                 .andExpect(jsonPath("$.data.canContinue").value(false));
         start(5).andExpect(jsonPath("$.data.questions.length()").value(0))
-                .andExpect(jsonPath("$.data.text", Matchers.containsString("已经掌握")));
+                .andExpect(jsonPath("$.data.text", Matchers.containsString("已经补回来了")));
+        mockMvc.perform(as(5, get("/api/assistant/summary")))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("orange"))
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text", Matchers.containsString("曾经错过")));
+        mockMvc.perform(as(5, get("/api/diagnosis/me")))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].color").value("orange"))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[1].color").value("green"));
         // 其他学生的推荐里没有这些题
         mockMvc.perform(as(6, get("/api/recommendations")))
                 .andExpect(jsonPath("$..exerciseId", Matchers.not(Matchers.hasItem(10))));

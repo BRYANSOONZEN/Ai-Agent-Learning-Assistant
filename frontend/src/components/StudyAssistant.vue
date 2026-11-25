@@ -118,11 +118,12 @@ function toggle() {
 
 // ---------- labels and actions ----------
 
-// practice only (the AI dialogue is not scored): the colour of the current mastery
+// portrait colour (MasteryService.color): green = mastered at the first try,
+// orange = was wrong at first, recovered with 补练题 (keep an eye on it), red = not yet, none = not practised
 const VERDICT = {
-  good: { text: '掌握', type: 'success' },
-  medium: { text: '一般', type: 'warning' },
-  weak: { text: '薄弱', type: 'danger' },
+  green: { text: '第一次就掌握', type: 'success' },
+  orange: { text: '补回来了，要留意', type: 'warning' },
+  red: { text: '还没掌握', type: 'danger' },
   none: { text: '未练习', type: 'info' },
 }
 const REMEDY = { recovered: '已补回来', practicing: '补练中' }
@@ -223,7 +224,7 @@ function act(ch, p) {
                     <el-tag :type="VERDICT[p.verdict]?.type" size="small" effect="light">
                       {{ VERDICT[p.verdict]?.text }}
                     </el-tag>
-                    <el-tag v-if="p.remedyStatus" :type="p.remedyStatus === 'recovered' ? 'success' : 'warning'" size="small" effect="plain">
+                    <el-tag v-if="p.remedyStatus === 'practicing'" type="info" size="small" effect="plain">
                       {{ REMEDY[p.remedyStatus] }}
                     </el-tag>
                   </div>
@@ -450,13 +451,13 @@ function act(ch, p) {
   gap: 6px;
   align-items: flex-start;
 }
-.points > li.v-good {
+.points > li.v-green {
   border-left-color: var(--app-success);
 }
-.points > li.v-medium {
+.points > li.v-orange {
   border-left-color: var(--app-warning);
 }
-.points > li.v-weak {
+.points > li.v-red {
   border-left-color: var(--app-danger);
 }
 .modes {

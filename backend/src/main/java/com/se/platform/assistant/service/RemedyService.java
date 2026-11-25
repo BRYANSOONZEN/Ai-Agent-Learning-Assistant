@@ -41,8 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 小助手的自动干预（个人）：docs/模块说明/小助手-自动干预与聊天.md 第四节。
  * <ol>
  *   <li>只在这一章的练习第一次交卷之后（阶段二）</li>
- *   <li>根据这个学生自己的错题（考第几条要点、选错的选项对应的误解），大模型当场生成 3 道补练题，不经过老师审核</li>
- *   <li>学生在小助手里做，程序判分，算进补练；够 2 道、平均 ≥ 0.8 → 已补回来</li>
+ *   <li>根据这个学生自己的错题（考第几条要点、选错的选项对应的误解），大模型当场生成 3 道补练题（单选、判断、多选），
+ *       不经过老师审核</li>
+ *   <li>学生在小助手里做，程序判分，算进补练；够 2 道、平均 ≥ 0.8 → 已补回来（画像从红变橙，不变绿）</li>
  *   <li>最多 2 轮；2 轮后还没补回来 → 转给老师</li>
  * </ol>
  */
@@ -105,10 +106,11 @@ public class RemedyService {
             return view(kp, open, rounds.size(), "上次的补练题还没做完，接着做吧。");
         }
         Mastery m = mastery(studentId, kpId);
-        if (MasteryService.STATUS_RECOVERED.equals(m == null ? null : m.getRemedyStatus())
-                || "good".equals(MasteryService.level(m == null ? null : m.getMastery()))) {
+        String color = MasteryService.color(m);
+        if (!MasteryService.RED.equals(color)) { // 只有红色（第一次没掌握、还没补回来）才补练
             return new RemedyView(kpId, kp.getName(), rounds.size(), MAX_ROUNDS, false, List.of(),
-                    "这个知识点你已经掌握了，不用补练。");
+                    MasteryService.ORANGE.equals(color) ? "这个知识点你已经补回来了，复习时多留意就好。"
+                            : "这个知识点你已经掌握了，不用补练。");
         }
         if (rounds.size() >= MAX_ROUNDS) {
             return new RemedyView(kpId, kp.getName(), rounds.size(), MAX_ROUNDS, true, List.of(),
@@ -208,7 +210,7 @@ public class RemedyService {
         r.setEscalated(escalated);
         r.setFinishedAt(LocalDateTime.now());
         roundMapper.updateById(r);
-        String text = recovered ? "补回来了！这个知识点变成绿色了。"
+        String text = recovered ? "补回来了！这个知识点从红色变成橙色：说明你曾经在这里错过，复习时多留意。"
                 : escalated ? "这一轮还没补回来。我已经告诉老师，老师会再帮你；你也可以先去 AI 对话把这个知识点讲一遍。"
                 : "这一轮还差一点。先看看解析和资料，再来第 2 轮。";
         return new RemedyResult(kpId, r.getRoundNo(), results, score, change, recovered, escalated,

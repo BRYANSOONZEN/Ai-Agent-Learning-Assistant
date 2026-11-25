@@ -197,9 +197,9 @@ class AssistantAndAutoInterventionTest {
                 .andExpect(jsonPath("$.data.chapters[0].dialogueItemId").value(3))
                 .andExpect(jsonPath("$.data.chapters[0].report.good").value(0))
                 .andExpect(jsonPath("$.data.chapters[0].report.weak").value(1))
-                .andExpect(jsonPath("$.data.chapters[0].report.headline", Matchers.containsString("还需要补")))
-                // 知识点 1：只看练习，当前 0（红），反复同一个误解 → 看资料、做补练题
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("weak"))
+                .andExpect(jsonPath("$.data.chapters[0].report.headline", Matchers.containsString("1 个还没掌握，需要补")))
+                // 知识点 1：只看练习，第一次 0、没补回来（红），反复同一个误解 → 看资料、做补练题
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("red"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].level").value("weak"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].firstMastery").value(0.0))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").value("remedy"))
@@ -228,13 +228,13 @@ class AssistantAndAutoInterventionTest {
 
     @Test
     void practiceGood_noRemedy_evenIfDialogueWeak() throws Exception {
-        // 学生04：练习全对，对话里没讲出来。AI 对话不打分（2026-11-25），只看练习 → 绿，不用补
+        // 学生04：练习第一次就全对，对话里没讲出来。AI 对话不打分（2026-11-25），只看练习 → 绿，不用补
         for (int item = 1; item <= 3; item++) {
             finishItem(8, item);
         }
-        summary(8).andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("good"))
+        summary(8).andExpect(jsonPath("$.data.chapters[0].report.points[0].verdict").value("green"))
                 .andExpect(jsonPath("$.data.chapters[0].report.points[0].action").doesNotExist())
-                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text").value("掌握得不错。"));
+                .andExpect(jsonPath("$.data.chapters[0].report.points[0].text").value("第一次练习就掌握了。"));
     }
 
     @Test

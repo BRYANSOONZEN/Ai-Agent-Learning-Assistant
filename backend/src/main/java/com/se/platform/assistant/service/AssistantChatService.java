@@ -348,14 +348,14 @@ public class AssistantChatService {
         for (ChapterKp k : kps) {
             Mastery m = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
                     .eq(Mastery::getStudentId, studentId).eq(Mastery::getKnowledgePointId, k.getKnowledgePointId()));
-            String level = MasteryService.level(m == null ? null : m.getMastery());
-            if (!"weak".equals(level) && !"medium".equals(level)) {
+            String color = MasteryService.color(m);
+            if (!MasteryService.RED.equals(color) && !MasteryService.ORANGE.equals(color)) {
                 continue;
             }
             KnowledgePoint kp = kpMapper.selectById(k.getKnowledgePointId());
             List<String> details = kp == null ? List.of() : practiceAnalysis.analyse(studentId, kp, ctx, false, false)
                     .details();
-            lines.add("「" + k.getName() + "」" + ("weak".equals(level) ? "还不熟" : "还差一点")
+            lines.add("「" + k.getName() + "」" + (MasteryService.RED.equals(color) ? "还不熟" : "补练后补回来了，但曾经错过")
                     + (details.isEmpty() ? "" : "（" + String.join("；", details) + "）"));
         }
         return lines.isEmpty() ? "本章的知识点都掌握得不错。" : String.join("\n", lines);

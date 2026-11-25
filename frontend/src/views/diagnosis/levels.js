@@ -14,6 +14,14 @@ export const LEVELS = {
 // recovered = at least 2 new questions, average >= 0.8; the first-attempt mastery is never changed.
 export const REMEDY = { recovered: '已补回来', practicing: '补练中' }
 
+// portrait colour per knowledge point (MasteryService.color), always shown with its label
+export const COLORS = {
+  green: { label: '第一次就掌握', cls: 'good' },
+  orange: { label: '补回来了，要留意', cls: 'medium' },
+  red: { label: '还没掌握', cls: 'weak' },
+  none: { label: '未练习', cls: 'none' },
+}
+
 export const THRESHOLDS = [0.6, 0.8]
 
 export const percent = (m) => (m == null ? '-' : Math.round(m * 100) + '%')

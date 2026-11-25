@@ -76,6 +76,26 @@ public class MasteryService {
         return first.values().stream().filter(a -> !Grader.PENDING.equals(a.getStatus())).toList();
     }
 
+    public static final String GREEN = "green";
+    public static final String ORANGE = "orange";
+    public static final String RED = "red";
+
+    /**
+     * 画像颜色（每个学生、每个知识点；docs/模块说明/练习与掌握度-设计.md 5.1）：
+     * 第一次练习就掌握（≥ 0.8）→ green；第一次没掌握、补练后补回来了 → orange（曾经错过，要留意，不变成绿色）；
+     * 还没补回来 → red；没练过 → none。
+     */
+    public static String color(Mastery m) {
+        if (m == null || (m.getFirstCount() == null || m.getFirstCount() == 0)
+                && (m.getRemedyCount() == null || m.getRemedyCount() == 0)) {
+            return "none";
+        }
+        if (m.getFirstMastery() != null && m.getFirstMastery() >= RECOVERED) {
+            return GREEN;
+        }
+        return STATUS_RECOVERED.equals(m.getRemedyStatus()) ? ORANGE : RED;
+    }
+
     /** good 掌握 / medium 一般 / weak 薄弱 / none 还没练过（阈值和 docs/api.md 一致） */
     public static String level(Double mastery) {
         if (mastery == null) {
@@ -119,7 +139,7 @@ public class MasteryService {
                 masteryMapper.updateById(row);
             }
             changes.add(new MasteryChange(kpId, kp.getName(), before, row.getMastery(), level(row.getMastery()),
-                    row.getRemedyStatus()));
+                    row.getRemedyStatus(), color(row)));
         }
         return changes;
     }

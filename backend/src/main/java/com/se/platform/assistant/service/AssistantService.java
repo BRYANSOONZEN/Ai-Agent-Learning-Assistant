@@ -136,37 +136,38 @@ public class AssistantService {
                 .orderByAsc(KnowledgePoint::getSortOrder)
                 .orderByAsc(KnowledgePoint::getId));
         List<PointReport> points = kps.stream().map(kp -> point(studentId, kp, ctx)).toList();
-        int good = (int) points.stream().filter(p -> "good".equals(p.verdict())).count();
+        int good = (int) points.stream().filter(p -> MasteryService.GREEN.equals(p.verdict())).count();
+        int orange = (int) points.stream().filter(p -> MasteryService.ORANGE.equals(p.verdict())).count();
         int weak = (int) points.stream().filter(p -> isWeak(p.verdict())).count();
+        int none = (int) points.stream().filter(p -> "none".equals(p.verdict())).count();
         String headline;
         if (points.isEmpty()) {
             headline = "「" + ch.getTitle() + "」你学完了。这一章还没有设置知识点，暂时没有更细的分析。";
-        } else if (weak == 0) {
-            int unsure = points.size() - good;   // 练得太少 + 数据不够
-            headline = "「" + ch.getTitle() + "」" + (completed ? "你学完了，" : "根据你目前的练习，") + points.size() + " 个知识点"
-                    + (good == points.size() ? "全部稳了，可以学下一章。"
-                    : good == 0 ? "都还没有足够的数据判断，先把练习多做几道。"
-                    : "里 " + good + " 个已经稳了，" + unsure + " 个还要多练几道才能判断。");
+        } else if (none == points.size()) {
+            headline = "「" + ch.getTitle() + "」" + (completed ? "你学完了，" : "") + "知识点都还没有足够的数据判断，先把练习做完。";
         } else {
-            // 只说不为 0 的部分，例如"2 个知识点里 1 个还需要补，1 个再练几道确认一下"
-            int few = (int) points.stream().filter(p -> "none".equals(p.verdict())).count();
+            // 只说不为 0 的部分，例如“7 个知识点里 4 个第一次就掌握，1 个补回来了，2 个还没掌握”
             List<String> parts = new ArrayList<>();
             if (good > 0) {
-                parts.add(good + " 个已经稳了");
+                parts.add(good + " 个第一次就掌握");
             }
-            parts.add(weak + " 个还需要补");
-            if (few > 0) {
-                parts.add(few + " 个还没练到");
+            if (orange > 0) {
+                parts.add(orange + " 个补回来了");
+            }
+            if (weak > 0) {
+                parts.add(weak + " 个还没掌握，需要补");
+            }
+            if (none > 0) {
+                parts.add(none + " 个还没练到");
             }
             headline = "「" + ch.getTitle() + "」" + (completed ? "你学完了。" : "根据你目前的练习：") + points.size()
-                    + " 个知识点里 "
-                    + String.join("，", parts) + "。";
+                    + " 个知识点里 " + String.join("，", parts) + "。";
         }
         return new ChapterReport(headline, good, weak, points);
     }
 
     static boolean isWeak(String verdict) {
-        return "weak".equals(verdict) || "medium".equals(verdict);
+        return MasteryService.RED.equals(verdict);
     }
 
     /**
@@ -180,10 +181,11 @@ public class AssistantService {
                 || m != null && m.getRemedyCount() != null && m.getRemedyCount() > 0;
         Double mastery = practiced ? m.getMastery() : null;
         String level = MasteryService.level(mastery);
+        String color = MasteryService.color(m);
         String status = m == null ? null : m.getRemedyStatus();
         List<RemedyRound> rounds = remedyService.rounds(studentId, kp.getId());
         boolean escalated = rounds.stream().anyMatch(r -> Boolean.TRUE.equals(r.getEscalated()));
-        boolean weak = "weak".equals(level) || "medium".equals(level);
+        boolean weak = MasteryService.RED.equals(color);
         PracticeAnalysis.Result pr = practiceAnalysis.analyse(studentId, kp, ctx, weak, false);
         String misconception = weak ? pr.misconception() : null;
         // 方案里只留“看资料”；做题改成小助手里的补练题
@@ -195,23 +197,25 @@ public class AssistantService {
         String action = null;
         if (!practiced) {
             text = "还没做过这个知识点的练习。";
-        } else if ("good".equals(level)) {
-            text = MasteryService.STATUS_RECOVERED.equals(status) ? (first == null ? "" : first + "，") + "补练后已经补回来了。"
-                    : "掌握得不错。";
+        } else if (MasteryService.GREEN.equals(color)) {
+            text = "第一次练习就掌握了。";
+        } else if (MasteryService.ORANGE.equals(color)) {
+            text = (first == null ? "" : first + "，") + "补练后补回来了。这里曾经错过，复习时多留意。";
         } else if (escalated) {
             text = "两轮补练还没补回来，已经告诉老师了。也可以先去 AI 对话把它讲一遍。";
             action = "dialogue";
         } else {
-            text = (first == null ? "" : first + "，") + ("weak".equals(level) ? "还需要补一补" : "还差一点")
+            text = (first == null ? "" : first + "，") + "还没掌握"
                     + (misconception == null ? "" : "。你可能是这样想的：" + misconception) + "。先看资料，再做几道补练题。";
             action = "remedy";
+            boolean open = !rounds.isEmpty() && RemedyRound.OPEN.equals(rounds.get(rounds.size() - 1).getStatus());
             plan.add(new PlanStep("remedy", rounds.isEmpty() ? "做 3 道根据你的错题出的新题（在小助手里做）"
-                    : "继续补练（第 " + Math.min(rounds.size() + (rounds.get(rounds.size() - 1).getStatus().equals(RemedyRound.OPEN) ? 0 : 1),
-                    RemedyService.MAX_ROUNDS) + " 轮）", null, null));
+                    : "继续补练（第 " + Math.min(rounds.size() + (open ? 0 : 1), RemedyService.MAX_ROUNDS) + " 轮）",
+                    null, null));
         }
         return new PointReport(kp.getId(), kp.getName(), level, mastery,
                 m == null ? null : m.getFirstMastery(), status, rounds.size(), escalated,
                 m == null || m.getAttemptCount() == null ? 0 : m.getAttemptCount(), misconception,
-                practiced ? level : "none", text, action, weak ? pr.details() : List.of(), plan);
+                color, text, action, weak ? pr.details() : List.of(), plan);
     }
 }

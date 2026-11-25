@@ -8,7 +8,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MasteryMeter from './MasteryMeter.vue'
-import { LEVELS, REMEDY, TOPIC_RESULTS, percent } from './levels'
+import { COLORS, LEVELS, REMEDY, TOPIC_RESULTS, percent } from './levels'
 import { getMyDiagnosis } from '@/api/diagnosis'
 
 const router = useRouter()
@@ -132,7 +132,7 @@ onMounted(load)
                 <span v-if="p.difficult" class="flag">难点</span>
               </div>
               <MasteryMeter :value="p.mastery" :level="p.level" />
-              <span v-if="p.remedyStatus" class="remedy" :class="p.remedyStatus">{{ REMEDY[p.remedyStatus] }}</span>
+              <span v-if="p.color && p.color !== 'none'" class="color-tag" :class="COLORS[p.color].cls">{{ COLORS[p.color].label }}</span>
               <span class="point-count">
                 {{ p.attemptCount ? `对 ${p.correctCount} / ${p.attemptCount}` : '没有作答' }}
               </span>
@@ -178,6 +178,26 @@ onMounted(load)
 </template>
 
 <style scoped>
+.color-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.color-tag.good {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.color-tag.medium {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+.color-tag.weak {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
 .first-line {
   margin: 6px 0 0;
   font-size: 12px;
