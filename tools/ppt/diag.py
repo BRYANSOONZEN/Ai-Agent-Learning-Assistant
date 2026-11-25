@@ -97,7 +97,7 @@ def label(slide, x, y, text, size=7, color="262626", anchor="above"):
     _font(r, size, color, bold=True)
 
 
-def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=0.5, size=8, legend=True):
+def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=0.5, size=8, legend=True, legend_at=(0.45, 4.72)):
     """nodes: [(id, col, row, text, kind, {w,h})]；edges: [(a, b, label, opts)]，opts 可含 dash、via（'h' 先横后竖 / 'v' 先竖后横）"""
     pos = {}
     for n in nodes:
@@ -165,7 +165,7 @@ def diagram(slide, nodes, edges, x0=0.3, y0=1.05, cw=1.56, rh=0.72, bw=1.38, bh=
                 label(slide, ax + 0.06, (y1 + by) / 2, lab, anchor="right")
     if legend == "std":  # 标准流程图符号
         lx, ly = 4.45, 4.86
-        lx, ly = 0.45, 4.72  # 放左下角空白处，不碰框
+        lx, ly = legend_at  # 默认放左下角空白处，不碰框
         for i, (k, t) in enumerate([("e", "开始 / 结束"), ("p", "处理"), ("d", "判断"), ("io", "输入 / 输出"), ("db", "数据")]):
             node(slide, lx + i * 0.76, ly, 0.22, 0.14 if k != "d" else 0.17, "", k, 6)
             sp = slide.shapes.add_textbox(Inches(lx + i * 0.76 + 0.14), Inches(ly - 0.09), Inches(0.62), Inches(0.18))
