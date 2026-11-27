@@ -21,6 +21,8 @@ CREATE TABLE `user` (
     role          VARCHAR(16)  NOT NULL,                -- student / teacher / admin
     clazz_id      BIGINT,                               -- 学生所在班级（班级表以后再建）
     status        TINYINT      NOT NULL DEFAULT 1,      -- 1 正常，0 禁用
+    token_version INT          NOT NULL DEFAULT 0,      -- 令牌版本：退出登录、改密码、管理员重置密码时加 1，旧令牌立即失效
+    must_change_password TINYINT NOT NULL DEFAULT 0,    -- 1 = 管理员开的账号或重置过的密码，第一次登录要先改密码
     created_at    DATETIME,
     updated_at    DATETIME,
     deleted       TINYINT      NOT NULL DEFAULT 0,      -- 逻辑删除：1 = 已删除

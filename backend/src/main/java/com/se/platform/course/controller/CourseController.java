@@ -40,7 +40,7 @@ public class CourseController {
     public Result<PageResult<CourseView>> page(@RequestParam(defaultValue = "1") int page,
                                                @RequestParam(defaultValue = "10") int size,
                                                @RequestParam(required = false) String keyword) {
-        return Result.ok(courseService.page(page, size, keyword));
+        return Result.ok(courseService.pageMine(page, size, keyword)); // 老师只看得到自己的课
     }
 
     /** GET /api/courses/mine：当前老师自己的课程（老师端「课程管理」） */
@@ -59,7 +59,7 @@ public class CourseController {
 
     @GetMapping("/{id}")
     public Result<CourseView> get(@PathVariable Long id) {
-        return Result.ok(courseService.get(id));
+        return Result.ok(courseService.getOwned(id)); // 别人的课返回 403
     }
 
     @PostMapping

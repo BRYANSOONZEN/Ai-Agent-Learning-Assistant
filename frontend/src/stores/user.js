@@ -17,11 +17,23 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }
 
+  // a renewed token from the backend (response header X-Refresh-Token)
+  function setToken(t) {
+    token.value = t
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...(saved || {}), token: t, user: user.value }))
+  }
+
+  // after changing the password: the user is no longer asked to change it
+  function setUser(u) {
+    user.value = u
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: token.value, user: u }))
+  }
+
   function logout() {
     token.value = ''
     user.value = null
     localStorage.removeItem(STORAGE_KEY)
   }
 
-  return { token, user, isLoggedIn, role, setLogin, logout }
+  return { token, user, isLoggedIn, role, setLogin, setToken, setUser, logout }
 })

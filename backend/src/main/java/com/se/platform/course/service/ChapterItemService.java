@@ -15,6 +15,8 @@ import com.se.platform.course.mapper.ExerciseKnowledgePointMapper;
 import com.se.platform.course.mapper.ExerciseMapper;
 import com.se.platform.dialogue.entity.DialogueTopic;
 import com.se.platform.dialogue.mapper.DialogueTopicMapper;
+import com.se.platform.feynman.entity.FeynmanSetup;
+import com.se.platform.feynman.mapper.FeynmanSetupMapper;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -35,6 +37,7 @@ public class ChapterItemService {
             "video", "视频", "document", "文档", "exercise", "练习", "dialogue", "AI 对话");
 
     private final ChapterItemMapper itemMapper;
+    private final FeynmanSetupMapper setupMapper;
     private final ChapterService chapterService;
     private final MaterialService materialService;
     private final ExerciseMapper exerciseMapper;
@@ -45,7 +48,9 @@ public class ChapterItemService {
     public ChapterItemService(ChapterItemMapper itemMapper, ChapterService chapterService,
                               MaterialService materialService, ExerciseMapper exerciseMapper,
                               ExerciseKnowledgePointMapper linkMapper, DialogueTopicMapper topicMapper,
-                              @org.springframework.context.annotation.Lazy MaterialPipeline pipeline) {
+                              @org.springframework.context.annotation.Lazy MaterialPipeline pipeline,
+                              FeynmanSetupMapper setupMapper) {
+        this.setupMapper = setupMapper;
         this.itemMapper = itemMapper;
         this.chapterService = chapterService;
         this.materialService = materialService;
@@ -78,8 +83,10 @@ public class ChapterItemService {
         item.setCourseId(chapter.getCourseId());
         item.setChapterId(chapter.getId());
         item.setType(req.type());
-        item.setSortOrder(Math.toIntExact(itemMapper.selectCount(
-                new LambdaQueryWrapper<ChapterItem>().eq(ChapterItem::getChapterId, chapter.getId()))));
+        // 排在最后：最大顺序号 + 1（删掉中间的项后再加，也不会插到前面）
+        item.setSortOrder(itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
+                        .eq(ChapterItem::getChapterId, chapter.getId()))
+                .stream().mapToInt(x -> x.getSortOrder() == null ? 0 : x.getSortOrder()).max().orElse(-1) + 1);
         copy(req, item);
         itemMapper.insert(item);
         return toView(item);
@@ -223,7 +230,9 @@ public class ChapterItemService {
             case "video" -> material != null;
             case "document" -> material != null || hasText;
             case "exercise" -> exercises > 0;
-            case "dialogue" -> topics > 0;
+            // 费曼对话的草稿老师确认过，或者有旧版对话话题
+            case "dialogue" -> topics > 0 || setupMapper.selectCount(new LambdaQueryWrapper<FeynmanSetup>()
+                    .eq(FeynmanSetup::getItemId, i.getId()).eq(FeynmanSetup::getStatus, FeynmanSetup.CONFIRMED)) > 0;
             default -> false;
         };
         return new ChapterItemView(i.getId(), i.getChapterId(), i.getType(), i.getTitle(), i.getDescription(),

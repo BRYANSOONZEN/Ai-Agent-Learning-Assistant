@@ -35,10 +35,14 @@ public class JwtService {
 
     private final byte[] secret;
     private final long validSeconds;
+    private final long rememberSeconds;
+    private final long renewSeconds;
     private final ObjectMapper json = new ObjectMapper();
 
     public JwtService(@Value("${platform.auth.jwt-secret:}") String configuredSecret,
-                      @Value("${platform.auth.token-hours:24}") long tokenHours) {
+                      @Value("${platform.auth.token-hours:24}") long tokenHours,
+                      @Value("${platform.auth.remember-days:7}") long rememberDays,
+                      @Value("${platform.auth.renew-hours:2}") long renewHours) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             byte[] random = new byte[32];
             new SecureRandom().nextBytes(random);
@@ -48,6 +52,18 @@ public class JwtService {
             this.secret = configuredSecret.getBytes(StandardCharsets.UTF_8);
         }
         this.validSeconds = tokenHours * 3600;
+        this.rememberSeconds = rememberDays * 24 * 3600;
+        this.renewSeconds = renewHours * 3600;
+    }
+
+    /** 勾了“记住我”的令牌有效期 */
+    public long rememberSeconds() {
+        return rememberSeconds;
+    }
+
+    /** 还剩多久就该换新令牌了 */
+    public boolean shouldRenew(Claims c) {
+        return c.expiresAt() - Instant.now().getEpochSecond() < renewSeconds;
     }
 
     public long validSeconds() {
@@ -55,17 +71,23 @@ public class JwtService {
     }
 
     /** 令牌里带的信息 */
-    public record Claims(long userId, String role, String name, long expiresAt) {
+    /** version：签发时用户的 token_version；lifetime：这张令牌一共能用几秒（续期时用同样的长度） */
+    public record Claims(long userId, String role, String name, long expiresAt, int version, long lifetime) {
     }
 
     public String issue(long userId, String role, String name) {
+        return issue(userId, role, name, 0, validSeconds);
+    }
+
+    public String issue(long userId, String role, String name, int version, long lifetime) {
         long now = Instant.now().getEpochSecond();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sub", String.valueOf(userId));
         body.put("role", role);
         body.put("name", name);
         body.put("iat", now);
-        body.put("exp", now + validSeconds);
+        body.put("exp", now + lifetime);
+        body.put("ver", version);
         try {
             String payload = B64.encodeToString(json.writeValueAsBytes(body));
             String unsigned = HEADER + "." + payload;
@@ -96,8 +118,10 @@ public class JwtService {
             if (Instant.now().getEpochSecond() >= exp) {
                 throw new ExpiredException();
             }
+            long iat = body.get("iat") instanceof Number n ? n.longValue() : exp - validSeconds;
+            int ver = body.get("ver") instanceof Number v ? v.intValue() : 0;
             return new Claims(Long.parseLong((String) body.get("sub")), (String) body.get("role"),
-                    (String) body.get("name"), exp);
+                    (String) body.get("name"), exp, ver, exp - iat);
         } catch (ExpiredException e) {
             throw e;
         } catch (Exception e) {

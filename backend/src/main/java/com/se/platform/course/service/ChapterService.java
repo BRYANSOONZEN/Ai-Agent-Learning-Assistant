@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ChapterService {
 
+    private final ChapterItemService itemService;
     private final ChapterMapper chapterMapper;
     private final CourseService courseService;
     private final ChapterItemMapper itemMapper;
@@ -32,7 +33,9 @@ public class ChapterService {
 
     public ChapterService(ChapterMapper chapterMapper, CourseService courseService, ChapterItemMapper itemMapper,
                           KnowledgePointMapper kpMapper, ExerciseMapper exerciseMapper,
-                          DialogueTopicMapper topicMapper) {
+                          DialogueTopicMapper topicMapper,
+                          @org.springframework.context.annotation.Lazy ChapterItemService itemService) {
+        this.itemService = itemService;
         this.chapterMapper = chapterMapper;
         this.courseService = courseService;
         this.itemMapper = itemMapper;
@@ -58,9 +61,10 @@ public class ChapterService {
         courseService.requireOwned(req.courseId());
         Chapter chapter = new Chapter();
         chapter.setCourseId(req.courseId());
-        // 新章节排在最后
-        chapter.setSortOrder(Math.toIntExact(chapterMapper.selectCount(
-                new LambdaQueryWrapper<Chapter>().eq(Chapter::getCourseId, req.courseId()))));
+        // 新章节排在最后：最大顺序号 + 1（删掉中间的章节后也不会插到前面）
+        chapter.setSortOrder(chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
+                        .eq(Chapter::getCourseId, req.courseId()))
+                .stream().mapToInt(c -> c.getSortOrder() == null ? 0 : c.getSortOrder()).max().orElse(-1) + 1);
         copy(req, chapter);
         chapterMapper.insert(chapter);
         return toView(chapter);
@@ -129,6 +133,7 @@ public class ChapterService {
     }
 
     private void copy(ChapterSaveRequest req, Chapter chapter) {
+        boolean publishing = "published".equals(req.status()) && !"published".equals(chapter.getStatus());
         chapter.setTitle(req.title().trim());
         chapter.setIntro(req.intro());
         chapter.setStatus(req.status() == null ? "draft" : req.status());
@@ -140,6 +145,20 @@ public class ChapterService {
                     .stream().map(ChapterItem::getTitle).toList();
             if (!noDue.isEmpty()) {
                 throw BusinessException.badRequest("发布前请给每次练习设截止时间：" + String.join("、", noDue));
+            }
+        }
+        // 发布前的 3 条检查（和前端“预览发布”页一样，后端再查一遍，直接调接口也绕不过去）
+        if (publishing && chapter.getId() != null) {
+            if (chapter.getIntro() == null || chapter.getIntro().isBlank()) {
+                throw BusinessException.badRequest("发布前请先写章节介绍");
+            }
+            var items = itemService.list(chapter.getId());
+            if (items.isEmpty()) {
+                throw BusinessException.badRequest("发布前至少要有一项内容");
+            }
+            List<String> notReady = items.stream().filter(it -> !it.ready()).map(it -> it.title()).toList();
+            if (!notReady.isEmpty()) {
+                throw BusinessException.badRequest("这些内容还不完整，不能发布：" + String.join("、", notReady));
             }
         }
     }

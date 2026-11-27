@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -96,7 +97,7 @@ class AuthSecurityTest {
 
     @Test
     void expiredTokenIs401WithAClearMessage() throws Exception {
-        String expired = new JwtService("test-secret-for-auth-security", 0).issue(2, "teacher", "李老师");
+        String expired = new JwtService("test-secret-for-auth-security", 0, 7, 2).issue(2, "teacher", "李老师");
         call(get("/api/courses/mine"), expired).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("登录已过期，请重新登录"));
     }
@@ -234,5 +235,59 @@ class AuthSecurityTest {
                 .andExpect(jsonPath("$.code").value(400));
         call(put("/api/admin/users/1/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":0}"), admin)
                 .andExpect(jsonPath("$.code").value(403));
+    }
+
+    // ------------------------------------------------------------------ 续期、记住我、退出、首次改密码
+
+    @Test
+    void rememberMeGivesSevenDays_normalLoginOneDay() throws Exception {
+        login("2023004", DEMO).andExpect(jsonPath("$.data.expiresIn").value(24 * 3600));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"2023004\",\"password\":\"%s\",\"remember\":true}".formatted(DEMO)))
+                .andExpect(jsonPath("$.data.expiresIn").value(7 * 24 * 3600));
+    }
+
+    @Test
+    void tokenAboutToExpireIsRenewedInAResponseHeader() throws Exception {
+        // 刚登录的 24 小时令牌：不用换
+        String fresh = token("2023004");
+        call(get("/api/auth/me"), fresh).andExpect(header().doesNotExist("X-Refresh-Token"));
+        // 只剩 1 小时（< 2 小时）的令牌：响应头里带一个新的，新令牌能用
+        String old = new JwtService("test-secret-for-auth-security", 24, 7, 2).issue(10, "student", "学生06", 0, 3600);
+        String renewed = call(get("/api/auth/me"), old).andExpect(status().isOk())
+                .andReturn().getResponse().getHeader("X-Refresh-Token");
+        assertThat(renewed).isNotBlank();
+        call(get("/api/auth/me"), renewed).andExpect(jsonPath("$.data.id").value(10));
+    }
+
+    @Test
+    void logoutInvalidatesTheTokenImmediately() throws Exception {
+        String t = token("2023005");
+        call(get("/api/auth/me"), t).andExpect(status().isOk());
+        call(post("/api/auth/logout"), t).andExpect(jsonPath("$.code").value(200));
+        call(get("/api/auth/me"), t).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("登录已失效，请重新登录"));
+        // 重新登录拿到的新令牌照常能用
+        call(get("/api/auth/me"), token("2023005")).andExpect(status().isOk());
+    }
+
+    @Test
+    void adminCreatedAccountMustChangePasswordFirst() throws Exception {
+        String admin = token("admin");
+        call(post("/api/admin/users").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"2023099\",\"password\":\"init12345\",\"name\":\"新同学\",\"role\":\"student\"}"), admin);
+        String body = login("2023099", "init12345").andExpect(jsonPath("$.data.user.mustChangePassword").value(true))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        String t = json.readTree(body).path("data").path("token").asText();
+        // 改密码：返回新令牌，“要先改密码”清掉，旧令牌失效
+        String changed = call(put("/api/auth/password").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"oldPassword\":\"init12345\",\"newPassword\":\"mine12345\"}"), t)
+                .andExpect(jsonPath("$.data.user.mustChangePassword").value(false))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        call(get("/api/auth/me"), t).andExpect(status().isUnauthorized());
+        call(get("/api/auth/me"), json.readTree(changed).path("data").path("token").asText())
+                .andExpect(jsonPath("$.data.mustChangePassword").value(false));
+        // 自己注册的学生不用改
+        login("2023001", DEMO).andExpect(jsonPath("$.data.user.mustChangePassword").value(false));
     }
 }

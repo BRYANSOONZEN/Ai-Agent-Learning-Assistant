@@ -13,6 +13,7 @@ import { useUserStore } from '@/stores/user'
 import { layoutChildren } from '@/router'
 import { getMyDiagnosis } from '@/api/diagnosis'
 import { getOpenIssueCount } from '@/api/classAnalysis'
+import { logoutApi } from '@/api/auth'
 import StudyAssistant from '@/components/StudyAssistant.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
@@ -80,10 +81,17 @@ const studyPrompt = computed(() => {
 
 const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 
-function logout() {
+async function logout() {
+  try {
+    await logoutApi() // the token stops working on the server too
+  } catch {
+    /* already invalid or offline: still sign out here */
+  }
   userStore.logout()
   router.push('/login')
 }
+// accounts opened by the admin (or after a reset) must change the password before using the platform
+const mustChange = computed(() => !!userStore.user?.mustChangePassword)
 </script>
 
 <template>
@@ -169,6 +177,7 @@ function logout() {
       <!-- 个人学习助手：学生才有，点开才出来 -->
       <StudyAssistant v-if="userStore.role === 'student'" />
       <ChangePasswordDialog v-model="passwordVisible" />
+      <ChangePasswordDialog :model-value="mustChange" forced />
     </div>
   </div>
 </template>

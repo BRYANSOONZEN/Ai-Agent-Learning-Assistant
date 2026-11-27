@@ -60,7 +60,12 @@ public class CourseService {
         return page(page, size, keyword, null, "published");
     }
 
+    /** 每页最多几条：直接调接口传很大的 size 也只给这么多 */
+    public static final int MAX_PAGE_SIZE = 50;
+
     private PageResult<CourseView> page(int page, int size, String keyword, Long teacherId, String status) {
+        size = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+        page = Math.max(1, page);
         LambdaQueryWrapper<Course> wrapper = new LambdaQueryWrapper<Course>()
                 // eq / like 的第一个参数是条件：为 true 才加这个条件
                 .eq(teacherId != null, Course::getTeacherId, teacherId)
@@ -81,6 +86,7 @@ public class CourseService {
     }
 
     public CourseView create(CourseSaveRequest req) {
+        requireUniqueName(req.name(), null);
         Course course = new Course();
         course.setTeacherId(currentTeacherId());
         copy(req, course);
@@ -90,9 +96,23 @@ public class CourseService {
 
     public CourseView update(Long id, CourseSaveRequest req) {
         Course course = requireOwned(id);
+        requireUniqueName(req.name(), id);
         copy(req, course);
         courseMapper.updateById(course);
         return toView(course);
+    }
+
+    /** 同一位老师的课程不能重名（不同老师可以） */
+    private void requireUniqueName(String name, Long exceptId) {
+        if (name == null) {
+            return;
+        }
+        long same = courseMapper.selectCount(new LambdaQueryWrapper<Course>()
+                .eq(Course::getTeacherId, currentTeacherId()).eq(Course::getName, name.trim())
+                .ne(exceptId != null, Course::getId, exceptId));
+        if (same > 0) {
+            throw BusinessException.conflict("你已经有一门叫「" + name.trim() + "」的课程了");
+        }
     }
 
     /** 课程下还有章节时不能删，避免误删整门课的内容 */

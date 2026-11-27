@@ -24,7 +24,8 @@ public final class AuthDtos {
     /** 前端发来的用户名和密码 */
     public record LoginRequest(
             @NotBlank(message = "用户名不能为空") String username,
-            @NotBlank(message = "密码不能为空") String password) {
+            @NotBlank(message = "密码不能为空") String password,
+            Boolean remember) {
     }
 
     /** 学生自己注册：没有角色字段，一律注册成学生 */
@@ -45,7 +46,8 @@ public final class AuthDtos {
     }
 
     /** 返回给前端的用户信息：没有 passwordHash 字段，所以不可能把哈希带出去 */
-    public record UserView(Long id, String username, String name, String role) {
+    /** mustChangePassword：true 时前端先弹出改密码，改完才能用 */
+    public record UserView(Long id, String username, String name, String role, boolean mustChangePassword) {
     }
 
     /** 登录结果：令牌 + 用户信息；expiresIn 是令牌还有几秒过期 */

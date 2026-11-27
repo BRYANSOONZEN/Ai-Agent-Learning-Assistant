@@ -22,6 +22,9 @@ request.interceptors.request.use((config) => {
 
 request.interceptors.response.use(
   (response) => {
+    // the token is about to expire: the backend sent a fresh one, keep using that (users who stay active are never kicked out)
+    const fresh = response.headers?.['x-refresh-token']
+    if (fresh) useUserStore().setToken(fresh)
     const { code, message, data } = response.data
     if (code === 200) return data
     // `silent: true` in the request config: the page shows the error itself (e.g. under the login form)

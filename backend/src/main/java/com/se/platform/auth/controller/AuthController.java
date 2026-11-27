@@ -44,10 +44,16 @@ public class AuthController {
         return Result.ok(authService.me());
     }
 
-    /** PUT /api/auth/password：修改自己的密码 */
+    /** PUT /api/auth/password {oldPassword, newPassword}：改密码；其他设备上的旧令牌失效，返回新令牌 */
     @PutMapping("/password")
-    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        authService.changePassword(request);
+    public Result<LoginResponse> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        return Result.ok(authService.changePassword(request));
+    }
+
+    /** POST /api/auth/logout：退出登录，手里的令牌立即失效 */
+    @PostMapping("/logout")
+    public Result<Void> logout() {
+        authService.logout();
         return Result.ok();
     }
 }

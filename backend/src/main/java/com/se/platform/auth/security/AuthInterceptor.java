@@ -27,6 +27,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
+    /** 续期时新令牌放在这个响应头里 */
+    public static final String REFRESH_HEADER = "X-Refresh-Token";
+
     private final JwtService jwtService;
     private final UserMapper userMapper;
     private final ObjectMapper json = new ObjectMapper();
@@ -66,11 +69,21 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (user.getStatus() == null || user.getStatus() != User.STATUS_ACTIVE) {
             return deny(resp, 401, "账号已被禁用");
         }
+        // 退出登录、改密码、管理员重置密码后，旧令牌的版本对不上
+        int version = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+        if (claims.version() != version) {
+            return deny(resp, 401, "登录已失效，请重新登录");
+        }
         // 角色以数据库为准（令牌签发后角色不会变，这里是双保险）
         if (!rule.allowed().contains(AccessRules.LOGGED_IN) && !rule.allowed().contains(user.getRole())) {
             return deny(resp, 403, "没有权限访问这个接口");
         }
         req.setAttribute(CurrentUser.ATTRIBUTE, new CurrentUser.User(user.getId(), user.getRole(), user.getName()));
+        // 快过期了：顺带发一个同样长度的新令牌，前端拿到就换掉（一直在用的人不会被中途踢出去）
+        if (jwtService.shouldRenew(claims)) {
+            resp.setHeader(REFRESH_HEADER, jwtService.issue(user.getId(), user.getRole(), user.getName(), version,
+                    claims.lifetime()));
+        }
         return true;
     }
 

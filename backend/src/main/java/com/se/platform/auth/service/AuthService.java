@@ -61,7 +61,7 @@ public class AuthService {
             throw BusinessException.forbidden("账号已被禁用，请联系管理员");
         }
         attempts.success(username);
-        return issue(user);
+        return issue(user, Boolean.TRUE.equals(request.remember()));
     }
 
     /** 学生自己注册：角色固定为学生，注册成功直接登录 */
@@ -78,14 +78,22 @@ public class AuthService {
         user.setRole("student");
         user.setStatus(User.STATUS_ACTIVE);
         userMapper.insert(user);
-        return issue(user);
+        return issue(user, false);
     }
 
     public UserView me() {
         return view(requireCurrent());
     }
 
-    public void changePassword(ChangePasswordRequest request) {
+    /** 退出登录：令牌版本加 1，手里的旧令牌（包括别的设备上的）立即失效 */
+    public void logout() {
+        User user = requireCurrent();
+        user.setTokenVersion(version(user) + 1);
+        userMapper.updateById(user);
+    }
+
+    /** 改密码：清掉“要先改密码”，其他设备上的旧令牌失效，返回一张新令牌给当前页面继续用 */
+    public LoginResponse changePassword(ChangePasswordRequest request) {
         User user = requireCurrent();
         if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
             throw BusinessException.badRequest("原密码不对");
@@ -94,7 +102,14 @@ public class AuthService {
             throw BusinessException.badRequest("新密码不能和原密码一样");
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
+        user.setTokenVersion(version(user) + 1);
         userMapper.updateById(user);
+        return issue(user, false);
+    }
+
+    static int version(User user) {
+        return user.getTokenVersion() == null ? 0 : user.getTokenVersion();
     }
 
     public String hash(String rawPassword) {
@@ -110,12 +125,14 @@ public class AuthService {
         return user;
     }
 
-    private LoginResponse issue(User user) {
-        String token = jwtService.issue(user.getId(), user.getRole(), user.getName());
-        return new LoginResponse(token, jwtService.validSeconds(), view(user));
+    private LoginResponse issue(User user, boolean remember) {
+        long seconds = remember ? jwtService.rememberSeconds() : jwtService.validSeconds();
+        String token = jwtService.issue(user.getId(), user.getRole(), user.getName(), version(user), seconds);
+        return new LoginResponse(token, seconds, view(user));
     }
 
     public static UserView view(User user) {
-        return new UserView(user.getId(), user.getUsername(), user.getName(), user.getRole());
+        return new UserView(user.getId(), user.getUsername(), user.getName(), user.getRole(),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
     }
 }

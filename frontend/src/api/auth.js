@@ -3,12 +3,12 @@ import { mockUsers } from '@/mock/data'
 
 // POST /api/auth/login { username, password } -> { token, expiresIn, user }
 // The role is NOT sent: it comes from the account in the database.
-export function login({ username, password }) {
+export function login({ username, password, remember }) {
   if (USE_MOCK) {
     const role = username.startsWith('teacher') ? 'teacher' : username === 'admin' ? 'admin' : 'student'
     return mockResponse({ token: 'mock-token', expiresIn: 86400, user: { ...mockUsers[role], username } })
   }
-  return request.post('/auth/login', { username, password }, { silent: true })
+  return request.post('/auth/login', { username, password, remember: !!remember }, { silent: true })
 }
 
 // POST /api/auth/register { username, password, name } -> same as login; always a student
@@ -21,7 +21,12 @@ export function getMe() {
   return request.get('/auth/me')
 }
 
-// PUT /api/auth/password { oldPassword, newPassword }
+// POST /api/auth/logout -> the token stops working at once (on every device)
+export function logoutApi() {
+  return request.post('/auth/logout', null, { silent: true })
+}
+
+// PUT /api/auth/password { oldPassword, newPassword } -> a new login { token, user }; other devices are signed out
 export function changePassword(data) {
   return request.put('/auth/password', data)
 }

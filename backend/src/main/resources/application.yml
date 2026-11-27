@@ -65,6 +65,8 @@ platform:
     # 都没有时每次启动随机生成（重启后要重新登录）
     jwt-secret: ${JWT_SECRET:}
     token-hours: 24               # 令牌 24 小时有效
+    remember-days: 7              # 登录时勾“记住我”：令牌 7 天有效
+    renew-hours: 2                # 令牌剩不到 2 小时时，后端在响应头 X-Refresh-Token 里顺带发一个新的（一直在用的人不会被踢出去）
     max-failures: 5               # 同一个用户名连续输错 5 次……
     lock-minutes: 15              # ……锁 15 分钟
   deadline:

@@ -16,7 +16,7 @@ const userStore = useUserStore()
 const formRef = ref()
 const loading = ref(false)
 const error = ref('')
-const form = reactive({ username: '', password: '' })
+const form = reactive({ username: '', password: '', remember: false })
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
@@ -62,6 +62,7 @@ async function submit() {
             show-password
           />
         </el-form-item>
+        <el-checkbox v-model="form.remember" class="remember">记住我（7 天内不用重新登录，公用电脑不要勾）</el-checkbox>
         <el-button type="primary" :loading="loading" class="submit" @click="submit">
           登录
         </el-button>
@@ -114,6 +115,9 @@ async function submit() {
 
 .submit {
   width: 100%;
+}
+.remember {
+  margin: -6px 0 12px;
 }
 
 .foot {

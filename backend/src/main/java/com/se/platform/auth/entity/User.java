@@ -28,6 +28,12 @@ public class User {
     /** 1 正常，0 禁用 */
     private Integer status;
 
+    /** 令牌版本：令牌里带着签发时的版本，不一样就失效（退出登录、改密码、重置密码时加 1） */
+    private Integer tokenVersion;
+
+    /** true = 第一次登录要先改密码（管理员开的账号、管理员重置过的密码） */
+    private Boolean mustChangePassword;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

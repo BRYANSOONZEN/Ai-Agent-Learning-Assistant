@@ -58,6 +58,7 @@ public class AdminUserService {
         user.setName(request.name().trim());
         user.setRole(request.role());
         user.setStatus(User.STATUS_ACTIVE);
+        user.setMustChangePassword(true); // 管理员定的初始密码：第一次登录先改
         userMapper.insert(user);
         return view(user);
     }
@@ -75,6 +76,8 @@ public class AdminUserService {
     public void resetPassword(long id, String password) {
         User user = requireEditable(id);
         user.setPasswordHash(authService.hash(password));
+        user.setMustChangePassword(true);                        // 重置后第一次登录先改
+        user.setTokenVersion(AuthService.version(user) + 1);     // 旧令牌立即失效
         userMapper.updateById(user);
         attempts.clear(user.getUsername()); // 重置后马上能登录，不用等锁定到期
     }
