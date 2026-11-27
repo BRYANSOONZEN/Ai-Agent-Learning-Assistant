@@ -258,7 +258,7 @@ public class ClassPushService {
     @Transactional
     public int remind(Long itemId, String message) {
         ChapterItem it = requireOwnedItem(itemId);
-        List<User> students = analysis.students();
+        List<User> students = analysis.students(it.getCourseId());
         Set<Long> submitted = new LinkedHashSet<>();
         analysis.firstAttempts(it, students).values().forEach(m -> submitted.addAll(m.keySet()));
         String text = message == null || message.isBlank()

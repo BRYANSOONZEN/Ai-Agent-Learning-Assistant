@@ -35,6 +35,10 @@ public class CourseService {
     private final CourseMapper courseMapper;
     private final ChapterMapper chapterMapper;
 
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private EnrollmentService enrollment;
+
     public CourseService(CourseMapper courseMapper, ChapterMapper chapterMapper) {
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
@@ -187,9 +191,9 @@ public class CourseService {
     }
 
     private CourseView toView(Course c) {
-        // 选课表还没建，studentCount 先返回 0
         return new CourseView(c.getId(), c.getName(), c.getDescription(), c.getTeacherId(),
-                courseMapper.findUserName(c.getTeacherId()), c.getStatus(), modulesOf(c), countChapters(c.getId()), 0,
+                courseMapper.findUserName(c.getTeacherId()), c.getStatus(), modulesOf(c), countChapters(c.getId()),
+                enrollment == null ? 0 : enrollment.count(c.getId()),
                 c.getCreatedAt());
     }
 }

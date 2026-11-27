@@ -63,6 +63,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ClassAnalysisService {
 
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
+
+
     static final double QUESTION_RATE = 0.8;
     static final double CELL_RATE = 0.5;
 
@@ -130,7 +135,7 @@ public class ClassAnalysisService {
         Course course = courseService.requireOwned(courseId);
         List<Chapter> chapters = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
                 .eq(Chapter::getCourseId, courseId).orderByAsc(Chapter::getSortOrder).orderByAsc(Chapter::getId));
-        List<User> students = students();
+        List<User> students = students(courseId);
         List<ItemBoard> items = new ArrayList<>();
         for (Chapter ch : chapters) {
             for (ChapterItem it : itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
@@ -332,7 +337,7 @@ public class ClassAnalysisService {
     private void recomputeCells(ClassIssue q) {
         ItemAnalysis a = analysisMapper.selectById(q.getAnalysisId());
         ChapterItem it = itemMapper.selectById(q.getItemId());
-        cells(a, it, firstAttempts(it, students()));
+        cells(a, it, firstAttempts(it, students(it.getCourseId())));
     }
 
     private ClassIssue requireQuestion(Long issueId, String newStatus) {
@@ -415,10 +420,9 @@ public class ClassAnalysisService {
 
     // ------------------------------------------------------------------ 小工具
 
-    /** 全班 = 所有在用的学生账号（和截止时间页一样） */
-    public List<User> students() {
-        return userMapper.selectList(new LambdaQueryWrapper<User>()
-                .eq(User::getRole, "student").eq(User::getStatus, 1).orderByAsc(User::getId));
+    /** 全班 = 选了这门课、账号在用的学生（和截止时间页一样） */
+    public List<User> students(Long courseId) {
+        return enrollment.students(courseId);
     }
 
     private List<Exercise> questions(Long itemId) {

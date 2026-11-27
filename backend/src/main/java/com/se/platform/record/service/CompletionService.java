@@ -47,6 +47,10 @@ public class CompletionService {
     private final AnswerRecordMapper answerMapper;
     private final DialogueSessionMapper sessionMapper;
 
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
+
     public CompletionService(ChapterItemMapper itemMapper, LearningEventMapper eventMapper,
                              AnswerRecordMapper answerMapper, DialogueSessionMapper sessionMapper) {
         this.itemMapper = itemMapper;
@@ -133,6 +137,9 @@ public class CompletionService {
 
     /** 学生要做这一项之前检查：锁住了就拒绝，告诉他先完成哪些项 */
     public void requireUnlocked(long studentId, ChapterItem item) {
+        if (enrollment != null) {
+            enrollment.requireEnrolled(studentId, item.getCourseId());
+        }
         List<Node> items = itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
                         .eq(ChapterItem::getChapterId, item.getChapterId())
                         .orderByAsc(ChapterItem::getSortOrder)

@@ -68,6 +68,10 @@ public class CourseProfileService {
     private final AnswerRecordMapper answerMapper;
     private final LearningEventMapper eventMapper;
     private final CompletionService completion;
+
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
     private final FeynmanDiagnosis feynmanDiagnosis;
     private final ProfileSnapshotMapper snapshotMapper;
     private final com.fasterxml.jackson.databind.ObjectMapper json;
@@ -94,8 +98,12 @@ public class CourseProfileService {
     /** 已发布的课程，带“学完几章” */
     public List<CourseOption> courses(long studentId) {
         List<CourseOption> out = new ArrayList<>();
+        java.util.Set<Long> mine = enrollment.courseIds(studentId);
         for (Course c : courseMapper.selectList(new LambdaQueryWrapper<Course>().eq(Course::getStatus, "published")
                 .orderByAsc(Course::getId))) {
+            if (!mine.contains(c.getId())) {
+                continue;   // 只列加入了的课
+            }
             Scope sc = scope(c.getId());
             Set<Long> done = completion.doneItemIds(studentId, sc.allItemIds());
             int chaptersDone = (int) sc.items.values().stream()

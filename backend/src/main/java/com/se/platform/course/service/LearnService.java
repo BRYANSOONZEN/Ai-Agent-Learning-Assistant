@@ -34,6 +34,10 @@ import org.springframework.stereotype.Service;
 public class LearnService {
 
     private final CourseService courseService;
+
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
     private final ChapterMapper chapterMapper;
     private final ChapterItemService itemService;
     private final ExerciseService exerciseService;
@@ -71,6 +75,7 @@ public class LearnService {
         if (!"published".equals(course.getStatus())) {
             throw BusinessException.notFound("课程");
         }
+        enrollment.requireEnrolled(recordService.currentStudentId(), courseId);
         List<LearnChapter> chapters = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
                         .eq(Chapter::getCourseId, courseId)
                         .eq(Chapter::getStatus, "published")

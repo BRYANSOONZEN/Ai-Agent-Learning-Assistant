@@ -27,6 +27,10 @@ public class LearnController {
 
     private final LearnService learnService;
 
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
+
     public LearnController(LearnService learnService) {
         this.learnService = learnService;
     }
@@ -37,6 +41,19 @@ public class LearnController {
                                                   @RequestParam(defaultValue = "12") int size,
                                                   @RequestParam(required = false) String keyword) {
         return Result.ok(learnService.courses(page, size, keyword));
+    }
+
+    /** POST /api/learn/courses/{id}/join：加入这门课（选课），加入后才能学 */
+    @PostMapping("/courses/{id}/join")
+    public Result<Void> join(@PathVariable Long id) {
+        enrollment.join(com.se.platform.common.CurrentUser.studentId(), id);
+        return Result.ok();
+    }
+
+    /** GET /api/learn/enrollments：我加入了哪些课（课程 id） */
+    @GetMapping("/enrollments")
+    public Result<java.util.Set<Long>> enrollments() {
+        return Result.ok(enrollment.courseIds(com.se.platform.common.CurrentUser.studentId()));
     }
 
     /** GET /api/learn/courses/{id}：学习页的大纲（已发布的章节 + 每章的内容项） */

@@ -5,7 +5,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
-import { getLearnCourses } from '@/api/learn'
+import { ElMessage } from 'element-plus'
+import { getEnrollments, getLearnCourses, joinCourse } from '@/api/learn'
 import { courseProgress } from './learnProgress'
 
 const router = useRouter()
@@ -31,11 +32,29 @@ function search() {
   load()
 }
 
-function open(c) {
+// courses I joined (选课); a course has to be joined before it can be learned
+const joined = ref([])
+async function loadJoined() {
+  try {
+    joined.value = (await getEnrollments()) || []
+  } catch {
+    joined.value = []
+  }
+}
+
+async function open(c) {
+  if (!joined.value.includes(c.id)) {
+    await joinCourse(c.id)
+    ElMessage.success(`已加入「${c.name}」`)
+    joined.value = [...joined.value, c.id]
+  }
   router.push({ name: 'course-detail', params: { id: c.id } })
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadJoined()
+})
 </script>
 
 <template>
@@ -65,7 +84,8 @@ onMounted(load)
           <p class="desc">{{ c.description || '还没有简介' }}</p>
           <div class="foot">
             <span class="teacher">{{ c.teacher }}</span>
-            <span v-if="courseProgress(c.id)" class="progress">已学 {{ courseProgress(c.id) }} 项</span>
+            <span v-if="!joined.includes(c.id)" class="start">加入课程</span>
+            <span v-else-if="courseProgress(c.id)" class="progress">已学 {{ courseProgress(c.id) }} 项</span>
             <span v-else class="start">开始学习</span>
           </div>
         </div>

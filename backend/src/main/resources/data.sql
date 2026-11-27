@@ -40,6 +40,10 @@ INSERT INTO course (name, description, teacher_id, status, created_at, updated_a
 -- 其他课默认开全部模块；「软件设计与体系结构」只用文档 + 知识点 + 题目（演示：老师可以不开视频和 AI 对话）
 UPDATE course SET modules = 'document,knowledge,exercise' WHERE id = 4;
 
+-- 选课：演示学生都已加入所有课程（新注册的学生要自己在“课程学习”里点“加入课程”）
+INSERT INTO enrollment (course_id, student_id, created_at)
+SELECT c.id, u.id, NOW() FROM course c, `user` u WHERE u.role = 'student';
+
 -- ---------------------------------------------------------------------
 -- 章节：「软件测试」（course_id = 1）的两章。第 1 章 id = 1，下面的对话话题就挂在它下面
 -- ---------------------------------------------------------------------

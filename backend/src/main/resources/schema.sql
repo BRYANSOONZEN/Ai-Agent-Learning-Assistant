@@ -651,3 +651,17 @@ CREATE TABLE profile_snapshot (
     PRIMARY KEY (id),
     CONSTRAINT uk_profile_snapshot UNIQUE (student_id, course_id)
 );
+
+-- ---------------------------------------------------------------------
+-- 选课：学生加入一门课后才能学，老师的全班分析、截止情况只算选了这门课的学生
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS enrollment;
+CREATE TABLE enrollment (
+    id          BIGINT    NOT NULL AUTO_INCREMENT,
+    course_id   BIGINT    NOT NULL,                    -- → course.id
+    student_id  BIGINT    NOT NULL,                    -- → user.id（学生）
+    created_at  DATETIME  NOT NULL,                    -- 加入的时间
+    PRIMARY KEY (id),
+    CONSTRAINT uk_enrollment UNIQUE (course_id, student_id)
+);
+CREATE INDEX idx_enrollment_student ON enrollment (student_id);

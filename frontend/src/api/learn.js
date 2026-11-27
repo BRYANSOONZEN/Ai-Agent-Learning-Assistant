@@ -8,6 +8,16 @@ import request from './request'
  */
 
 // GET /api/learn/courses?page=&size=&keyword= -> { records, total }
+// GET /api/learn/enrollments -> ids of the courses I joined
+export function getEnrollments() {
+  return request.get('/learn/enrollments')
+}
+
+// POST /api/learn/courses/{id}/join -> join a published course (needed before learning it)
+export function joinCourse(id) {
+  return request.post(`/learn/courses/${id}/join`)
+}
+
 export function getLearnCourses({ page = 1, size = 12, keyword = '' } = {}) {
   return request.get('/learn/courses', { params: { page, size, keyword } })
 }

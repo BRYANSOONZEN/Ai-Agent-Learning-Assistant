@@ -46,6 +46,10 @@ public class DeadlineService {
     private final ChapterItemMapper itemMapper;
     private final CompletionService completionService;
     private final UserMapper userMapper;
+
+    /** 选课：没加入这门课的学生不能学（字段注入，单元测试里直接 new 时为空） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.se.platform.course.service.EnrollmentService enrollment;
     private final int remindDays;
 
     public DeadlineService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
@@ -64,9 +68,10 @@ public class DeadlineService {
         Visible v = visible(null);
         Map<Long, Map<Long, LocalDateTime>> finished = finishedAt(v.items, List.of(studentId));
         List<StudentDeadline> list = new ArrayList<>();
+        java.util.Set<Long> mine = enrollment.courseIds(studentId);
         for (ChapterItem it : v.items) {
-            if (finished.getOrDefault(it.getId(), Map.of()).containsKey(studentId)) {
-                continue;
+            if (!mine.contains(it.getCourseId()) || finished.getOrDefault(it.getId(), Map.of()).containsKey(studentId)) {
+                continue;   // 没加入的课、已经做完的不提醒
             }
             Chapter ch = v.chapters.get(it.getChapterId());
             Course c = v.courses.get(it.getCourseId());
@@ -82,12 +87,14 @@ public class DeadlineService {
     /** 老师：自己课程里设了截止时间的项，全班完成情况。已过期的在前，同一类按截止时间排 */
     public List<ItemDeadline> teacher(long teacherId, LocalDateTime now) {
         Visible v = visible(teacherId);
-        List<User> students = userMapper.selectList(new LambdaQueryWrapper<User>()
-                .eq(User::getRole, "student").eq(User::getStatus, 1).orderByAsc(User::getId));
-        Map<Long, Map<Long, LocalDateTime>> finished =
-                finishedAt(v.items, students.stream().map(User::getId).toList());
+        // 每门课的“全班” = 选了这门课的学生
+        Map<Long, List<User>> byCourse = new java.util.HashMap<>();
+        v.items.forEach(it -> byCourse.computeIfAbsent(it.getCourseId(), enrollment::students));
+        List<Long> allIds = byCourse.values().stream().flatMap(List::stream).map(User::getId).distinct().toList();
+        Map<Long, Map<Long, LocalDateTime>> finished = finishedAt(v.items, allIds);
         List<ItemDeadline> list = new ArrayList<>();
         for (ChapterItem it : v.items) {
+            List<User> students = byCourse.get(it.getCourseId());
             Map<Long, LocalDateTime> byStudent = finished.getOrDefault(it.getId(), Map.of());
             List<Student> missing = students.stream().filter(s -> !byStudent.containsKey(s.getId()))
                     .map(s -> new Student(s.getId(), s.getUsername(), s.getName())).toList();
