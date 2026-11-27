@@ -44,6 +44,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class MaterialPipeline {
 
     private final OfficeToPdf officeToPdf;
+    private final VideoTermFixer termFixer;
 
     private final ChapterItemMapper itemMapper;
     private final MaterialService materialService;
@@ -60,8 +61,10 @@ public class MaterialPipeline {
     public MaterialPipeline(ChapterItemMapper itemMapper, MaterialService materialService, MaterialJobMapper jobMapper,
                             MaterialTextMapper textMapper, ChapterKpStateMapper stateMapper,
                             MaterialExtractor extractor, KpRecognizer recognizer,
-                            @Value("${platform.material.async:true}") boolean async, OfficeToPdf officeToPdf) {
+                            @Value("${platform.material.async:true}") boolean async, OfficeToPdf officeToPdf,
+                            VideoTermFixer termFixer) {
         this.officeToPdf = officeToPdf;
+        this.termFixer = termFixer;
         this.itemMapper = itemMapper;
         this.materialService = materialService;
         this.jobMapper = jobMapper;
@@ -274,7 +277,10 @@ public class MaterialPipeline {
         s.setStatus(ChapterKpState.RECOGNIZING);
         s.setMessage("正在识别知识点，约 1 分钟");
         stateMapper.updateById(s);
-        run(recognizePool, () -> recognizer.recognize(chapterId));
+        run(recognizePool, () -> {
+            termFixer.fix(chapterId);       // 先用课件里的专业词纠正视频的同音错字（每个视频只做一次）
+            recognizer.recognize(chapterId);
+        });
     }
 
     /** 老师点“重新识别”：保留老师改过的知识点 */

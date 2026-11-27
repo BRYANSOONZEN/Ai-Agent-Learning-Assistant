@@ -362,6 +362,7 @@ CREATE TABLE material_job (                      -- 每个视频 / 文档项一�
     status       VARCHAR(16)  NOT NULL,          -- queued 排队 / processing 处理中 / done 完成 / failed 失败
     message      VARCHAR(500),                   -- 失败原因，或完成时的简要结果（几页、几张图、几分钟）
     meta         TEXT,                           -- 处理服务返回的统计（JSON：耗时、图片数、token）
+    terms_checked TINYINT(1),                        -- 视频：同音字纠正已经做过
     started_at   DATETIME,
     finished_at  DATETIME,
     created_at   DATETIME     NOT NULL,
@@ -381,6 +382,7 @@ CREATE TABLE material_text (                     -- 转出来的文字，一段�
     start_sec   DECIMAL(9,1),                    -- 视频片段从第几秒开始
     end_sec     DECIMAL(9,1),
     content     TEXT         NOT NULL,
+    original    TEXT,                                -- 视频同音字纠正前的原文（改过才有）
     sort_order  INT          NOT NULL,
     PRIMARY KEY (id)
 );

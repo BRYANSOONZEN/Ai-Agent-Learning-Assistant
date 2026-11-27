@@ -20,5 +20,7 @@ public class MaterialText {
     private BigDecimal startSec;
     private BigDecimal endSec;
     private String content;
+    /** 同音字纠正前的原文（VideoTermFixer 改过才有） */
+    private String original;
     private Integer sortOrder;
 }

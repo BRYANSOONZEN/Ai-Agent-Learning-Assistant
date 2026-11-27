@@ -57,7 +57,7 @@ class MaterialKpTest {
                         new Segment("P13-图1", "image", 13, null, null, "流程图：不一致 → 失败根因分析")), "{}");
             }
             return new Result(List.of(
-                    new Segment("01", "video", null, BigDecimal.ZERO, new BigDecimal("41.3"), "这一节讲边界值"),
+                    new Segment("01", "video", null, BigDecimal.ZERO, new BigDecimal("41.3"), "这一节讲边界值分吸"),
                     new Segment("02", "video", null, new BigDecimal("41.3"), new BigDecimal("90"), "错误常在边界附近")), "{}");
         }
     }
@@ -148,6 +148,9 @@ class MaterialKpTest {
 
     @Test
     void uploadThenUploadDone_recognizesWithCheckedSources() throws Exception {
+        // 识别前先纠正视频的同音错字：模型给两条，第 2 条课件里没有“那一节”，程序不用
+        fake.reply("{\"fixes\": [{\"from\": \"边界值分吸\", \"to\": \"边界值分析\"}, {\"from\": \"这一节\", \"to\": \"那一节\"}]}")
+                .then(KPS);
         long video = addVideo();
         upload(1, "课件.pdf").andExpect(jsonPath("$.code").value(200));
         upload(video, "讲解.mp4").andExpect(jsonPath("$.code").value(200));
@@ -171,7 +174,13 @@ class MaterialKpTest {
                 .andExpect(jsonPath("$.data.kps[1].sources", Matchers.contains("D1-P13-图1")));
 
         // 发给模型的资料带编号：老师写的文字 D1-T0、PDF 第 4 页 D1-P4、图 D1-P13-图1、视频 V1-01
-        String prompt = fake.requests().get(0).messages().get(0).content();
+        String fixPrompt = fake.requests().get(0).messages().get(0).content();
+        org.junit.jupiter.api.Assertions.assertTrue(fixPrompt.contains("边界值分析：在边界上") && fixPrompt.contains("边界值分吸"));
+        org.junit.jupiter.api.Assertions.assertEquals("这一节讲边界值分析", jdbc.queryForObject(
+                "SELECT content FROM material_text WHERE seg_key = '01'", String.class));
+        org.junit.jupiter.api.Assertions.assertEquals("这一节讲边界值分吸", jdbc.queryForObject(
+                "SELECT original FROM material_text WHERE seg_key = '01'", String.class));
+        String prompt = fake.requests().get(1).messages().get(0).content();
         org.junit.jupiter.api.Assertions.assertTrue(prompt.contains("[D1-T0 "));
         org.junit.jupiter.api.Assertions.assertTrue(prompt.contains("[D1-P4 "));
         org.junit.jupiter.api.Assertions.assertTrue(prompt.contains("[D1-P13-图1 "));

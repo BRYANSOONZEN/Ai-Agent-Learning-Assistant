@@ -26,6 +26,8 @@ public class AiCallLogService {
     public static final String TASK_DIALOGUE_TURN = "DIALOGUE_TURN";
     /** 任务名：从一章的资料识别知识点 */
     public static final String TASK_KP_EXTRACT = "KP_EXTRACT";
+    /** 视频识别文字的同音错字，用课件里的专业词纠正 */
+    public static final String TASK_ASR_TERM_FIX = "ASR_TERM_FIX";
     /** 任务名：费曼对话——老师端起草、学生每一句的判断、结束时的总评 */
     public static final String TASK_FEYNMAN_DRAFT = "FEYNMAN_DRAFT";
     public static final String TASK_FEYNMAN_TURN = "FEYNMAN_TURN";

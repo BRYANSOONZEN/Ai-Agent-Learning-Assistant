@@ -25,6 +25,8 @@ public class MaterialJob {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String message;
     private String meta;
+    /** 视频：同音字纠正已经做过（每个视频只做一次） */
+    private Boolean termsChecked;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime startedAt;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
