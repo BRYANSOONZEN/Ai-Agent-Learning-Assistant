@@ -190,3 +190,13 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 备份 | `mysqldump -u root -p --default-character-set=utf8mb4 se_platform > backup.sql` |
 | 恢复 | `mysql -u root -p se_platform < backup.sql` |
 | 回到干净的演示数据 | `DROP DATABASE se_platform; CREATE DATABASE se_platform DEFAULT CHARACTER SET utf8mb4;`，再启动后端（自动建表、放演示数据） |
+
+---
+
+## 五、换到 MySQL 时发现并修好的问题
+
+| 问题 | 原因 | 怎么修的 |
+|---|---|---|
+| 已有的 MySQL 库重启时报“升级数据库失败” | 升级脚本用的 `ADD COLUMN IF NOT EXISTS` 是 H2 的写法，MySQL 不支持 | `KeepDataConfig` 认出是 MySQL 时，先查这一列在不在，不在才加 |
+| 判断“表在不在”可能看错库 | 原来查所有库的 `INFORMATION_SCHEMA`，MySQL 自带的系统库里也有一张 `user` 表 | 改成只看当前连接的库（JDBC 元数据），H2 上也有测试（`KeepDataConfigTest`） |
+| 上传资料后转文字报“资料不存在” | “上传后排队”放在事务提交后的回调里做，那时连接还没切回自动提交，排队记录要等连接清理时才真正写进去；后台线程抢先去读，读到了已删除的旧文件。H2 碰巧赶得上，MySQL（默认隔离级别可重复读）就读不到 | 提交后的这一步交给单独的线程、用新的连接做，写完立即生效（`MaterialPipeline.afterCommit`） |

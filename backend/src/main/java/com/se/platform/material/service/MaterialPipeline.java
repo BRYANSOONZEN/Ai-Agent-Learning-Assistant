@@ -56,6 +56,7 @@ public class MaterialPipeline {
     private final boolean async;
     /** 一次只转一份资料：视频识别很吃 CPU */
     private final ExecutorService extractPool = Executors.newSingleThreadExecutor(r -> new Thread(r, "material-extract"));
+    private final ExecutorService commitPool = Executors.newSingleThreadExecutor(r -> new Thread(r, "material-after-commit"));
     private final ExecutorService recognizePool = Executors.newSingleThreadExecutor(r -> new Thread(r, "kp-recognize"));
 
     public MaterialPipeline(ChapterItemMapper itemMapper, MaterialService materialService, MaterialJobMapper jobMapper,
@@ -339,16 +340,23 @@ public class MaterialPipeline {
         }
     }
 
-    private static void afterCommit(Runnable r) {
+    /**
+     * 老师的上传 / 删除提交以后再做 r（排队、清文字）。
+     * 不能直接在 afterCommit 回调里写库：那时连接还没切回自动提交，写的东西要等连接清理时才提交，
+     * 后台线程先读就读到旧数据（MySQL 上实测：读到已删掉的旧文件，报“资料不存在”）。
+     * 所以交给单独的线程，用新的连接做，写完立即生效。测试里（async = false）照旧直接做。
+     */
+    private void afterCommit(Runnable r) {
+        Runnable later = async ? () -> run(commitPool, r) : r;
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    r.run();
+                    later.run();
                 }
             });
         } else {
-            r.run();
+            later.run();
         }
     }
 }
