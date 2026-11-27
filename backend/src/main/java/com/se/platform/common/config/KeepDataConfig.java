@@ -72,6 +72,11 @@ public class KeepDataConfig {
                     st.execute(sql);
                 }
             }
+            // 选课表是后加的：第一次建出来时，把已有的学生加入已有的课程（以前不用选课就能学，升级后不能把他们关在门外）
+            if (created.contains("enrollment")) {
+                st.execute("INSERT INTO enrollment (course_id, student_id, created_at) "
+                        + "SELECT c.id, u.id, NOW() FROM course c, `user` u WHERE u.role = 'student'");
+            }
             log.info(created.isEmpty() ? "数据库已存在，保留原有数据" : "数据库已存在，保留原有数据；新建了表：{}", created);
         } catch (Exception e) {
             throw new IllegalStateException("检查数据库表失败：" + e.getMessage(), e);
