@@ -86,6 +86,8 @@ public class AssistantChatService {
     private final PracticeAnalysis practiceAnalysis;
     private final AiCallLogService callLog;
     private final ObjectMapper json;
+    /** 每个学生每天最多问几句（application.yml：platform.assistant.daily-chat-limit） */
+    private final int dailyLimit;
     private final PromptTemplate template = PromptTemplate.load("assistant_chat_v1");
 
     public AssistantChatService(AssistantMessageMapper messageMapper, ChapterMapper chapterMapper,
@@ -94,7 +96,10 @@ public class AssistantChatService {
                                 ExerciseKnowledgePointMapper linkMapper, MasteryMapper masteryMapper,
                                 KpRecognizer recognizer, FeynmanDraftService feynmanDraft,
                                 RemedyService remedyService, PracticeAnalysis practiceAnalysis,
-                                AiCallLogService callLog, ObjectMapper json) {
+                                AiCallLogService callLog, ObjectMapper json,
+                                @org.springframework.beans.factory.annotation.Value("${platform.assistant.daily-chat-limit:20}")
+                                int dailyLimit) {
+        this.dailyLimit = dailyLimit;
         this.messageMapper = messageMapper;
         this.chapterMapper = chapterMapper;
         this.courseMapper = courseMapper;
@@ -124,6 +129,13 @@ public class AssistantChatService {
         }
         if (msg.length() > MAX_MESSAGE) {
             throw BusinessException.badRequest("一次最多 " + MAX_MESSAGE + " 字");
+        }
+        // 每个学生每天最多问 dailyLimit 句（所有章节加起来），控制费用；第二天 0 点重新计
+        long today = messageMapper.selectCount(new LambdaQueryWrapper<AssistantMessage>()
+                .eq(AssistantMessage::getStudentId, studentId).eq(AssistantMessage::getRole, AssistantMessage.STUDENT)
+                .ge(AssistantMessage::getCreatedAt, java.time.LocalDate.now().atStartOfDay()));
+        if (today >= dailyLimit) {
+            throw new BusinessException(429, "今天已经问了 " + dailyLimit + " 句，明天再来吧。学习情况里的补练题、拓展题不受影响");
         }
         Chapter ch = chapterMapper.selectById(chapterId);
         if (ch == null || !"published".equals(ch.getStatus())) {

@@ -16,6 +16,16 @@ export function register({ username, password, name }) {
   return request.post('/auth/register', { username, password, name }, { silent: true })
 }
 
+// GET /api/auth/demo-accounts -> demo accounts for one-click switching ([] when switched off in application.yml)
+export function getDemoAccounts() {
+  return request.get('/auth/demo-accounts', { silent: true })
+}
+
+// POST /api/auth/demo-login { username } -> same as login (only the listed demo accounts, no password)
+export function demoLogin(username) {
+  return request.post('/auth/demo-login', { username }, { silent: true })
+}
+
 // GET /api/auth/me -> { id, username, name, role }
 export function getMe() {
   return request.get('/auth/me')

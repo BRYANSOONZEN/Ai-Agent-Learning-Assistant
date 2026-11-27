@@ -33,6 +33,19 @@ public class AuthService {
     private final LoginAttempts attempts;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    private boolean demoSwitch;
+    private java.util.List<String> demoUsernames = java.util.List.of();
+
+    @org.springframework.beans.factory.annotation.Value("${platform.demo.switch-enabled:false}")
+    public void setDemoSwitch(boolean on) {
+        this.demoSwitch = on;
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${platform.demo.accounts:}")
+    public void setDemoAccounts(String list) {
+        this.demoUsernames = java.util.Arrays.stream(list.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+    }
+
     public AuthService(UserMapper userMapper, JwtService jwtService, LoginAttempts attempts) {
         this.userMapper = userMapper;
         this.jwtService = jwtService;
@@ -78,6 +91,28 @@ public class AuthService {
         user.setRole("student");
         user.setStatus(User.STATUS_ACTIVE);
         userMapper.insert(user);
+        return issue(user, false);
+    }
+
+    /** 演示切换：开着时列出配置里的演示账号（按配置的顺序） */
+    public java.util.List<UserView> demoAccounts() {
+        if (!demoSwitch) {
+            return java.util.List.of();
+        }
+        return demoUsernames.stream()
+                .map(u -> userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, u)))
+                .filter(u -> u != null && u.getStatus() == User.STATUS_ACTIVE).map(AuthService::view).toList();
+    }
+
+    /** 演示切换：只能登录配置里列出的演示账号；开关关着时一律拒绝 */
+    public LoginResponse demoLogin(String username) {
+        if (!demoSwitch || username == null || !demoUsernames.contains(username.trim())) {
+            throw BusinessException.forbidden("演示切换没有开，或者这不是演示账号");
+        }
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username.trim()));
+        if (user == null || user.getStatus() != User.STATUS_ACTIVE) {
+            throw BusinessException.forbidden("这个演示账号不能用");
+        }
         return issue(user, false);
     }
 

@@ -10,10 +10,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { layoutChildren } from '@/router'
 import { getMyDiagnosis } from '@/api/diagnosis'
 import { getOpenIssueCount } from '@/api/classAnalysis'
-import { logoutApi } from '@/api/auth'
+import { demoLogin, getDemoAccounts, logoutApi } from '@/api/auth'
+import { homeFor, layoutChildren } from '@/router'
 import StudyAssistant from '@/components/StudyAssistant.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
@@ -81,6 +81,15 @@ const studyPrompt = computed(() => {
 
 const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 
+// demo switch (only when the backend allows it): sign in as another demo account in one click
+const demos = ref([])
+getDemoAccounts().then((list) => (demos.value = list || [])).catch(() => {})
+async function switchTo(u) {
+  const data = await demoLogin(u.username)
+  userStore.setLogin(data)
+  window.location.href = homeFor(data.user.role) // full reload: every page and the assistant start fresh
+}
+
 async function logout() {
   try {
     await logoutApi() // the token stops working on the server too
@@ -142,6 +151,11 @@ const mustChange = computed(() => !!userStore.user?.mustChangePassword)
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item icon="Lock" @click="passwordVisible = true">修改密码</el-dropdown-item>
+              <template v-if="demos.length">
+                <el-dropdown-item divided disabled>切换演示账号</el-dropdown-item>
+                <el-dropdown-item v-for="u in demos.filter((d) => d.id !== userStore.user?.id)" :key="u.username"
+                                  icon="User" @click="switchTo(u)">{{ u.name }}（{{ roleLabels[u.role] }}）</el-dropdown-item>
+              </template>
               <el-dropdown-item icon="SwitchButton" divided @click="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>

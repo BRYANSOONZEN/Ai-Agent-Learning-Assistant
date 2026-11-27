@@ -37,6 +37,8 @@ public final class AccessRules {
             // 账号
             rule("/api/auth/login", PUBLIC),
             rule("/api/auth/register", PUBLIC),
+            rule("/api/auth/demo-accounts", PUBLIC),   // 演示切换：配置关掉时返回空、登录被拒
+            rule("/api/auth/demo-login", PUBLIC),
             rule("/api/auth/**", LOGGED_IN),
             rule("/api/hello/**", LOGGED_IN),
             // 管理员：用户管理、AI 调用记录

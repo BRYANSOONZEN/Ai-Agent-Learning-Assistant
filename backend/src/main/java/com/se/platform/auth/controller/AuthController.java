@@ -32,6 +32,18 @@ public class AuthController {
         return Result.ok(authService.login(request));
     }
 
+    /** GET /api/auth/demo-accounts：演示切换开着时，可以一键登录的演示账号；关掉时为空 */
+    @GetMapping("/demo-accounts")
+    public Result<java.util.List<UserView>> demoAccounts() {
+        return Result.ok(authService.demoAccounts());
+    }
+
+    /** POST /api/auth/demo-login {username}：演示切换开着时，直接登录列出的演示账号（不用密码） */
+    @PostMapping("/demo-login")
+    public Result<LoginResponse> demoLogin(@RequestBody java.util.Map<String, String> body) {
+        return Result.ok(authService.demoLogin(body == null ? null : body.get("username")));
+    }
+
     /** POST /api/auth/register：学生注册，成功后直接登录 */
     @PostMapping("/register")
     public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {

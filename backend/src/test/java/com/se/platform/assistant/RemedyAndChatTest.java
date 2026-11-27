@@ -231,6 +231,23 @@ class RemedyAndChatTest {
     }
 
     @Test
+    void dailyChatLimit_twentyPerStudent() throws Exception {
+        // 今天已经问了 20 句（直接写进记录，不调模型）
+        for (int i = 0; i < 20; i++) {
+            jdbc.update("INSERT INTO assistant_message (student_id, chapter_id, role, content, created_at) "
+                    + "VALUES (12, 1, 'student', ?, NOW())", "问题 " + i);
+        }
+        int before = fake.requests().size();
+        say(12, "再问一句").andExpect(jsonPath("$.code").value(429))
+                .andExpect(jsonPath("$.message", Matchers.containsString("今天已经问了 20 句")));
+        assertThat(fake.requests().size()).isEqualTo(before); // 没调模型，不花钱
+        // 昨天问的不算
+        jdbc.update("UPDATE assistant_message SET created_at = DATEADD('DAY', -1, NOW()) WHERE student_id = 12");
+        fake.reply("边界外的值也要测。");
+        say(12, "边界值要怎么取？").andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
     void stageOne_noQuestionsInChat() throws Exception {
         fake.reply("来考考你：\nA. 0、1、2\nB. 1、50、99\n你选哪个？");
         say(12, "边界值要怎么取？").andExpect(jsonPath("$.data.stage").value("learning"))

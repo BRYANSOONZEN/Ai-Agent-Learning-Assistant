@@ -69,8 +69,15 @@ platform:
     renew-hours: 2                # 令牌剩不到 2 小时时，后端在响应头 X-Refresh-Token 里顺带发一个新的（一直在用的人不会被踢出去）
     max-failures: 5               # 同一个用户名连续输错 5 次……
     lock-minutes: 15              # ……锁 15 分钟
+  demo:
+    # 演示时一键切换账号（登录页和右上角菜单），不用输密码。只能切到下面列出的演示账号。
+    # 录屏、课堂演示用；部署给真实用户前改成 false（或设环境变量 DEMO_SWITCH=false），接口就不可用
+    switch-enabled: ${DEMO_SWITCH:true}
+    accounts: teacher01,2023001,2023003,2023008,2023009,admin
   deadline:
     remind-days: 3                # 截止前 3 天开始提醒学生（学生首页「快到期」）
+  assistant:
+    daily-chat-limit: 20          # 小助手聊天：每个学生每天最多问 20 句（控制费用；补练、拓展不算）
 
 # ---------- 大模型（AI 对话等功能用，见 docs/ai-implementation.md 第 3 节第 1 步）----------
 # 对应的 Java 类：com.se.platform.ai.config.LlmProperties（短横线写法 base-url 会自动对应字段 baseUrl）

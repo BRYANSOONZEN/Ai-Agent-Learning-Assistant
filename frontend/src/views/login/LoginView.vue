@@ -5,9 +5,9 @@
  */
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { homeFor } from '@/router'
+import { demoLogin, getDemoAccounts, login } from '@/api/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +20,21 @@ const form = reactive({ username: '', password: '', remember: false })
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+}
+
+// demo accounts (shown only when the backend's demo switch is on): one click, no password
+const demos = ref([])
+const ROLE = { teacher: '老师', student: '学生', admin: '管理员' }
+getDemoAccounts().then((list) => (demos.value = list || [])).catch(() => {})
+async function quick(u) {
+  error.value = ''
+  try {
+    const data = await demoLogin(u.username)
+    userStore.setLogin(data)
+    router.push(homeFor(data.user.role))
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 async function submit() {
@@ -67,6 +82,12 @@ async function submit() {
           登录
         </el-button>
       </el-form>
+      <div v-if="demos.length" class="demos">
+        <span class="foot-muted">演示账号一键登录：</span>
+        <el-button v-for="u in demos" :key="u.username" size="small" @click="quick(u)">
+          {{ u.name }}<small class="demo-role">{{ ROLE[u.role] }}</small>
+        </el-button>
+      </div>
       <p class="foot">
         还没有账号？<router-link :to="{ name: 'register' }">学生注册</router-link>
         <span class="foot-muted">老师账号由管理员开通</span>
@@ -115,6 +136,20 @@ async function submit() {
 
 .submit {
   width: 100%;
+}
+.demos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+}
+.demos .el-button {
+  margin: 0;
+}
+.demo-role {
+  margin-left: 4px;
+  color: var(--el-text-color-secondary);
 }
 .remember {
   margin: -6px 0 12px;

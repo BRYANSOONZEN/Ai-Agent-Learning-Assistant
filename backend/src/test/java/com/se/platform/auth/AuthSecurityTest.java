@@ -290,4 +290,18 @@ class AuthSecurityTest {
         // 自己注册的学生不用改
         login("2023001", DEMO).andExpect(jsonPath("$.data.user.mustChangePassword").value(false));
     }
+
+    @Test
+    void demoSwitch_onlyListedDemoAccounts() throws Exception {
+        mvc.perform(get("/api/auth/demo-accounts"))
+                .andExpect(jsonPath("$.data[*].username", org.hamcrest.Matchers.hasItems("teacher01", "2023008", "admin")));
+        String body = mvc.perform(post("/api/auth/demo-login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"2023008\"}"))
+                .andExpect(jsonPath("$.data.user.name").value("学生08"))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        call(get("/api/learn/courses"), json.readTree(body).path("data").path("token").asText()).andExpect(status().isOk());
+        // 没列出的账号不能这样登录
+        mvc.perform(post("/api/auth/demo-login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"2023002\"}"))
+                .andExpect(jsonPath("$.code").value(403));
+    }
 }
