@@ -23,8 +23,8 @@ export function getLearnCourses({ page = 1, size = 12, keyword = '' } = {}) {
 }
 
 // GET /api/learn/courses/{id} -> { course, chapters: [{ id, title, intro, items: [...] }], doneItemIds }
-export function getLearnCourse(id) {
-  return request.get(`/learn/courses/${id}`)
+export function getLearnCourse(id, silent = false) {
+  return request.get(`/learn/courses/${id}`, { silent })
 }
 
 // GET /api/learn/items/{id}/questions -> [{ id, stem, options }]

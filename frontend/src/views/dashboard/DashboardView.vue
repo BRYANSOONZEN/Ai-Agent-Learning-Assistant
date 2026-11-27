@@ -96,7 +96,12 @@ function go(view) {
 
 async function loadPath() {
   if (!last) return
-  const data = await getLearnCourse(last.courseId)
+  let data
+  try {
+    data = await getLearnCourse(last.courseId, true)
+  } catch {
+    return // e.g. no longer in that course: just skip "接着上次学习"
+  }
   const ch = data.chapters.find((c) => c.id === last.chapterId)
   if (!ch) return
   const done = syncDone(last.courseId, data.doneItemIds)

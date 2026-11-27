@@ -5,12 +5,15 @@
  * so 首页 and the course list can show progress without extra requests.
  */
 import { logEvent } from '@/api/learn'
+import { useUserStore } from '@/stores/user'
 
+// one copy per account: several demo accounts are often used in the same browser
+const perUser = (base) => base + ':' + (useUserStore().user?.id ?? '')
 const KEY = 'se-platform-learn-done' // { [courseId]: [itemId, ...] }
 
 function readAll() {
   try {
-    return JSON.parse(localStorage.getItem(KEY) || '{}')
+    return JSON.parse(localStorage.getItem(perUser(KEY)) || '{}')
   } catch {
     return {}
   }
@@ -22,7 +25,7 @@ export function doneItems(courseId) {
 
 function write(all) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(all))
+    localStorage.setItem(perUser(KEY), JSON.stringify(all))
   } catch {
     /* storage unavailable: the server still has the record */
   }
@@ -64,7 +67,7 @@ const LAST_KEY = 'se-platform-learn-last'
 
 export function saveLast(position) {
   try {
-    localStorage.setItem(LAST_KEY, JSON.stringify(position))
+    localStorage.setItem(perUser(LAST_KEY), JSON.stringify(position))
   } catch {
     /* ignore */
   }
@@ -72,7 +75,7 @@ export function saveLast(position) {
 
 export function lastPosition() {
   try {
-    return JSON.parse(localStorage.getItem(LAST_KEY) || 'null')
+    return JSON.parse(localStorage.getItem(perUser(LAST_KEY)) || 'null')
   } catch {
     return null
   }
