@@ -83,18 +83,49 @@ public class KeepDataConfig {
         }
     }
 
-    /** 已有的库：执行 schema-upgrade.sql（给已有的表加新列），每条语句都能重复执行 */
+    /** 加列语句：ALTER TABLE 表 ADD COLUMN IF NOT EXISTS 列 …（H2 支持这种写法，MySQL 不支持） */
+    private static final Pattern ADD_COLUMN = Pattern.compile(
+            "(?is)^ALTER\\s+TABLE\\s+`?(\\w+)`?\\s+ADD\\s+COLUMN\\s+IF\\s+NOT\\s+EXISTS\\s+(\\w+)\\s+(.*)$");
+
+    /**
+     * 已有的库：执行 schema-upgrade.sql（给已有的表加新列），每条语句都能重复执行。
+     * MySQL 不认识 ADD COLUMN IF NOT EXISTS：先查这一列在不在，不在才加；H2 专用的其他语句（改列类型）在 MySQL 上跳过——
+     * MySQL 的库是按最新的 schema.sql 建的，类型本来就对。
+     */
     static void upgradeColumns(DataSource ds) {
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            boolean mysql = c.getMetaData().getDatabaseProductName().toLowerCase().contains("mysql");
             int n = 0;
             for (String sql : statements("schema-upgrade.sql")) {
-                st.execute(sql);
-                n++;
+                if (!mysql) {
+                    st.execute(sql);
+                    n++;
+                    continue;
+                }
+                Matcher m = ADD_COLUMN.matcher(sql);
+                if (m.find()) {
+                    if (!columnExists(c, m.group(1), m.group(2))) {
+                        st.execute("ALTER TABLE `" + m.group(1) + "` ADD COLUMN " + m.group(2) + " " + m.group(3));
+                        n++;
+                    }
+                }
             }
             log.info("数据库升级语句执行了 {} 条（已有的列不会重复加）", n);
         } catch (Exception e) {
             throw new IllegalStateException("升级数据库失败：" + e.getMessage(), e);
         }
+    }
+
+    /** 当前库里有没有这一列（只看当前库，不看 MySQL 自己的系统库） */
+    static boolean columnExists(Connection c, String table, String column) throws SQLException {
+        try (ResultSet rs = c.getMetaData().getColumns(c.getCatalog(), c.getSchema(), null, null)) {
+            while (rs.next()) {
+                if (table.equalsIgnoreCase(rs.getString("TABLE_NAME")) && column.equalsIgnoreCase(rs.getString("COLUMN_NAME"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     static List<String> statements() throws java.io.IOException {
@@ -127,13 +158,15 @@ public class KeepDataConfig {
         }
     }
 
+    /** 当前库里有没有这张表（只看当前库：MySQL 自己的系统库里也有一张 user 表，不能算） */
     static boolean tableExists(Connection c, String table) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE LOWER(TABLE_NAME) = ?")) {
-            ps.setString(1, table.toLowerCase());
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
+        try (ResultSet rs = c.getMetaData().getTables(c.getCatalog(), c.getSchema(), null, new String[] {"TABLE"})) {
+            while (rs.next()) {
+                if (table.equalsIgnoreCase(rs.getString("TABLE_NAME"))) {
+                    return true;
+                }
             }
         }
+        return false;
     }
 }
