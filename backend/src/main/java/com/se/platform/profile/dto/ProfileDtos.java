@@ -51,7 +51,11 @@ public final class ProfileDtos {
     public record CourseProfile(Long courseId, String courseName, String studentName, boolean open,
                                 int chaptersDone, int chapters, LocalDate refDate, LocalDateTime computedAt,
                                 List<CourseDimension> dimensions, List<ChapterProfile> chapterProfiles,
-                                List<DayActivity> days) {
+                                List<DayActivity> days, Snapshot snapshot) {
+    }
+
+    /** 学完这门课那一刻保存的画像（之后不再改）；还没学完为空 */
+    public record Snapshot(LocalDateTime savedAt, LocalDate refDate, List<CourseDimension> dimensions) {
     }
 
     /**

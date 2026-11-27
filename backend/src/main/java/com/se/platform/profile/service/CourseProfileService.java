@@ -20,6 +20,7 @@ import com.se.platform.profile.dto.ProfileDtos.CourseOption;
 import com.se.platform.profile.dto.ProfileDtos.CourseProfile;
 import com.se.platform.profile.dto.ProfileDtos.DayActivity;
 import com.se.platform.profile.dto.ProfileDtos.PointColor;
+import com.se.platform.profile.dto.ProfileDtos.Snapshot;
 import com.se.platform.record.entity.AnswerRecord;
 import com.se.platform.record.entity.LearningEvent;
 import com.se.platform.record.mapper.AnswerRecordMapper;
@@ -28,6 +29,8 @@ import com.se.platform.record.service.CompletionService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import com.se.platform.feynman.service.FeynmanDiagnosis;
+import com.se.platform.profile.entity.ProfileSnapshot;
+import com.se.platform.profile.mapper.ProfileSnapshotMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -66,13 +69,18 @@ public class CourseProfileService {
     private final LearningEventMapper eventMapper;
     private final CompletionService completion;
     private final FeynmanDiagnosis feynmanDiagnosis;
+    private final ProfileSnapshotMapper snapshotMapper;
+    private final com.fasterxml.jackson.databind.ObjectMapper json;
 
     public CourseProfileService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
                                 KnowledgePointMapper kpMapper,
                                 MasteryMapper masteryMapper, AnswerRecordMapper answerMapper,
                                 LearningEventMapper eventMapper, CompletionService completion,
-                                FeynmanDiagnosis feynmanDiagnosis) {
+                                FeynmanDiagnosis feynmanDiagnosis, ProfileSnapshotMapper snapshotMapper,
+                                com.fasterxml.jackson.databind.ObjectMapper json) {
         this.feynmanDiagnosis = feynmanDiagnosis;
+        this.snapshotMapper = snapshotMapper;
+        this.json = json;
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
         this.itemMapper = itemMapper;
@@ -129,7 +137,35 @@ public class CourseProfileService {
                 onTime(studentId, sc),
                 accuracy(studentId, sc));
         return new CourseProfile(courseId, course.getName(), studentName, open, chaptersDone, sc.chapters.size(),
-                refDate, LocalDateTime.now(), dims, chapterProfiles, days);
+                refDate, LocalDateTime.now(), dims, chapterProfiles, days, snapshot(studentId, courseId, open, refDate, dims));
+    }
+
+    // ------------------------------------------------------------------ 学完时的快照
+
+    /**
+     * 全部章节学完后第一次打开课程画像时，把当时的四维存一份（每人每门课一份，之后不再改）；以后再打开都带上这一份。
+     * 平时的画像照常现算：老师之后加了新章节，学生没学完时 open 变回 false，但快照还在。
+     */
+    private Snapshot snapshot(long studentId, Long courseId, boolean open, LocalDate refDate, List<CourseDimension> dims) {
+        ProfileSnapshot saved = snapshotMapper.selectOne(new LambdaQueryWrapper<ProfileSnapshot>()
+                .eq(ProfileSnapshot::getStudentId, studentId).eq(ProfileSnapshot::getCourseId, courseId));
+        try {
+            if (saved == null && open) {
+                saved = new ProfileSnapshot();
+                saved.setStudentId(studentId);
+                saved.setCourseId(courseId);
+                saved.setData(json.writeValueAsString(new Snapshot(null, refDate, dims)));
+                saved.setCreatedAt(LocalDateTime.now());
+                snapshotMapper.insert(saved);
+            }
+            if (saved == null) {
+                return null;
+            }
+            Snapshot s = json.readValue(saved.getData(), Snapshot.class);
+            return new Snapshot(saved.getCreatedAt(), s.refDate(), s.dimensions());
+        } catch (Exception e) {
+            throw new IllegalStateException("画像快照读写失败", e);
+        }
     }
 
     // ------------------------------------------------------------------ 每章

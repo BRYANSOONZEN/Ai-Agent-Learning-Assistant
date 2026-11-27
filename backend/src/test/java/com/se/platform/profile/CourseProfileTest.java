@@ -73,7 +73,8 @@ class CourseProfileTest {
                 .andExpect(jsonPath(dim("completion") + ".denominator").value(Matchers.contains(2)))
                 // 没有过了截止的练习、没有已判的作答：显示“暂无数据”（null），不用 0 补
                 .andExpect(jsonPath(dim("onTime") + ".value").value(Matchers.contains(Matchers.nullValue())))
-                .andExpect(jsonPath(dim("accuracy") + ".value").value(Matchers.contains(Matchers.nullValue())));
+                .andExpect(jsonPath(dim("accuracy") + ".value").value(Matchers.contains(Matchers.nullValue())))
+                .andExpect(jsonPath("$.data.snapshot").value(Matchers.nullValue())); // 没学完不存快照
     }
 
     @Test
@@ -93,7 +94,20 @@ class CourseProfileTest {
                 // 今天交过已判的题：1 个有效学习日，1/7
                 .andExpect(jsonPath(dim("consistency") + ".numerator").value(Matchers.contains(1)))
                 .andExpect(jsonPath(dim("consistency") + ".value").value(Matchers.contains(0.1429)))
-                .andExpect(jsonPath("$.data.days.length()").value(14));
+                .andExpect(jsonPath("$.data.days.length()").value(14))
+                // 学完了：存一份快照，四维和当时一样
+                .andExpect(jsonPath("$.data.snapshot.savedAt").isNotEmpty())
+                .andExpect(jsonPath("$.data.snapshot.dimensions[?(@.key == 'accuracy')].numerator").value(Matchers.contains(n - 1)));
+        // 之后老师加了新章节：学生没学完，四维关上，但快照还在、内容不变，也不会再存第二份
+        jdbc.update("INSERT INTO chapter (course_id, title, intro, status, sort_order, created_at, updated_at) "
+                + "VALUES (1, '新章', '介绍', 'published', 9, NOW(), NOW())");
+        long chId = jdbc.queryForObject("SELECT MAX(id) FROM chapter", Long.class);
+        jdbc.update("INSERT INTO chapter_item (course_id, chapter_id, type, title, description, sort_order, created_at, updated_at) "
+                + "VALUES (1, ?, 'document', '新文档', '正文', 0, NOW(), NOW())", chId);
+        profile().andExpect(jsonPath("$.data.open").value(false))
+                .andExpect(jsonPath("$.data.snapshot.dimensions[?(@.key == 'completion')].value").value(Matchers.contains(1.0)));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM profile_snapshot WHERE student_id = 12", Integer.class));
     }
 
     @Test

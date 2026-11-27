@@ -109,6 +109,14 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
             </div>
           </div>
         </div>
+        <!-- saved the first time the whole course was finished; never changes afterwards -->
+        <div v-if="profile.snapshot" class="snapshot">
+          <b>学完那天保存的画像</b>
+          <span class="muted">（{{ String(profile.snapshot.savedAt).slice(0, 10) }} 保存，之后不再改；参考日 {{ profile.snapshot.refDate }}）</span>
+          <span v-for="d in profile.snapshot.dimensions" :key="d.key" class="snap-dim">
+            {{ d.label }} <b>{{ pct(d.value) }}</b>
+          </span>
+        </div>
       </section>
 
       <!-- every chapter -->
@@ -262,6 +270,20 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
 .point.none {
   background: #f5f5f5;
   color: #8c8c8c;
+}
+.snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7f8fa;
+  font-size: 13px;
+}
+.snap-dim b {
+  margin-left: 2px;
 }
 .dialogue-title {
   margin: 12px 0 0;

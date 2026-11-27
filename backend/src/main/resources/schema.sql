@@ -634,3 +634,18 @@ CREATE TABLE assistant_notice (
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_assistant_notice ON assistant_notice (student_id);
+
+-- ---------------------------------------------------------------------
+-- 「画」：学完一门课时的画像快照（docs/模块说明/学生画像-设计.md）
+-- 全部章节学完、第一次打开课程画像时存一份，之后不再改；平时的画像仍然每次现算
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS profile_snapshot;
+CREATE TABLE profile_snapshot (
+    id          BIGINT    NOT NULL AUTO_INCREMENT,
+    student_id  BIGINT    NOT NULL,
+    course_id   BIGINT    NOT NULL,
+    data        TEXT      NOT NULL,                    -- JSON：当时的四维和每章画像
+    created_at  DATETIME  NOT NULL,                    -- 保存的时间（≈ 学完的时间）
+    PRIMARY KEY (id),
+    CONSTRAINT uk_profile_snapshot UNIQUE (student_id, course_id)
+);
