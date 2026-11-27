@@ -136,6 +136,57 @@ class RemedyAndChatTest {
                 .andExpect(jsonPath("$..exerciseId", Matchers.not(Matchers.hasItem(10))));
     }
 
+    // ------------------------------------------------------------------ 拓展（E1 Elaborate）
+
+    private ResultActions startExtend(long student, String assess) throws Exception {
+        return mockMvc.perform(as(student, post("/api/assistant/extend/1/start")).param("assessType", assess));
+    }
+
+    @Test
+    void extend_onlyAfterMastered_andNeverChangesMastery() throws Exception {
+        // 红色（还没补回来）不能拓展
+        startExtend(5, "scenario").andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", Matchers.containsString("先把这个知识点补回来")));
+
+        // 补练全对 → 橙色，可以拓展
+        fake.reply(THREE).then(SOLVED);
+        submit(5, "A").andExpect(jsonPath("$.data.change.color").value("orange"));
+        Double firstBefore = jdbc.queryForObject(
+                "SELECT first_mastery FROM mastery WHERE student_id = 5 AND knowledge_point_id = 1", Double.class);
+
+        fake.reply(THREE).then(SOLVED);
+        int before = fake.requests().size();
+        startExtend(5, "data").andExpect(jsonPath("$.data.questions.length()").value(3))
+                .andExpect(jsonPath("$.data.questions[0].answer").doesNotExist())
+                .andExpect(jsonPath("$.data.text", Matchers.containsString("数据分析")));
+        // 出题要求：比练习更难、用学生选的考查类型
+        assertThat(fake.requests().get(before).messages().toString()).contains("拓展题（第 1 组）").contains("比练习更难");
+        // 没做完再点同一种类型：接着做，不重新出题
+        int calls = fake.requests().size();
+        startExtend(5, "data").andExpect(jsonPath("$.data.text", Matchers.containsString("接着做")));
+        assertThat(fake.requests().size()).isEqualTo(calls);
+
+        // 全部做错：只记进学习记录，掌握度和颜色都不变
+        String body = startExtend(5, "data").andReturn().getResponse().getContentAsString();
+        List<Integer> ids = JsonPath.read(body, "$.data.questions[*].id");
+        StringBuilder a = new StringBuilder("{\"answers\":{");
+        for (int i = 0; i < ids.size(); i++) {
+            a.append(i == 0 ? "" : ",").append('"').append(ids.get(i)).append("\":\"B\"");
+        }
+        mockMvc.perform(as(5, post("/api/assistant/extend/1/submit"))
+                        .contentType(MediaType.APPLICATION_JSON).content(a.append("}}").toString()))
+                .andExpect(jsonPath("$.data.score").value(0.0))
+                .andExpect(jsonPath("$.data.text", Matchers.containsString("这组比较难")));
+        assertThat(jdbc.queryForObject("SELECT first_mastery FROM mastery WHERE student_id = 5 AND knowledge_point_id = 1",
+                Double.class)).isEqualTo(firstBefore);
+        mockMvc.perform(as(5, get("/api/diagnosis/me")))
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].color").value("orange"));
+        // 没有要交的了
+        mockMvc.perform(as(5, post("/api/assistant/extend/1/submit"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"answers\":{}}"))
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
     @Test
     void ambiguousRemedyQuestionDropped() throws Exception {
         // AI 不看答案做第 2 题时答了 B（和标准答案 A 不一样）→ 这道丢掉
