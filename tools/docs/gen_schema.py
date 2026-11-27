@@ -45,7 +45,7 @@ def parse(text):
             body, _, comment = raw.partition("--")
             body = body.strip().rstrip(",")
             comment = comment.strip()
-            if re.match(r"(PRIMARY KEY|CONSTRAINT|UNIQUE|KEY|INDEX)", body, re.I):
+            if re.match(r"(PRIMARY KEY|CONSTRAINT|UNIQUE\s|KEY\s|INDEX\s)", body):
                 keys.append(body + ("（" + comment + "）" if comment else ""))
                 continue
             cm = re.match(r"`?(\w+)`?\s+([A-Z]+(?:\([\d, ]+\))?)\s*(.*)", body)
