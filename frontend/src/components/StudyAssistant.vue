@@ -287,6 +287,7 @@ function act(ch, p) {
                     </el-tag>
                   </div>
                   <p>{{ p.text }}</p>
+                  <p v-if="p.dialogue" class="dialogue-note">{{ p.dialogue }}</p>
                   <ul v-if="p.details?.length && p.verdict !== 'good'" class="details">
                     <li v-for="(d, k) in p.details" :key="k">{{ d }}</li>
                   </ul>
@@ -612,6 +613,12 @@ function act(ch, p) {
   flex-direction: column;
   gap: 10px;
   align-items: flex-start;
+}
+
+.dialogue-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-text-muted);
 }
 
 .others {

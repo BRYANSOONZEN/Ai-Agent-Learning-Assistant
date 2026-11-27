@@ -27,6 +27,7 @@ import com.se.platform.record.mapper.LearningEventMapper;
 import com.se.platform.record.service.CompletionService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.se.platform.feynman.service.FeynmanDiagnosis;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -64,11 +65,14 @@ public class CourseProfileService {
     private final AnswerRecordMapper answerMapper;
     private final LearningEventMapper eventMapper;
     private final CompletionService completion;
+    private final FeynmanDiagnosis feynmanDiagnosis;
 
     public CourseProfileService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
                                 KnowledgePointMapper kpMapper,
                                 MasteryMapper masteryMapper, AnswerRecordMapper answerMapper,
-                                LearningEventMapper eventMapper, CompletionService completion) {
+                                LearningEventMapper eventMapper, CompletionService completion,
+                                FeynmanDiagnosis feynmanDiagnosis) {
+        this.feynmanDiagnosis = feynmanDiagnosis;
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
         this.itemMapper = itemMapper;
@@ -141,13 +145,15 @@ public class CourseProfileService {
         int[] acc = firstAttemptAccuracy(studentId, exercises.stream().map(ChapterItem::getId).toList());
 
         List<PointColor> points = new ArrayList<>();
+        Map<Long, String> dialogue = feynmanDiagnosis.byKnowledgePoint(studentId, ch.getId());
         for (KnowledgePoint kp : kpMapper.selectList(new LambdaQueryWrapper<KnowledgePoint>()
                 .eq(KnowledgePoint::getChapterId, ch.getId()).orderByAsc(KnowledgePoint::getSortOrder)
                 .orderByAsc(KnowledgePoint::getId))) {
             Mastery m = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
                     .eq(Mastery::getStudentId, studentId).eq(Mastery::getKnowledgePointId, kp.getId()));
             points.add(new PointColor(kp.getId(), kp.getName(), MasteryService.color(m),
-                    m == null ? null : m.getFirstMastery(), m == null ? null : m.getRemedyStatus()));
+                    m == null ? null : m.getFirstMastery(), m == null ? null : m.getRemedyStatus(),
+                    dialogue.get(kp.getId())));
         }
         boolean completed = !items.isEmpty() && flowDone == items.size();
         long red = points.stream().filter(p -> MasteryService.RED.equals(p.color())).count();

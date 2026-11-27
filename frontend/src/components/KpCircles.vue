@@ -3,7 +3,8 @@
  * Student view of a chapter's knowledge points: one numbered circle per point, in teaching order.
  * No connecting lines: when the circles wrap onto several rows, lines made it look as if some points were related
  * and others not; the number alone shows the order.
- * Key points (重点) are bigger. Clicking a circle shows its one-line summary and two shortcuts:
+ * Key points (重点) are bigger; once the student has practised, each circle takes their colour (green / orange / red).
+ * Clicking a circle shows its one-line summary and two shortcuts:
  * the main place in a video where it is taught (start time) and the courseware pages.
  * The teacher sees the full table (KpMap) instead, to check where each point was recognized from.
  */
@@ -17,6 +18,8 @@ const emit = defineEmits(['jump'])
 
 const picked = ref(0)
 const kp = computed(() => props.map.rows[picked.value] || null)
+// colours only when the student has practised at least one point (otherwise every circle stays plain)
+const colored = computed(() => props.map.rows.some((r) => r.color && r.color !== 'none'))
 
 function mmss(sec) {
   const s = Math.max(0, Math.floor(sec || 0))
@@ -56,6 +59,12 @@ const doc = computed(() => {
       <span><i class="dot big" />重点</span>
       <span><i class="dot" />一般</span>
       <span>数字是讲课的先后顺序，点圆圈看说明</span>
+      <template v-if="colored">
+        <span><i class="dot fill green" />第一次就掌握</span>
+        <span><i class="dot fill orange" />补回来了</span>
+        <span><i class="dot fill red" />还没掌握</span>
+        <span><i class="dot" />还没练</span>
+      </template>
     </div>
 
     <div class="track">
@@ -64,7 +73,7 @@ const doc = computed(() => {
         <button
           type="button"
           class="circle"
-          :class="{ big: r.importance === '重点', on: i === picked }"
+          :class="[{ big: r.importance === '重点', on: i === picked }, r.color && r.color !== 'none' ? 'c-' + r.color : '']"
           :title="r.name"
           @click="picked = i"
         >
@@ -167,6 +176,34 @@ const doc = computed(() => {
   line-height: 1.3;
   cursor: pointer;
   transition: transform 0.15s, background 0.15s;
+}
+/* the student's own result on this point (same colours as practice, the assistant and the profile) */
+.circle.c-green {
+  border-color: #36aa95;
+  background: #e6f2ef;
+  color: #2f7d6d;
+}
+.circle.c-orange {
+  border-color: #e99a4e;
+  background: #fbf1e4;
+  color: #b8691b;
+}
+.circle.c-red {
+  border-color: #e5675a;
+  background: #f8e7e5;
+  color: #b4433a;
+}
+.dot.fill.green {
+  border-color: #36aa95;
+  background: #e6f2ef;
+}
+.dot.fill.orange {
+  border-color: #e99a4e;
+  background: #fbf1e4;
+}
+.dot.fill.red {
+  border-color: #e5675a;
+  background: #f8e7e5;
 }
 .circle.big {
   width: 90px;

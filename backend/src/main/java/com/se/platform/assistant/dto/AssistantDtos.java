@@ -61,11 +61,12 @@ public final class AssistantDtos {
      * @param action        remedy 做补练题 / dialogue 去 AI 对话 / 为空 不用做什么
      * @param details       哪种考查类型做错、哪条要点没掌握
      * @param plan          复习方案：看资料（跳到那一秒、那一页）→ 补练题
+     * @param dialogue      AI 对话里每条要点的情况（只是说明，不影响颜色）；没对话过为空
      */
     public record PointReport(Long knowledgePointId, String name, String level, Double mastery, Double firstMastery,
                               String remedyStatus, int remedyRounds, boolean escalated, int attempts,
                               String misconception, String verdict, String text, String action,
-                              List<String> details, List<PlanStep> plan) {
+                              List<String> details, List<PlanStep> plan, String dialogue) {
     }
 
     /**

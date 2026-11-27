@@ -514,7 +514,7 @@ public class FeynmanEngine {
         return b.toString();
     }
 
-    static String label(Point p, String peer) {
+    public static String label(Point p, String peer) {
         if ("clear".equals(p.status)) {
             return switch (p.how == null ? "self" : p.how) {
                 case "self" -> "自己讲清楚了";

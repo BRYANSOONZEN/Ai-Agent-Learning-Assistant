@@ -31,6 +31,10 @@ import com.se.platform.material.mapper.ChapterKpMapper;
 import com.se.platform.material.mapper.ChapterKpStateMapper;
 import com.se.platform.material.mapper.MaterialJobMapper;
 import java.time.LocalDateTime;
+import com.se.platform.common.CurrentUser;
+import com.se.platform.diagnosis.service.MasteryService;
+import com.se.platform.diagnosis.entity.Mastery;
+import com.se.platform.diagnosis.mapper.MasteryMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -48,6 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ChapterKpService {
+
+    private final MasteryMapper masteryMapper;
 
     private static final TypeReference<List<KeyPoint>> POINTS = new TypeReference<>() {
     };
@@ -69,7 +75,9 @@ public class ChapterKpService {
     public ChapterKpService(ChapterService chapterService, CourseService courseService, ChapterMapper chapterMapper,
                             ChapterItemMapper itemMapper, MaterialJobMapper jobMapper, ChapterKpMapper kpMapper,
                             ChapterKpStateMapper stateMapper, KnowledgePointMapper knowledgePointMapper,
-                            MaterialPipeline pipeline, KpRecognizer recognizer, ObjectMapper json) {
+                            MaterialPipeline pipeline, KpRecognizer recognizer, ObjectMapper json,
+                            MasteryMapper masteryMapper) {
+        this.masteryMapper = masteryMapper;
         this.chapterService = chapterService;
         this.courseService = courseService;
         this.chapterMapper = chapterMapper;
@@ -215,7 +223,7 @@ public class ChapterKpService {
     /** 老师：草稿也能看 */
     public KpMap teacherMap(Long chapterId) {
         chapterService.requireOwned(chapterId);
-        return map(chapterId);
+        return map(chapterId, null);
     }
 
     /** 学生：只看已确认的，章节和课程都要已发布 */
@@ -230,10 +238,11 @@ public class ChapterKpService {
         if (s == null || s.getConfirmedAt() == null) {
             return new KpMap(chapterId, "none", List.of(), List.of());
         }
-        return map(chapterId);
+        return map(chapterId, CurrentUser.studentId());
     }
 
-    private KpMap map(Long chapterId) {
+    /** studentId 不为空：每个知识点带上这个学生的颜色（只看练习，规则同 MasteryService.color） */
+    private KpMap map(Long chapterId, Long studentId) {
         List<KpRecognizer.Seg> segs = recognizer.segments(chapterId);
         Map<String, KpRecognizer.Seg> byKey = segs.stream()
                 .collect(Collectors.toMap(KpRecognizer.Seg::key, Function.identity(), (a, b) -> a));
@@ -257,7 +266,15 @@ public class ChapterKpService {
             spots.values().forEach(l -> l.sort((a, b) -> Integer.compare(
                     a.page() != null ? a.page() : a.startSec() != null ? a.startSec() : 0,
                     b.page() != null ? b.page() : b.startSec() != null ? b.startSec() : 0)));
-            rows.add(new MapRow(k.id(), k.name(), k.summary(), k.importance(), k.keyPoints().size(), spots));
+            String color = null;
+            if (studentId != null) {
+                ChapterKp ck = kpMapper.selectById(k.id());
+                Long pointId = ck == null ? null : ck.getKnowledgePointId();
+                color = pointId == null ? "none" : MasteryService.color(masteryMapper.selectOne(
+                        new LambdaQueryWrapper<Mastery>().eq(Mastery::getStudentId, studentId)
+                                .eq(Mastery::getKnowledgePointId, pointId)));
+            }
+            rows.add(new MapRow(k.id(), k.name(), k.summary(), k.importance(), k.keyPoints().size(), spots, color));
         }
         ChapterKpState s = pipeline.state(chapterId);
         return new KpMap(chapterId, s.getStatus(), columns, rows);

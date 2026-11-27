@@ -141,6 +141,12 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
             {{ p.name }}<small>{{ COLORS[p.color].label }}</small>
           </span>
         </div>
+        <p v-if="ch.points.some((p) => p.dialogue)" class="dialogue-title">AI 对话里讲得怎么样（只是说明，不计分）</p>
+        <ul v-if="ch.points.some((p) => p.dialogue)" class="dialogue-notes">
+          <li v-for="p in ch.points.filter((x) => x.dialogue)" :key="p.knowledgePointId">
+            <b>{{ p.name }}</b>{{ p.dialogue.replace(/^AI 对话：/, '：') }}
+          </li>
+        </ul>
         <p class="summary">{{ ch.summary }}</p>
       </section>
 
@@ -256,6 +262,22 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
 .point.none {
   background: #f5f5f5;
   color: #8c8c8c;
+}
+.dialogue-title {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+.dialogue-notes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #595959;
+  line-height: 1.7;
+}
+.dialogue-notes b {
+  color: #262626;
+  font-weight: 600;
 }
 .summary {
   margin: 10px 0 0;

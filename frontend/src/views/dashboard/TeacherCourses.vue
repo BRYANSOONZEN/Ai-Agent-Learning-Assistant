@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CourseFormDialog from '@/views/teacher/CourseFormDialog.vue'
 import DeadlineBoard from './DeadlineBoard.vue'
+import TodoBoard from './TodoBoard.vue'
 import { MODULES } from '@/views/teacher/courseModules'
 import { getCourses } from '@/api/teacherCourse'
 
@@ -72,6 +73,8 @@ onMounted(load)
         <el-icon><Plus /></el-icon>新建课程
       </button>
     </header>
+
+    <TodoBoard />
 
     <DeadlineBoard />
 

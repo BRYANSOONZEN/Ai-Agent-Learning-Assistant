@@ -260,3 +260,9 @@ export function editFeynmanDraft(itemId, kpId, draft) {
 export function confirmFeynman(itemId) {
   return request.post(`/chapter-items/${itemId}/feynman/confirm`)
 }
+
+// GET /api/teacher/todo -> [{ kind: kp|feynman|exercise|short, courseId, courseName, chapterId, chapterTitle,
+//   view: 'kps' | 'item:<id>', title, count }] what is waiting for the teacher to confirm
+export function getTeacherTodo() {
+  return request.get('/teacher/todo')
+}

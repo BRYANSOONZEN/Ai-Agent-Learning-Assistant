@@ -50,7 +50,10 @@ def tests(src):
 
 def surefire():
     total = fail = 0
+    alive = {os.path.basename(f)[:-5] for f in glob.glob(os.path.join(TEST, "**", "*Test.java"), recursive=True)}
     for f in glob.glob(os.path.join(ROOT, "target", "surefire-reports", "*.txt")):
+        if os.path.basename(f)[:-4].split(".")[-1] not in alive:
+            continue  # 已经删掉的测试类留下的旧报告
         m = re.search(r"Tests run: (\d+), Failures: (\d+), Errors: (\d+)", open(f, encoding="utf-8").read())
         if m:
             total += int(m.group(1))

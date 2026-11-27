@@ -54,8 +54,9 @@ public final class KpDtos {
     }
 
     /** 一行：一个知识点，每份资料一格（itemId → 位置） */
+    /** color：学生看时是他自己在这个知识点的颜色（green / orange / red / none，和练习、画像一致）；老师看时为空 */
     public record MapRow(Long kpId, String name, String summary, String importance, int keyPointCount,
-                         java.util.Map<Long, List<MapSpot>> spots) {
+                         java.util.Map<Long, List<MapSpot>> spots, String color) {
     }
 
     public record KpMap(Long chapterId, String status, List<MapColumn> columns, List<MapRow> rows) {

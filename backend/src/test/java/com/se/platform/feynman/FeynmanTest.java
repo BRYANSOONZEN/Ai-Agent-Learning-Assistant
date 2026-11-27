@@ -200,6 +200,13 @@ class FeynmanTest {
         Assertions.assertTrue(state.contains("课件第 5 页"));
         say(sid, "还能说吗").andExpect(jsonPath("$.code").value(400));
         mockMvc.perform(get("/api/learn/courses/1")).andExpect(jsonPath("$.data.doneItemIds", Matchers.hasItem(3)));
+        // 学习情况给小助手和每章画像用：只是一句说明，不改颜色
+        String line = "AI 对话：要点 1 自己讲清楚了；要点 2 讲了一部分，阿哲补充了";
+        jdbc.update("UPDATE chapter_kp SET knowledge_point_id = 1 WHERE id = ?", kpId); // 老师确认后对应到知识点 1
+        mockMvc.perform(get("/api/profiles/me/courses/1"))
+                .andExpect(jsonPath("$.data.chapterProfiles[0].points[*].dialogue", Matchers.hasItem(line)));
+        mockMvc.perform(get("/api/assistant/summary"))
+                .andExpect(jsonPath("$..points[*].dialogue", Matchers.hasItem(line)));
 
         // 老师重新生成草稿：没聊完的那一次作废，学生再打开从新草稿开始（已完成的不受影响）
         long open = json.readTree(mockMvc.perform(post("/api/learn/items/3/feynman/start").param("again", "true"))

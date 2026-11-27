@@ -75,6 +75,6 @@ public final class ProfileDtos {
 
     /** 知识点颜色：green 第一次就掌握 / orange 补回来了 / red 还没掌握 / none 没练过 */
     public record PointColor(Long knowledgePointId, String name, String color, Double firstMastery,
-                             String remedyStatus) {
+                             String remedyStatus, String dialogue) {
     }
 }

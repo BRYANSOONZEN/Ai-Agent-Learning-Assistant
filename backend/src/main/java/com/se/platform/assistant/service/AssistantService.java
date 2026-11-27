@@ -21,6 +21,7 @@ import com.se.platform.diagnosis.service.MasteryService;
 import com.se.platform.record.entity.LearningEvent;
 import com.se.platform.record.mapper.LearningEventMapper;
 import java.time.LocalDateTime;
+import com.se.platform.feynman.service.FeynmanDiagnosis;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -42,6 +43,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class AssistantService {
 
+    private final FeynmanDiagnosis feynmanDiagnosis;
+
     private final CourseMapper courseMapper;
     private final ChapterMapper chapterMapper;
     private final ChapterItemMapper itemMapper;
@@ -53,7 +56,9 @@ public class AssistantService {
 
     public AssistantService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
                             KnowledgePointMapper kpMapper, LearningEventMapper eventMapper, MasteryMapper masteryMapper,
-                            RemedyService remedyService, PracticeAnalysis practiceAnalysis) {
+                            RemedyService remedyService, PracticeAnalysis practiceAnalysis,
+                            FeynmanDiagnosis feynmanDiagnosis) {
+        this.feynmanDiagnosis = feynmanDiagnosis;
         this.practiceAnalysis = practiceAnalysis;
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
@@ -135,7 +140,8 @@ public class AssistantService {
                 .eq(KnowledgePoint::getChapterId, ch.getId())
                 .orderByAsc(KnowledgePoint::getSortOrder)
                 .orderByAsc(KnowledgePoint::getId));
-        List<PointReport> points = kps.stream().map(kp -> point(studentId, kp, ctx)).toList();
+        Map<Long, String> dialogue = feynmanDiagnosis.byKnowledgePoint(studentId, ch.getId());
+        List<PointReport> points = kps.stream().map(kp -> point(studentId, kp, ctx, dialogue.get(kp.getId()))).toList();
         int good = (int) points.stream().filter(p -> MasteryService.GREEN.equals(p.verdict())).count();
         int orange = (int) points.stream().filter(p -> MasteryService.ORANGE.equals(p.verdict())).count();
         int weak = (int) points.stream().filter(p -> isWeak(p.verdict())).count();
@@ -174,7 +180,7 @@ public class AssistantService {
      * 一个知识点：只看练习（2026-11-25 起 AI 对话不打分，不再用“概念层”）。
      * 颜色 = 当前掌握度的等级；红、橙的给复习方案和“做补练题”（小助手的自动干预，见 RemedyService）。
      */
-    private PointReport point(long studentId, KnowledgePoint kp, PracticeAnalysis.Context ctx) {
+    private PointReport point(long studentId, KnowledgePoint kp, PracticeAnalysis.Context ctx, String dialogue) {
         Mastery m = masteryMapper.selectOne(new LambdaQueryWrapper<Mastery>()
                 .eq(Mastery::getStudentId, studentId).eq(Mastery::getKnowledgePointId, kp.getId()));
         boolean practiced = m != null && m.getFirstCount() != null && m.getFirstCount() > 0
@@ -218,6 +224,6 @@ public class AssistantService {
         return new PointReport(kp.getId(), kp.getName(), level, mastery,
                 m == null ? null : m.getFirstMastery(), status, rounds.size(), escalated,
                 m == null || m.getAttemptCount() == null ? 0 : m.getAttemptCount(), misconception,
-                color, text, action, weak ? pr.details() : List.of(), plan);
+                color, text, action, weak ? pr.details() : List.of(), plan, dialogue);
     }
 }
