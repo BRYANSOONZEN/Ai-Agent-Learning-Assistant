@@ -46,7 +46,7 @@ public final class FeynmanDtos {
                          List<PointView> points, Boolean misconceptionFixed, String review) {
     }
 
-    /** 学生看到的对话（小结也只给学生看）。status：open / done（done 后下一项解锁） */
+    /** 学生看到的对话（小结也只给学生看）。status：open / done（done 后本章练习解锁） */
     public record SessionView(Long id, String status, int kpIdx, List<KpView> kps, List<Message> messages) {
     }
 

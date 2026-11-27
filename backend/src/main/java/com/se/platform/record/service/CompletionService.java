@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
- * 一项内容"学完了没有"，以及按顺序解锁。
+ * 一项内容"学完了没有"，以及按内容类型解锁（视频、文档不锁；AI 对话要资料学完；练习要 AI 对话完成）。
  *
  * <p>学完，三种来源任取其一：
  * <ul>

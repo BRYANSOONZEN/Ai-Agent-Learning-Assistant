@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 视频和文档怎么算"学完"（学完才解锁下一项，见 CompletionService）。
+ * 视频和文档怎么算"学完"（学完后用于解锁 AI 对话和练习，见 CompletionService）。
  *
  * <p><b>视频</b>：完成度
  * <pre>
