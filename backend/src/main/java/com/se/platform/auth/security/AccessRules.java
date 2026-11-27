@@ -42,7 +42,7 @@ public final class AccessRules {
             // 管理员：用户管理、AI 调用记录
             rule("/api/admin/**", ADMIN),
             rule("/api/ai/logs/**", ADMIN),
-            // 学生：学、记、诊（自己）、画（自己）、荐、助手、自己的干预任务
+            // 学生：学、记、诊（自己）、画（自己）、荐、助手
             rule("/api/learn/**", STUDENT),
             rule("/api/dialogue/**", STUDENT),
             rule("/api/recommendations/**", STUDENT),
@@ -50,10 +50,9 @@ public final class AccessRules {
             rule("/api/diagnosis/me", STUDENT),
             rule("/api/profiles/me", STUDENT),
             rule("/api/profiles/me/**", STUDENT),
-            rule("/api/interventions/mine", STUDENT),
             // 资料文件：老师预览、学生学习都要看
             rule("/api/materials/**", STUDENT, TEACHER),
-            // 老师：建课、对话话题、全班诊断、单个学生的诊断和画像、预警和干预
+            // 老师：建课、对话话题、全班诊断、单个学生的诊断和画像、全班分析和干预
             rule("/api/courses/**", TEACHER),
             rule("/api/chapters/**", TEACHER),
             rule("/api/chapter-items/**", TEACHER),
@@ -63,11 +62,9 @@ public final class AccessRules {
             rule("/api/teacher/**", TEACHER),
             rule("/api/diagnosis/**", TEACHER),
             rule("/api/profiles/**", TEACHER),
-            rule("/api/interventions/**", TEACHER),
             rule("/api/class-analysis/**", TEACHER),
             rule("/api/class-issues/**", TEACHER),
-            rule("/api/class-pushes/**", TEACHER),
-            rule("/api/alerts/**", TEACHER));
+            rule("/api/class-pushes/**", TEACHER));
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 

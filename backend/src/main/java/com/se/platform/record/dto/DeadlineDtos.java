@@ -11,11 +11,11 @@ public final class DeadlineDtos {
 
     /**
      * 学生端：一项还没做、有截止时间的任务。
-     * kind：item 章节里的练习 / AI 对话；intervention 老师布置的干预任务（这时 itemId 为空，interventionId 有值）。
+     * kind：item（章节里的练习 / AI 对话）。
      * state：overdue 已过期 / soon 快到期（离截止不到 remind-days 天）/ later 还早。
      * minutesLeft：离截止还有几分钟，已过期是负数。
      */
-    public record StudentDeadline(String kind, Long itemId, Long interventionId, Long courseId, String courseName,
+    public record StudentDeadline(String kind, Long itemId, Long courseId, String courseName,
                                   Long chapterId, String chapterTitle, String type, String title, LocalDateTime dueAt,
                                   boolean allowLate, String state, long minutesLeft) {
     }

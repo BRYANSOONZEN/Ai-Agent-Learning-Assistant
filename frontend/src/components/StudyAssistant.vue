@@ -9,13 +9,13 @@
  * Hidden while an exercise is being answered or an AI dialogue is going (stores/assistantFocus).
  * Shows only this student's own data:
  *   - a chapter finished, or one whose exercises were done: a personal report per knowledge point
- *     (dialogue = concept, exercises = application). From the exercise answers: which assessment type went wrong,
+ *     (colour from the exercises only). From the exercise answers: which assessment type went wrong,
  *     which key points were missed, the recurring misconception, and an automatic review plan
  *     (watch the video from the right second / read the page → practise → explain it to the AI classmate);
  *     no teacher involved
- *   - what the teacher (or the system, automatically) assigned
+ *   - 老师补充讲解 + 新题 pushed after the class analysis, deadlines, notices
  *   - chapters still in progress and the next item
- * The badge counts new things: a newly finished chapter, a newly assigned task.
+ * The badge counts new things: a newly finished chapter, a deadline, a new push from the teacher.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -23,7 +23,6 @@ import { getAssistantSummary, getMyPushes, getNotices } from '@/api/assistant'
 import PushBox from './PushBox.vue'
 import RemedyBox from './RemedyBox.vue'
 import AssistantChat from './AssistantChat.vue'
-import { getMyAssignments } from '@/api/intervention'
 import { getMyDeadlines } from '@/api/learn'
 import { studentBusy } from '@/stores/assistantFocus'
 
@@ -33,7 +32,6 @@ const router = useRouter()
 const open = ref(false)
 const loading = ref(false)
 const summary = ref(null) // { chapters, focusChapterId }
-const running = ref([]) // interventions in progress for me
 const deadlines = ref([]) // items due soon or overdue: the assistant reminds (no teacher involved)
 const pushes = ref([]) // 老师补充讲解 (class intervention) pushed to me
 const notices = ref([]) // 老师提醒
@@ -66,9 +64,7 @@ async function refresh() {
   if (loading.value) return
   loading.value = true
   try {
-    // one after the other: both make the backend scan this student
     summary.value = await getAssistantSummary()
-    running.value = (await getMyAssignments()).running || []
     deadlines.value = ((await getMyDeadlines()) || []).filter((d) => d.kind === 'item' && d.state !== 'later')
     pushes.value = (await getMyPushes()) || []
     notices.value = (await getNotices()) || []
@@ -125,7 +121,6 @@ function readSeen() {
 const seen = ref(readSeen())
 const newKeys = computed(() => [
   ...chapters.value.filter((c) => c.completed).map((c) => 'ch:' + c.chapterId),
-  ...running.value.map((iv) => 'iv:' + iv.id),
   ...deadlines.value.map((d) => `dl:${d.itemId}:${d.state}`),
   ...pushes.value.filter((p) => !p.done).map((p) => 'push:' + p.id),
   ...notices.value.map((n, i) => 'note:' + i + ':' + n.length),
@@ -160,7 +155,6 @@ const VERDICT = {
 }
 const REMEDY = { recovered: '已补回来', practicing: '补练中' }
 
-const IV_TYPE = { PRACTICE: '练习', REVIEW: '复习 + 重新对话', REVIEW_PRACTICE: '复习对话后再练习' }
 
 function goItem(ch, itemId) {
   open.value = false
@@ -326,19 +320,6 @@ function act(ch, p) {
               </el-button>
             </div>
           </template>
-
-          <!-- assigned tasks -->
-          <div v-if="running.length" class="assigned">
-            <h4>给你布置的任务</h4>
-            <div v-for="iv in running" :key="iv.id" class="task">
-              <div class="task-head">
-                <b>「{{ iv.knowledgePointName }}」{{ IV_TYPE[iv.type] }}</b>
-                <small>{{ iv.auto ? '系统根据你的情况布置' : '老师布置' }}</small>
-              </div>
-              <p>{{ iv.note }}</p>
-            </div>
-            <el-button size="small" @click="goPractice">去学习推荐查看</el-button>
-          </div>
 
           <!-- other chapters in progress -->
           <div v-if="inProgress.length && current?.completed" class="others">
@@ -631,36 +612,6 @@ function act(ch, p) {
   flex-direction: column;
   gap: 10px;
   align-items: flex-start;
-}
-
-.assigned {
-  border-top: 1px solid var(--app-border);
-  padding-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-}
-.task {
-  width: 100%;
-  background: var(--app-bg);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-.task-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-}
-.task-head small {
-  color: var(--app-text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.task p {
-  margin-top: 4px;
-  color: var(--app-text-secondary);
 }
 
 .others {

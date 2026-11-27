@@ -35,6 +35,12 @@ public class ClassAnalysisController {
         return Result.ok(service.board(courseId));
     }
 
+    /** GET /api/class-analysis/open-count：侧边栏「干预管理」后面的数字 = 分析作废的练习 + 待老师处理的卡片 */
+    @GetMapping("/api/class-analysis/open-count")
+    public Result<Integer> openCount() {
+        return Result.ok(service.openCount());
+    }
+
     /** POST /api/class-issues/{id}/ok：老师检查后，这道题没问题（算回要点 × 考查类型） */
     @PostMapping("/api/class-issues/{id}/ok")
     public Result<Void> ok(@PathVariable Long id) {

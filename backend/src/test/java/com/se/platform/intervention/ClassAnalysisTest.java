@@ -242,7 +242,7 @@ class ClassAnalysisTest {
         jdbc.update("DELETE FROM answer_record WHERE item_id = 2 AND student_id IN (8, 9, 10, 11)");
         deadlinePassed();
         board().andExpect(jsonPath("$.data.items[0].status").value("void"));
-        mockMvc.perform(get("/api/interventions/open-count")).andExpect(jsonPath("$.data").value(1));
+        mockMvc.perform(get("/api/class-analysis/open-count")).andExpect(jsonPath("$.data").value(1));
         mockMvc.perform(post("/api/class-analysis/items/2/remind").contentType(MediaType.APPLICATION_JSON)
                 .content("{}")).andExpect(jsonPath("$.data").value(7));
         mockMvc.perform(as(12, get("/api/assistant/notices")))

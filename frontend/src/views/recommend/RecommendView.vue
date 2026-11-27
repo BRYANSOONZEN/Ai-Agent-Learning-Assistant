@@ -5,13 +5,11 @@
  * Each point card says why (mastery, the misconception from the last wrong answer), what to re-read first,
  * then the questions. A question is answered right here, one at a time: it is graded, recorded as
  * 「推荐练习」 and mastery is recomputed. Right answers and 换一道 are not recommended again.
- * Above the list: 给你布置的任务 (TeacherAssigned), interventions from the teacher or started by the system.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
-import TeacherAssigned from './TeacherAssigned.vue'
 import MasteryMeter from '@/views/diagnosis/MasteryMeter.vue'
 import { LEVELS, percent } from '@/views/diagnosis/levels'
 import { getRecommendations, practiceRecommended, recommendationFeedback } from '@/api/recommend'
@@ -25,16 +23,13 @@ const chosen = reactive({}) // exerciseId -> letter
 const results = reactive({}) // exerciseId -> graded result
 const changes = reactive({}) // knowledgePointId -> latest mastery change
 const busy = ref(null) // exerciseId being submitted
-const teacherTasks = ref(0) // running interventions shown in 老师布置
 
 const total = computed(() => (data.value?.points || []).reduce((n, p) => n + p.exercises.length, 0))
 const answeredSome = computed(() => Object.keys(results).length > 0)
 const headline = computed(() => {
   const d = data.value
-  if (teacherTasks.value && !total.value) return '先完成给你布置的任务'
   if (!d.weakCount) return '没有薄弱的知识点，暂时不用补'
-  // every weak point is under an intervention: the teacher's plan (老师布置) replaces the list
-  if (!d.points.length) return '先完成给你布置的任务'
+  if (!d.points.length) return '薄弱知识点的题都做完了，先回看内容'
   const first = d.points[0]
   if (!total.value) return `「${first.name}」的题都做完了，先回看内容`
   return d.points.length === 1
@@ -121,7 +116,6 @@ onMounted(load)
         </button>
       </section>
 
-      <TeacherAssigned @loaded="(n) => (teacherTasks = n)" @changed="load" />
 
       <el-empty v-if="!data.weakCount" description="继续学新的内容吧，做错的题会出现在这里">
         <el-button @click="router.push({ name: 'diagnosis' })">看学情诊断</el-button>

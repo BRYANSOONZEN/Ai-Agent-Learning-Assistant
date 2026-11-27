@@ -9,8 +9,6 @@ import com.se.platform.course.entity.Course;
 import com.se.platform.course.mapper.ChapterItemMapper;
 import com.se.platform.course.mapper.ChapterMapper;
 import com.se.platform.course.mapper.CourseMapper;
-import com.se.platform.intervention.dto.InterventionDtos.InterventionView;
-import com.se.platform.intervention.service.InterventionService;
 import com.se.platform.record.dto.DeadlineDtos.ItemDeadline;
 import com.se.platform.record.dto.DeadlineDtos.Student;
 import com.se.platform.record.dto.DeadlineDtos.StudentDeadline;
@@ -49,15 +47,9 @@ public class DeadlineService {
     private final CompletionService completionService;
     private final UserMapper userMapper;
     private final int remindDays;
-    private final InterventionService interventionService;
-
-    /** 干预类型 → 学生看到的名字 */
-    private static final Map<String, String> TASK_LABELS = Map.of(
-            "PRACTICE", "变式练习", "REVIEW", "复习 + 重做对话", "REVIEW_PRACTICE", "先复习再练习");
 
     public DeadlineService(CourseMapper courseMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
                            CompletionService completionService, UserMapper userMapper,
-                           InterventionService interventionService,
                            @Value("${platform.deadline.remind-days:3}") int remindDays) {
         this.courseMapper = courseMapper;
         this.chapterMapper = chapterMapper;
@@ -65,7 +57,6 @@ public class DeadlineService {
         this.completionService = completionService;
         this.userMapper = userMapper;
         this.remindDays = remindDays;
-        this.interventionService = interventionService;
     }
 
     /** 学生：还没做的、设了截止时间的项 */
@@ -79,19 +70,10 @@ public class DeadlineService {
             }
             Chapter ch = v.chapters.get(it.getChapterId());
             Course c = v.courses.get(it.getCourseId());
-            list.add(new StudentDeadline("item", it.getId(), null, c.getId(), c.getName(), ch.getId(), ch.getTitle(),
+            list.add(new StudentDeadline("item", it.getId(), c.getId(), c.getName(), ch.getId(), ch.getTitle(),
                     it.getType(),
                     it.getTitle(), it.getDueAt(), allowLate(it), state(it.getDueAt(), now),
                     Duration.between(now, it.getDueAt()).toMinutes()));
-        }
-        // 老师布置的干预任务：执行中的都有期限；过期后仍然可以做（补救练习不拦），只标出来
-        for (InterventionView iv : interventionService.mine(studentId).running()) {
-            if (iv.dueAt() == null) {
-                continue;
-            }
-            list.add(new StudentDeadline("intervention", null, iv.id(), null, null, null, null, iv.type(),
-                    "老师布置：" + TASK_LABELS.getOrDefault(iv.type(), "任务") + "（" + iv.knowledgePointName() + "）",
-                    iv.dueAt(), true, state(iv.dueAt(), now), Duration.between(now, iv.dueAt()).toMinutes()));
         }
         list.sort(Comparator.comparing(StudentDeadline::dueAt));
         return list;

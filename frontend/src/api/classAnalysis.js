@@ -48,3 +48,8 @@ export function remindMissing(itemId, message) {
 export function extendDeadline(itemId, dueAt) {
   return request.post(`/class-analysis/items/${itemId}/extend`, { dueAt })
 }
+
+// GET /api/class-analysis/open-count -> number for the sidebar badge (void analyses + cards waiting for the teacher)
+export function getOpenIssueCount() {
+  return request.get('/class-analysis/open-count')
+}

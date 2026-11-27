@@ -41,11 +41,8 @@ const deadlines = ref([]) // exercises / AI dialogues with a deadline, not done 
 // remind: overdue + due within REMIND_DAYS; the rest are only counted
 const urgent = computed(() => deadlines.value.filter((d) => d.state !== 'later'))
 const laterCount = computed(() => deadlines.value.length - urgent.value.length)
-// item -> that item in the course; teacher-assigned task -> 学习推荐 (where 老师布置 lives)
-const deadlineLink = (d) =>
-  d.kind === 'intervention'
-    ? { name: 'recommend' }
-    : { name: 'course-detail', params: { id: d.courseId }, query: { chapter: d.chapterId, view: 'item:' + d.itemId } }
+// each deadline opens that item in the course
+const deadlineLink = (d) => ({ name: 'course-detail', params: { id: d.courseId }, query: { chapter: d.chapterId, view: 'item:' + d.itemId } })
 
 const today = new Date()
   .toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
@@ -219,17 +216,16 @@ onMounted(async () => {
         <span class="muted">{{ laterCount ? `另外还有 ${laterCount} 项，离截止还早` : '截止前 3 天开始提醒' }}</span>
       </div>
       <ul class="deadlines">
-        <li v-for="d in urgent" :key="d.kind + (d.itemId || d.interventionId)">
+        <li v-for="d in urgent" :key="d.itemId">
           <router-link :to="deadlineLink(d)" class="deadline-row">
             <span class="sw-icon sm" :class="d.state === 'overdue' ? 'tone-orange' : 'tone-blue'">
               <el-icon :size="14">
-                <component :is="d.kind === 'intervention' ? 'Aim' : itemType(d.type)?.icon || 'EditPen'" />
+                <component :is="itemType(d.type)?.icon || 'EditPen'" />
               </el-icon>
             </span>
             <span class="deadline-main">
               <strong>{{ d.title }}</strong>
-              <small v-if="d.kind === 'intervention'">在「学习推荐」里完成 · 期限 {{ fmtDue(d.dueAt) }}</small>
-              <small v-else>{{ d.courseName }} · {{ d.chapterTitle }} · 截止 {{ fmtDue(d.dueAt) }}</small>
+              <small>{{ d.courseName }} · {{ d.chapterTitle }} · 截止 {{ fmtDue(d.dueAt) }}</small>
             </span>
             <span class="sw-tag" :class="dueInfo(d.dueAt, d.allowLate).tone">{{ dueInfo(d.dueAt, d.allowLate).text }}</span>
           </router-link>

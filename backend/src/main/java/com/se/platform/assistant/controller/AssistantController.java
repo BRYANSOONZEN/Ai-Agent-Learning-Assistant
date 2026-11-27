@@ -16,7 +16,6 @@ import com.se.platform.assistant.service.RemedyService;
 import java.util.List;
 import com.se.platform.assistant.service.AssistantService;
 import com.se.platform.common.Result;
-import com.se.platform.intervention.service.InterventionService;
 import com.se.platform.record.service.RecordService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,32 +34,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class AssistantController {
 
     private final AssistantService assistantService;
-    private final InterventionService interventionService;
     private final RecordService recordService;
     private final RemedyService remedyService;
     private final AssistantChatService chatService;
     private final ClassPushService pushService;
 
-    public AssistantController(AssistantService assistantService, InterventionService interventionService,
+    public AssistantController(AssistantService assistantService,
                                RecordService recordService, RemedyService remedyService,
                                AssistantChatService chatService, ClassPushService pushService) {
         this.pushService = pushService;
         this.chatService = chatService;
         this.remedyService = remedyService;
         this.assistantService = assistantService;
-        this.interventionService = interventionService;
         this.recordService = recordService;
     }
 
     /** GET /api/assistant/summary：学过的章节、进度，学完的章节带个人总结 */
     @GetMapping("/summary")
     public Result<Summary> summary() {
-        long student = recordService.currentStudentId();
-        synchronized (InterventionService.SCAN_LOCK) {
-            // 先扫描这个学生：有新问题时干预自动执行，助手里马上能看到"老师布置"
-            interventionService.scanStudent(student);
-        }
-        return Result.ok(assistantService.summary(student));
+        return Result.ok(assistantService.summary(recordService.currentStudentId()));
     }
 
     /** POST /api/assistant/remedy/{kpId}/start：开始（或继续）这个知识点的补练，当场生成个人补练题 */

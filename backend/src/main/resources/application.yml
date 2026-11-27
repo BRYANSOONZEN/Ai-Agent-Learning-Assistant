@@ -69,8 +69,6 @@ platform:
     lock-minutes: 15              # ……锁 15 分钟
   deadline:
     remind-days: 3                # 截止前 3 天开始提醒学生（学生首页「快到期」）
-  intervention:
-    due-days: 7                   # 干预开始执行后默认 7 天内做完（到第 7 天 23:59），老师审核时可改、执行中可延期
 
 # ---------- 大模型（AI 对话等功能用，见 docs/ai-implementation.md 第 3 节第 1 步）----------
 # 对应的 Java 类：com.se.platform.ai.config.LlmProperties（短横线写法 base-url 会自动对应字段 baseUrl）

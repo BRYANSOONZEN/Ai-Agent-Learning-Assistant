@@ -12,7 +12,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { layoutChildren } from '@/router'
 import { getMyDiagnosis } from '@/api/diagnosis'
-import { getOpenAlertCount } from '@/api/intervention'
+import { getOpenIssueCount } from '@/api/classAnalysis'
 import StudyAssistant from '@/components/StudyAssistant.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
@@ -59,7 +59,7 @@ const openAlerts = ref(0)
 async function refreshAlerts() {
   if (userStore.role !== 'teacher') return (openAlerts.value = 0)
   try {
-    openAlerts.value = await getOpenAlertCount()
+    openAlerts.value = await getOpenIssueCount()
   } catch {
     openAlerts.value = 0
   }

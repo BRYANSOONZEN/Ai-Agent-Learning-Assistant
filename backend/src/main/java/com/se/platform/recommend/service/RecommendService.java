@@ -23,8 +23,6 @@ import com.se.platform.diagnosis.dto.DiagnosisDtos.PointDiagnosis;
 import com.se.platform.diagnosis.dto.DiagnosisDtos.StudentDiagnosis;
 import com.se.platform.diagnosis.service.DiagnosisService;
 import com.se.platform.diagnosis.service.MasteryService;
-import com.se.platform.intervention.entity.Intervention;
-import com.se.platform.intervention.mapper.InterventionMapper;
 import com.se.platform.recommend.dto.RecommendDtos.PointRecommendation;
 import com.se.platform.recommend.dto.RecommendDtos.RecExercise;
 import com.se.platform.recommend.dto.RecommendDtos.RecommendationList;
@@ -70,14 +68,12 @@ public class RecommendService {
     private final KnowledgePointMapper kpMapper;
     private final ChapterMapper chapterMapper;
     private final ChapterItemMapper itemMapper;
-    private final InterventionMapper interventionMapper;
 
     public RecommendService(DiagnosisService diagnosisService, MasteryService masteryService,
                             RecordService recordService, ExerciseService exerciseService,
                             RecommendationMapper recommendationMapper, AnswerRecordMapper answerMapper,
                             ExerciseKnowledgePointMapper linkMapper, ExerciseMapper exerciseMapper,
-                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper,
-                            InterventionMapper interventionMapper) {
+                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper) {
         this.diagnosisService = diagnosisService;
         this.masteryService = masteryService;
         this.recordService = recordService;
@@ -89,7 +85,6 @@ public class RecommendService {
         this.kpMapper = kpMapper;
         this.chapterMapper = chapterMapper;
         this.itemMapper = itemMapper;
-        this.interventionMapper = interventionMapper;
     }
 
     // ------------------------------------------------------------------ 推荐列表
@@ -105,17 +100,10 @@ public class RecommendService {
                         .eq(Recommendation::getTargetType, Recommendation.EXERCISE))
                 .stream().collect(Collectors.toMap(Recommendation::getTargetId, r -> r));
         Map<Long, List<Boolean>> history = history(studentId);
-        Set<Long> managed = interventionMapper.selectList(new LambdaQueryWrapper<Intervention>()
-                        .eq(Intervention::getStudentId, studentId)
-                        .eq(Intervention::getStatus, Intervention.APPROVED))
-                .stream().map(Intervention::getKnowledgePointId).collect(Collectors.toSet());
 
         List<PointRecommendation> points = new ArrayList<>();
         int left = MAX_TOTAL;
         for (PointDiagnosis p : diagnosis.weakPoints()) { // 已经按掌握度从低到高
-            if (managed.contains(p.knowledgePointId())) {
-                continue; // 老师在干预，按"老师布置"做
-            }
             KnowledgePoint kp = kpMapper.selectById(p.knowledgePointId());
             List<RecExercise> picked = new ArrayList<>();
             for (Candidate c : candidates(kp, mine, history)) {
