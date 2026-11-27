@@ -60,13 +60,18 @@ const ALERT = { done: 'info', overdue: 'warning', soon: 'warning', later: 'info'
 // server progress of videos / documents: itemId -> { ranges, lastPosition, readSec, completed, ... }
 const progressMap = computed(() => data.value?.progress || {})
 
-// locked = not the first item of its chapter, the item before it is not finished, and it is not finished itself
-// (the same rule as the server's CompletionService, so finishing an item unlocks the next one at once)
+// unlock rule (same as the server's CompletionService.blockers, not by position):
+// videos / documents are always open; AI 对话 needs every video / document of the chapter finished;
+// 练习 needs every AI 对话 of the chapter finished (no AI 对话 in the chapter: every video / document);
+// an item the student already finished is never locked. Returns the items to finish first, or null.
+const isMaterial = (t) => t === 'video' || t === 'document'
 function lockedBy(ch, it) {
-  const i = ch?.items.indexOf(it) ?? -1
-  if (i <= 0) return null
-  const prev = ch.items[i - 1]
-  return !done.value.includes(prev.id) && !done.value.includes(it.id) ? prev : null
+  if (!ch || !it || done.value.includes(it.id) || isMaterial(it.type)) return null
+  const materials = ch.items.filter((x) => isMaterial(x.type))
+  const dialogues = ch.items.filter((x) => x.type === 'dialogue')
+  const need = it.type === 'dialogue' ? materials : it.type === 'exercise' ? (dialogues.length ? dialogues : materials) : []
+  const left = need.filter((x) => !done.value.includes(x.id))
+  return left.length ? left : null
 }
 const lockPrev = computed(() => (item.value ? lockedBy(chapter.value, item.value) : null))
 
@@ -331,12 +336,16 @@ onMounted(load)
               />
               <p v-if="item.description && item.type !== 'document'" class="pre lead">{{ item.description }}</p>
 
-              <!-- locked: the item before it is not finished yet -->
+              <!-- locked: the items it needs are not finished yet -->
               <div v-if="lockPrev" class="locked">
                 <el-icon :size="34"><Lock /></el-icon>
                 <strong>这一项还没解锁</strong>
-                <p>先完成上一项：《{{ lockPrev.title }}》</p>
-                <el-button type="primary" @click="open(chapter, 'item:' + lockPrev.id)">去完成</el-button>
+                <p>
+                  {{ item.type === 'dialogue' ? '本章的视频、文档全部学完后解锁。' : '' }}还差：{{
+                    lockPrev.map((x) => '《' + x.title + '》').join('、')
+                  }}
+                </p>
+                <el-button type="primary" @click="open(chapter, 'item:' + lockPrev[0].id)">去完成</el-button>
               </div>
 
               <!-- video: watched ≥ 90% = finished -->

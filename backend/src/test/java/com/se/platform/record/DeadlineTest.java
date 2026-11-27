@@ -77,7 +77,9 @@ class DeadlineTest {
     @Test
     void lateSubmissionIsCountedOrBlocked() throws Exception {
         finished(12, 1);
+        finished(12, 3);   // 练习要等 AI 对话完成才解锁
         finished(13, 1);
+        finished(13, 3);
         String past = LocalDateTime.now().minusHours(1).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
         // 练习改成 1 小时前截止、允许补做：12 号补交，老师那边记 1 人迟交
@@ -89,7 +91,7 @@ class DeadlineTest {
                 .andExpect(jsonPath("$.data[?(@.itemId == 2)].late").value(Matchers.contains(1)))
                 .andExpect(jsonPath("$.data[?(@.itemId == 2)].done").value(Matchers.contains(8)));
 
-        // 改成不允许补做：13 号交卷被拒；12 号（练习已交，对话已解锁）开始对话也被拒
+        // 改成不允许补做：13 号交卷被拒；12 号开始对话也被拒
         setDeadline(2, "练习：边界值小测", "exercise", past, false);
         mockMvc.perform(post("/api/learn/items/2/submit").header(DemoIdentity.HEADER, "13")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"answers\": {\"1\": \"A\", \"2\": \"B\"}}"))

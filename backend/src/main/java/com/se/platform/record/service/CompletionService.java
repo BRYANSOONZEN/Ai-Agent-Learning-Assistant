@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,7 +31,12 @@ import org.springframework.stereotype.Service;
  *   <li>AI 对话结束过（dialogue_session 状态 FINISHED）</li>
  * </ul>
  *
- * <p>解锁：一章里按学习顺序，第 k+1 项解锁 ⇔ 第 k 项学完；每章第 1 项默认解锁。
+ * <p>解锁（2026-11-26 定，按内容项类型，不看排列顺序）：
+ * <ul>
+ *   <li>视频、文档：一直解锁，学生可以按自己的顺序看、来回看</li>
+ *   <li>AI 对话：本章视频、文档全部学完才解锁</li>
+ *   <li>练习：本章 AI 对话全部完成才解锁；这一章没有 AI 对话的，视频、文档全部学完就解锁</li>
+ * </ul>
  * 自己已经学完的项永远是解锁的（老数据不会被锁回去）。
  */
 @Service
@@ -83,39 +89,60 @@ public class CompletionService {
         return done;
     }
 
+    /** 判断解锁只需要内容项的 id、类型和标题 */
+    public record Node(Long id, String type, String title) {
+        static Node of(ChapterItem i) {
+            return new Node(i.getId(), i.getType(), i.getTitle());
+        }
+    }
+
+    private static boolean material(String type) {
+        return "video".equals(type) || "document".equals(type);
+    }
+
     /**
-     * 锁住的项。chapters：每章的内容项 id，已按学习顺序排好。
-     * 第 k 项锁住 ⇔ 不是第 1 项，且第 k-1 项没学完，且第 k 项自己也没学完。
+     * 这一项要先完成哪些项（按学习顺序）；空 = 已解锁。chapter：这一章的全部内容项，已按学习顺序排好。
+     * 自己已经学完的项不锁。
      */
-    public Set<Long> lockedItemIds(Set<Long> done, List<List<Long>> chapters) {
+    public static List<Node> blockers(List<Node> chapter, Node item, Set<Long> done) {
+        if (done.contains(item.id()) || material(item.type())) {
+            return List.of();
+        }
+        List<Node> materials = chapter.stream().filter(n -> material(n.type())).toList();
+        List<Node> dialogues = chapter.stream().filter(n -> "dialogue".equals(n.type())).toList();
+        List<Node> need = switch (item.type()) {
+            case "dialogue" -> materials;
+            case "exercise" -> dialogues.isEmpty() ? materials : dialogues;
+            default -> List.of();
+        };
+        return need.stream().filter(n -> !done.contains(n.id())).toList();
+    }
+
+    /** 锁住的项。chapters：每章的内容项，已按学习顺序排好 */
+    public Set<Long> lockedItemIds(Set<Long> done, List<List<Node>> chapters) {
         Set<Long> locked = new HashSet<>();
-        for (List<Long> items : chapters) {
-            for (int k = 1; k < items.size(); k++) {
-                if (!done.contains(items.get(k - 1)) && !done.contains(items.get(k))) {
-                    locked.add(items.get(k));
+        for (List<Node> items : chapters) {
+            for (Node it : items) {
+                if (!blockers(items, it, done).isEmpty()) {
+                    locked.add(it.id());
                 }
             }
         }
         return locked;
     }
 
-    /** 学生要做这一项之前检查：锁住了就拒绝，告诉他先完成哪一项 */
+    /** 学生要做这一项之前检查：锁住了就拒绝，告诉他先完成哪些项 */
     public void requireUnlocked(long studentId, ChapterItem item) {
-        List<ChapterItem> items = itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
-                .eq(ChapterItem::getChapterId, item.getChapterId())
-                .orderByAsc(ChapterItem::getSortOrder)
-                .orderByAsc(ChapterItem::getId));
-        int k = 0;
-        while (k < items.size() && !items.get(k).getId().equals(item.getId())) {
-            k++;
-        }
-        if (k == 0 || k >= items.size()) {
-            return; // 第 1 项，或者不在这一章里（不该发生）：不锁
-        }
-        ChapterItem prev = items.get(k - 1);
-        Set<Long> done = doneItemIds(studentId, List.of(prev.getId(), item.getId()));
-        if (!done.contains(prev.getId()) && !done.contains(item.getId())) {
-            throw BusinessException.badRequest("这一项还没解锁，请先完成上一项：《" + prev.getTitle() + "》");
+        List<Node> items = itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
+                        .eq(ChapterItem::getChapterId, item.getChapterId())
+                        .orderByAsc(ChapterItem::getSortOrder)
+                        .orderByAsc(ChapterItem::getId))
+                .stream().map(Node::of).toList();
+        Set<Long> done = doneItemIds(studentId, items.stream().map(Node::id).toList());
+        List<Node> need = blockers(items, Node.of(item), done);
+        if (!need.isEmpty()) {
+            String names = need.stream().map(n -> "《" + n.title() + "》").collect(Collectors.joining("、"));
+            throw BusinessException.badRequest("这一项还没解锁，请先完成：" + names);
         }
     }
 

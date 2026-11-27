@@ -63,10 +63,9 @@ class ProgressTest {
     void video_mergedRanges_ninetyPercentUnlocks() throws Exception {
         long v = addVideo();
 
-        // 12 号连对话都没做：视频还锁着
+        // 视频一直解锁：12 号什么都没学，也能直接看新加的视频
         video(12, v, "{\"duration\": 20, \"ranges\": [[0, 8]]}")
-                .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message", Matchers.containsString("请先完成上一项")));
+                .andExpect(jsonPath("$.code").value(200));
 
         // 7 号：20 秒的视频，看了 0～8 秒：P = 8 / 20 = 40%
         video(7, v, "{\"duration\": 20, \"ranges\": [[0, 8]], \"position\": 8}")
@@ -123,7 +122,7 @@ class ProgressTest {
 
     @Test
     void document_thirtySecondsThenButton() throws Exception {
-        // 12 号：文档是第 1 项，直接能读；练习、对话锁着
+        // 12 号：文档一直能读；AI 对话要等资料学完，练习要等 AI 对话完成
         course(12).andExpect(jsonPath("$.data.lockedItemIds", Matchers.contains(2, 3)));
 
         // 不能直接报"学完"，也不能一打开就点"我已读完"
@@ -140,21 +139,21 @@ class ProgressTest {
         mockMvc.perform(post("/api/learn/items/1/finish-reading").header(DemoIdentity.HEADER, "12"))
                 .andExpect(jsonPath("$.message", Matchers.containsString("还需 17 秒")));
 
-        // 又读了 20 秒：33 秒 ≥ 30，点"我已读完"，学完，练习解锁
+        // 又读了 20 秒：33 秒 ≥ 30，点"我已读完"，学完，AI 对话解锁；练习还要等 AI 对话完成
         waitSeconds(12, 1, 20);
         reading(12, 20).andExpect(jsonPath("$.data.readSec").value(33));
         mockMvc.perform(post("/api/learn/items/1/finish-reading").header(DemoIdentity.HEADER, "12"))
                 .andExpect(jsonPath("$.data.completed").value(true));
         course(12).andExpect(jsonPath("$.data.doneItemIds", Matchers.contains(1)))
-                .andExpect(jsonPath("$.data.lockedItemIds", Matchers.contains(3)));
+                .andExpect(jsonPath("$.data.lockedItemIds", Matchers.contains(2)));
     }
 
     @Test
     void lockedItemsCannotBeDone() throws Exception {
-        // 13 号没读文档：练习的题目、交卷、AI 对话都被拦，提示先完成哪一项
+        // 13 号没读文档、没做对话：练习的题目、交卷、AI 对话都被拦，提示先完成哪一项
         mockMvc.perform(get("/api/learn/items/2/questions").header(DemoIdentity.HEADER, "13"))
                 .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message", Matchers.containsString("阅读：边界值分析要点")));
+                .andExpect(jsonPath("$.message", Matchers.containsString("AI 对话：订单数量怎么测")));
         mockMvc.perform(post("/api/learn/items/2/submit").header(DemoIdentity.HEADER, "13")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"answers\": {\"1\": \"A\"}}"))
                 .andExpect(jsonPath("$.code").value(400));

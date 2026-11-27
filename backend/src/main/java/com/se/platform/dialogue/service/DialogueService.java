@@ -100,7 +100,7 @@ public class DialogueService {
         ChapterItem item = itemId == null ? null : itemMapper.selectById(itemId);
         if (item != null) {
             ChapterItemService.requireOpen(item, LocalDateTime.now());
-            completionService.requireUnlocked(CurrentUser.studentId(), item); // 上一项学完才解锁
+            completionService.requireUnlocked(CurrentUser.studentId(), item); // 本章视频、文档全部学完才解锁
         }
         List<TopicView> topics = topicService.listEnabled(chapterId, itemId);
         if (topics.isEmpty()) {

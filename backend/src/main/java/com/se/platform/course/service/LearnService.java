@@ -83,7 +83,8 @@ public class LearnService {
         List<Long> itemIds = chapters.stream().flatMap(ch -> ch.items().stream()).map(it -> it.id()).toList();
         Set<Long> done = completionService.doneItemIds(student, itemIds);
         Set<Long> locked = completionService.lockedItemIds(done,
-                chapters.stream().map(ch -> ch.items().stream().map(it -> it.id()).toList()).toList());
+                chapters.stream().map(ch -> ch.items().stream()
+                        .map(it -> new CompletionService.Node(it.id(), it.type(), it.title())).toList()).toList());
         var progress = itemIds.isEmpty() ? java.util.Map.<Long, com.se.platform.record.dto.ProgressDtos.ProgressView>of()
                 : progressService.views(student, itemMapper.selectBatchIds(itemIds));
         return new LearnCourse(courseService.get(courseId), chapters,
