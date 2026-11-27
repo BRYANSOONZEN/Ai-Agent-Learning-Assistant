@@ -8,7 +8,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, "..", "..", "docs", "提交材料")
-JOBS = [("03-接口设计.md", "gen_api.py"), ("04-数据设计.md", "gen_schema.py")]
+JOBS = [("03-接口设计.md", "gen_api.py"), ("04-数据设计.md", "gen_schema.py"), ("06-测试说明.md", "gen_tests.py")]
 
 for name, script in JOBS:
     path = os.path.join(DOCS, name)
