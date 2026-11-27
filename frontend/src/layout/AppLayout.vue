@@ -16,6 +16,7 @@ import { demoLogin, getDemoAccounts, logoutApi } from '@/api/auth'
 import { homeFor, layoutChildren } from '@/router'
 import StudyAssistant from '@/components/StudyAssistant.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
+import MessageBell from '@/components/MessageBell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -181,6 +182,7 @@ const mustChange = computed(() => !!userStore.user?.mustChangePassword)
         </div>
         <div class="topbar-right">
           <span class="today"><i class="dot" />{{ today }}</span>
+          <MessageBell />
           <span class="avatar avatar-top">{{ userStore.user?.name?.[0] }}</span>
         </div>
       </header>
