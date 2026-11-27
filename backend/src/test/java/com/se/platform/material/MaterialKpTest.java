@@ -75,6 +75,24 @@ class MaterialKpTest {
         FakeExtractor fakeExtractor() {
             return new FakeExtractor();
         }
+
+        /** 不真的调 Office：把原文件复制一份当作转好的 PDF */
+        @Bean
+        @Primary
+        com.se.platform.material.service.OfficeToPdf fakeOfficeToPdf() {
+            return new com.se.platform.material.service.OfficeToPdf() {
+                @Override
+                public Path convert(Path source) {
+                    try {
+                        Path pdf = pdfPath(source);
+                        java.nio.file.Files.copy(source, pdf, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        return pdf;
+                    } catch (java.io.IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+            };
+        }
     }
 
     /** 模型的回复：2 个有出处的知识点（第 1 个写了 4 条要点，只留前 3 条）；还有一个编出来的出处 D9-P1（要去掉），一个没有任何有效出处的知识点（要去掉） */
@@ -169,6 +187,21 @@ class MaterialKpTest {
     }
 
     @Test
+    void pptIsConvertedToPdf_thenProcessedAsPdf_andStudentsSeeThePdf() throws Exception {
+        upload(1, "课件.pptx").andExpect(jsonPath("$.code").value(200));
+        // 按 PDF 处理：第 4 页、第 13 页的图都转出了文字
+        status().andExpect(jsonPath("$.data.materials[?(@.itemId == 1)].status").value(Matchers.contains("done")));
+        org.junit.jupiter.api.Assertions.assertEquals(2,
+                jdbc.queryForObject("SELECT COUNT(*) FROM material_text WHERE item_id = 1", Integer.class));
+        // 内容项带上转好的 PDF 地址，取这个地址返回 PDF
+        String pdfUrl = json.readTree(mockMvc.perform(get("/api/chapters/1/items"))
+                .andReturn().getResponse().getContentAsString()).path("data").get(0).path("material").path("pdfUrl").asText();
+        org.junit.jupiter.api.Assertions.assertTrue(pdfUrl.endsWith("/file?pdf=true"));
+        mockMvc.perform(get(pdfUrl)).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .content().contentType("application/pdf"));
+    }
+
+    @Test
     void uploadDoneBeforeProcessing_failedMaterialDoesNotBlock() throws Exception {
         long video = addVideo();
         // 视频处理失败：原因写给老师看；文档仍然处理好
@@ -178,8 +211,8 @@ class MaterialKpTest {
         status().andExpect(jsonPath("$.data.materials[?(@.itemId == " + video + ")].message")
                 .value(Matchers.contains("视频没有声音，取不出讲解内容")));
 
-        // 不支持的格式：说明要转成 PDF
-        upload(1, "课件.pptx");
+        // 不支持的格式（单独一张图片）：说明要转成 PDF；PPT、Word 现在能转（见上一个测试）
+        upload(1, "板书.png");
         status().andExpect(jsonPath("$.data.materials[?(@.itemId == 1)].message",
                 Matchers.contains(Matchers.containsString("请转成 PDF"))));
     }

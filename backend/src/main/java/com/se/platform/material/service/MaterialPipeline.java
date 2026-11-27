@@ -43,6 +43,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class MaterialPipeline {
 
+    private final OfficeToPdf officeToPdf;
+
     private final ChapterItemMapper itemMapper;
     private final MaterialService materialService;
     private final MaterialJobMapper jobMapper;
@@ -58,7 +60,8 @@ public class MaterialPipeline {
     public MaterialPipeline(ChapterItemMapper itemMapper, MaterialService materialService, MaterialJobMapper jobMapper,
                             MaterialTextMapper textMapper, ChapterKpStateMapper stateMapper,
                             MaterialExtractor extractor, KpRecognizer recognizer,
-                            @Value("${platform.material.async:true}") boolean async) {
+                            @Value("${platform.material.async:true}") boolean async, OfficeToPdf officeToPdf) {
+        this.officeToPdf = officeToPdf;
         this.itemMapper = itemMapper;
         this.materialService = materialService;
         this.jobMapper = jobMapper;
@@ -164,8 +167,12 @@ public class MaterialPipeline {
                 segs = List.of(new MaterialExtractor.Segment("T1", "text", null, null, null,
                         Files.readString(file, StandardCharsets.UTF_8)));
             } else if (kind == null) {
-                throw new MaterialExtractor.ExtractException("暂时只能识别 PDF、文本和视频，这个文件（"
+                throw new MaterialExtractor.ExtractException("暂时只能识别 PDF、PPT、Word、文本和视频，这个文件（"
                         + m.getOriginalName() + "）请转成 PDF 再上传");
+            } else if ("office".equals(kind)) {  // PPT、Word：先用本机 Office 转成 PDF，再按 PDF 处理
+                MaterialExtractor.Result r = extractor.extract(officeToPdf.convert(file), "pdf");
+                segs = r.segments();
+                meta = r.meta();
             } else {
                 MaterialExtractor.Result r = extractor.extract(file, kind);
                 segs = r.segments();
@@ -204,7 +211,7 @@ public class MaterialPipeline {
         maybeRecognize(job.getChapterId());
     }
 
-    /** video / pdf / text；不支持的返回 null */
+    /** video / pdf / office（PPT、Word）/ text；不支持的返回 null */
     static String kindOf(ChapterItem item, Material m) {
         if ("video".equals(item.getType())) {
             return "video";
@@ -212,6 +219,9 @@ public class MaterialPipeline {
         String name = m.getOriginalName() == null ? "" : m.getOriginalName().toLowerCase(Locale.ROOT);
         if (name.endsWith(".pdf")) {
             return "pdf";
+        }
+        if (OfficeToPdf.isOffice(name)) {
+            return "office";
         }
         if (name.endsWith(".txt") || name.endsWith(".md")) {
             return "text";

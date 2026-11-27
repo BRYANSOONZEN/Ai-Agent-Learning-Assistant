@@ -111,7 +111,16 @@ public class MaterialService {
     private MaterialView toView(Material m) {
         return new MaterialView(m.getId(), m.getChapterId(), m.getTitle(), m.getOriginalName(), m.getFileSize(),
                 m.getContentType(), kind(extension(m.getOriginalName())), "/api/materials/" + m.getId() + "/file",
-                m.getCreatedAt());
+                m.getCreatedAt(), convertedPdf(m) == null ? null : "/api/materials/" + m.getId() + "/file?pdf=true");
+    }
+
+    /** PPT、Word 转好的 PDF（OfficeToPdf 放在原文件旁边）；没有返回 null */
+    public Path convertedPdf(Material m) {
+        if (!com.se.platform.material.service.OfficeToPdf.isOffice(m.getOriginalName())) {
+            return null;
+        }
+        Path pdf = com.se.platform.material.service.OfficeToPdf.pdfPath(root.resolve(m.getFilePath()).normalize());
+        return pdf.startsWith(root) && Files.exists(pdf) ? pdf : null;
     }
 
     private static String kind(String ext) {

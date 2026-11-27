@@ -124,13 +124,20 @@ public class ChapterContentController {
      * 返回 Resource 时，Spring 会自动处理 Range 请求，视频可以拖动进度条。
      */
     @GetMapping("/api/materials/{id}/file")
-    public ResponseEntity<Resource> file(@PathVariable Long id) {
+    public ResponseEntity<Resource> file(@PathVariable Long id,
+                                         @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean pdf) {
         Material m = materialService.require(id);
-        Resource resource = new FileSystemResource(materialService.file(m));
+        // ?pdf=true：PPT、Word 转好的 PDF，浏览器能直接预览
+        java.nio.file.Path converted = pdf ? materialService.convertedPdf(m) : null;
+        if (pdf && converted == null) {
+            throw com.se.platform.common.BusinessException.notFound("转好的 PDF");
+        }
+        Resource resource = new FileSystemResource(converted != null ? converted : materialService.file(m));
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(m.getContentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(m.getOriginalName(), StandardCharsets.UTF_8).build().toString())
+                .contentType(converted != null ? MediaType.APPLICATION_PDF : MediaType.parseMediaType(m.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(converted != null ? m.getOriginalName() + ".pdf" : m.getOriginalName(),
+                                StandardCharsets.UTF_8).build().toString())
                 .body(resource);
     }
 }

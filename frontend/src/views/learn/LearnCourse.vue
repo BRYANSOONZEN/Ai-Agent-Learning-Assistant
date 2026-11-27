@@ -118,10 +118,12 @@ function jumpTo({ itemId, startSec, page }) {
   open(chapter.value, 'item:' + itemId, startSec != null ? { t: startSec } : page != null ? { p: page } : {})
 }
 // a PDF opened from the knowledge-point map goes straight to that page (the browser's PDF viewer reads #page=N)
+// PPT / Word: the PDF the backend converted with Office (material.pdfUrl)
 function docSrc(material) {
-  const url = withToken(material.url)
+  const office = fileKind(material) === 'office' && material.pdfUrl
+  const url = withToken(office ? material.pdfUrl : material.url)
   const page = Number(route.query.p)
-  return page > 0 && fileKind(material) === 'pdf' ? `${url}#page=${page}` : url
+  return page > 0 && (office || fileKind(material) === 'pdf') ? `${url}#page=${page}` : url
 }
 // an AI 对话 item uses the 费曼对话 (explain to 小林) when the teacher has set one up; otherwise the old dialogue
 const feynmanOn = ref(null) // null = still checking
@@ -373,7 +375,7 @@ onMounted(load)
                 <div v-if="item.description" class="reading pre">{{ item.description }}</div>
                 <template v-if="item.material">
                   <iframe
-                    v-if="['pdf', 'text'].includes(fileKind(item.material))"
+                    v-if="['pdf', 'text'].includes(fileKind(item.material)) || item.material.pdfUrl"
                     :key="item.id + ':' + (route.query.p || '')"
                     :src="docSrc(item.material)"
                     class="doc-frame"

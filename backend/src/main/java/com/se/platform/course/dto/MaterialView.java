@@ -16,5 +16,6 @@ public record MaterialView(
         String contentType,
         String kind,
         String url,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        String pdfUrl) {        // PPT、Word 转好的 PDF（学生端直接看这个）；没转好或不是 PPT、Word 为空
 }
