@@ -224,7 +224,8 @@ const pushedCount = computed(() => (board.value?.items || []).reduce((n, i) => n
         </p>
         <h4>补充讲解 <small>{{ draft.explanationBy === 'ai' ? '大模型起草，请检查修改' : '你自己写（也可以贴新的资料链接）' }}</small></h4>
         <el-input v-model="draft.explanation" type="textarea" :rows="8" maxlength="2000" show-word-limit />
-        <h4>新题（{{ draft.questions.length }} 道，学生看不到答案）
+        <h4>
+          新题（{{ draft.questions.length }} 道，学生看不到答案）
           <el-button size="small" link type="primary" :loading="working" @click="regenerate">重新出题</el-button>
         </h4>
         <div v-for="(q, k) in draft.questions" :key="q.id" class="q">

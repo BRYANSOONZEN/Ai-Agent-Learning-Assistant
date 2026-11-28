@@ -20,3 +20,7 @@ application-local.yml
 # Local archives
 *.zip
 tools/material_kp/.cache/
+
+# Python 编译缓存
+__pycache__/
+*.pyc

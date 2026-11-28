@@ -60,15 +60,19 @@ async function submit() {
     :close-on-press-escape="!props.forced"
     @open="onOpen"
   >
-    <el-alert v-if="props.forced" type="warning" show-icon :closable="false" class="forced-tip"
-              title="这个账号的密码是管理员设的，改成只有你知道的密码后才能继续使用。" />
+    <el-alert
+      v-if="props.forced" type="warning" show-icon :closable="false" class="forced-tip"
+      title="这个账号的密码是管理员设的，改成只有你知道的密码后才能继续使用。"
+    />
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
       <el-form-item label="原密码" prop="oldPassword">
         <el-input v-model="form.oldPassword" type="password" show-password autocomplete="current-password" />
       </el-form-item>
       <el-form-item label="新密码" prop="newPassword">
-        <el-input v-model="form.newPassword" type="password" show-password placeholder="8～64 位，含字母和数字"
-                  autocomplete="new-password" />
+        <el-input
+          v-model="form.newPassword" type="password" show-password placeholder="8～64 位，含字母和数字"
+          autocomplete="new-password"
+        />
       </el-form-item>
       <el-form-item label="确认新密码" prop="confirm">
         <el-input v-model="form.confirm" type="password" show-password autocomplete="new-password" />

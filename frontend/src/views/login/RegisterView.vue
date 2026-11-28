@@ -73,8 +73,10 @@ async function submit() {
           <el-input v-model="form.name" placeholder="老师看到的名字" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" type="password" placeholder="8～64 位，含字母和数字"
-                    autocomplete="new-password" show-password />
+          <el-input
+            v-model="form.password" type="password" placeholder="8～64 位，含字母和数字"
+            autocomplete="new-password" show-password
+          />
         </el-form-item>
         <el-form-item label="确认密码" prop="confirm">
           <el-input v-model="form.confirm" type="password" placeholder="再输入一次" autocomplete="new-password" show-password />

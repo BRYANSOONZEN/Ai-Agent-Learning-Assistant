@@ -136,9 +136,11 @@ const mustChange = computed(() => !!userStore.user?.mustChangePassword)
       </nav>
 
       <div class="sidebar-bottom">
-        <component :is="studyPrompt.assistant ? 'a' : RouterLink" v-if="studyPrompt && !collapsed"
+        <component
+          :is="studyPrompt.assistant ? 'a' : RouterLink" v-if="studyPrompt && !collapsed"
           v-bind="studyPrompt.assistant ? { href: '#' } : { to: studyPrompt.to }" class="sidebar-prompt"
-          @click="studyPrompt.assistant && ($event.preventDefault(), openAssistant())">
+          @click="studyPrompt.assistant && ($event.preventDefault(), openAssistant())"
+        >
           <span class="prompt-orb"><el-icon :size="16"><MagicStick /></el-icon></span>
           <strong>{{ studyPrompt.title }}</strong>
           <p>{{ studyPrompt.text }}</p>
@@ -160,8 +162,12 @@ const mustChange = computed(() => !!userStore.user?.mustChangePassword)
               <el-dropdown-item icon="Lock" @click="passwordVisible = true">修改密码</el-dropdown-item>
               <template v-if="demos.length">
                 <el-dropdown-item divided disabled>切换演示账号</el-dropdown-item>
-                <el-dropdown-item v-for="u in demos.filter((d) => d.id !== userStore.user?.id)" :key="u.username"
-                                  icon="User" @click="switchTo(u)">{{ u.name }}（{{ roleLabels[u.role] }}）</el-dropdown-item>
+                <el-dropdown-item
+                  v-for="u in demos.filter((d) => d.id !== userStore.user?.id)" :key="u.username"
+                  icon="User" @click="switchTo(u)"
+                >
+                  {{ u.name }}（{{ roleLabels[u.role] }}）
+                </el-dropdown-item>
               </template>
               <el-dropdown-item icon="SwitchButton" divided @click="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>

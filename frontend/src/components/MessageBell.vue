@@ -106,8 +106,10 @@ watch(() => route.fullPath, load)
 </script>
 
 <template>
-  <el-popover v-if="userStore.role === 'student' || userStore.role === 'teacher'" placement="bottom-end" :width="360"
-              trigger="click" @show="markAllRead">
+  <el-popover
+    v-if="userStore.role === 'student' || userStore.role === 'teacher'" placement="bottom-end" :width="360"
+    trigger="click" @show="markAllRead"
+  >
     <template #reference>
       <button type="button" class="bell" :aria-label="`消息，${unread} 条未读`">
         <el-badge :value="unread" :hidden="!unread" :max="99">

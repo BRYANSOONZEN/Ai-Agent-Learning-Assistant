@@ -119,8 +119,10 @@ function openAssistant() {
 
       <!-- 还没做：在这里做（调小助手原来的接口） -->
       <template v-if="s.status === 'open'">
-        <RemedyBox v-if="s.kind !== 'teacher'" :kp-id="s.knowledgePointId" :mode="s.kind" :assess-type="s.assessType || 'scenario'" no-continue
-          @changed="finished(s)" />
+        <RemedyBox
+          v-if="s.kind !== 'teacher'" :kp-id="s.knowledgePointId" :mode="s.kind" :assess-type="s.assessType || 'scenario'" no-continue
+          @changed="finished(s)"
+        />
         <PushBox v-else :push="{ id: s.id, explanation: '', done: false, questions: s.questions }" @changed="finished(s)" />
         <div v-if="decide[s.id]" class="decide">
           <span>这组拓展题要保存到学习推荐吗？</span>
@@ -134,8 +136,10 @@ function openAssistant() {
         <li v-for="q in s.questions" :key="q.id">
           <p class="stem">{{ q.stem }} <el-tag size="small" :type="tag(q).type">{{ tag(q).text }}</el-tag></p>
           <ul v-if="q.options?.length" class="opts">
-            <li v-for="(o, k) in q.options" :key="k"
-              :class="{ right: LETTERS[k] === q.answer, mine: LETTERS[k] === q.chosen && LETTERS[k] !== q.answer }">
+            <li
+              v-for="(o, k) in q.options" :key="k"
+              :class="{ right: LETTERS[k] === q.answer, mine: LETTERS[k] === q.chosen && LETTERS[k] !== q.answer }"
+            >
               {{ LETTERS[k] }}. {{ o }}
             </li>
           </ul>

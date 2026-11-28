@@ -78,7 +78,7 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
   <div v-loading="loading" class="profile">
     <PageHeader title="学生画像" subtitle="每章看知识点颜色和练习情况；全部章节学完后开放课程四维画像。AI 对话不计入画像分数。">
       <el-select v-model="courseId" placeholder="选课程" style="width: 240px">
-          <el-option v-for="c in courses" :key="c.courseId" :label="`${c.name}（学完 ${c.chaptersDone}/${c.chapters} 章）`" :value="c.courseId" />
+        <el-option v-for="c in courses" :key="c.courseId" :label="`${c.name}（学完 ${c.chaptersDone}/${c.chapters} 章）`" :value="c.courseId" />
       </el-select>
     </PageHeader>
 
@@ -144,8 +144,10 @@ const activeDays = computed(() => (profile.value?.days || []).filter((d) => d.mi
           </div>
         </div>
         <div v-if="ch.points.length" class="points">
-          <span v-for="p in ch.points" :key="p.knowledgePointId" class="point" :class="COLORS[p.color].cls"
-            :title="p.firstMastery != null ? `第一次 ${Math.round(p.firstMastery * 100)}%` : ''">
+          <span
+            v-for="p in ch.points" :key="p.knowledgePointId" class="point" :class="COLORS[p.color].cls"
+            :title="p.firstMastery != null ? `第一次 ${Math.round(p.firstMastery * 100)}%` : ''"
+          >
             {{ p.name }}<small>{{ COLORS[p.color].label }}</small>
           </span>
         </div>

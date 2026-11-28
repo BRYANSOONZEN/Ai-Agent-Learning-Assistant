@@ -270,8 +270,12 @@ function act(ch, p) {
                 <b>{{ d.title }}</b>
                 <small>{{ d.chapterTitle }} · {{ d.state === 'overdue' ? (d.allowLate ? '已过期，还可以补做（算迟交）' : '已过期') : dueText(d) }}</small>
               </span>
-              <el-button v-if="d.state === 'soon' || d.allowLate" size="small" type="primary" link
-                @click="goItem({ courseId: d.courseId, chapterId: d.chapterId }, d.itemId)">去做</el-button>
+              <el-button
+                v-if="d.state === 'soon' || d.allowLate" size="small" type="primary" link
+                @click="goItem({ courseId: d.courseId, chapterId: d.chapterId }, d.itemId)"
+              >
+                去做
+              </el-button>
             </div>
           </div>
 
@@ -332,8 +336,10 @@ function act(ch, p) {
                     {{ p.action === 'dialogue' ? '巩固一下（AI 对话）' : '做补练题' }}
                   </el-button>
                   <div v-if="gen && gen.kpId === p.knowledgePointId" class="gen">
-                    <p v-if="gen.loading" class="muted"><el-icon class="is-loading"><Loading /></el-icon>
-                      {{ gen.kind === 'extend' ? '正在出更难的题……' : '正在根据你的错题出补练题……' }}</p>
+                    <p v-if="gen.loading" class="muted">
+                      <el-icon class="is-loading"><Loading /></el-icon>
+                      {{ gen.kind === 'extend' ? '正在出更难的题……' : '正在根据你的错题出补练题……' }}
+                    </p>
                     <template v-else>
                       <p>{{ gen.text }}</p>
                       <el-button v-if="gen.count" size="small" type="primary" @click="goRecommend(gen.kind, gen.kpId)">

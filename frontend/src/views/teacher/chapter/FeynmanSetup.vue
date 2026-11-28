@@ -184,27 +184,27 @@ onMounted(load)
           </div>
         </template>
         <template v-else>
-        <dl>
-          <dt>AI 同学</dt>
-          <dd>{{ d.draft.scene.name || '小林' }}：{{ d.draft.scene.persona }}</dd>
-          <dt>场景（{{ d.draft.scene.type }}）</dt>
-          <dd>{{ d.draft.scene.setting }}</dd>
-          <dt>开场白</dt>
-          <dd class="say">{{ d.draft.scene.opening }}</dd>
-          <dt>带着的误解</dt>
-          <dd class="say">{{ d.draft.misconception_probe.line }}</dd>
-        </dl>
-        <div v-for="p in d.draft.key_points" :key="p.no" class="point">
-          <div class="point-title">要点 {{ p.no }}：{{ d.keyPoints[p.no - 1] }}</div>
-          <div class="grid">
-            <span class="sw-tag teal">讲清</span><span>{{ p.understood_if }}</span>
-            <span class="sw-tag gray">不完整</span><span>{{ p.partial_if }}</span>
-            <b>L1</b><span>{{ p.L1 }}</span>
-            <b>L2</b><span>{{ p.L2 }}</span>
-            <b>L3</b><span>{{ p.L3 }}</span>
-            <b>之后</b><span>不给答案，指向：{{ p.pointer }}</span>
+          <dl>
+            <dt>AI 同学</dt>
+            <dd>{{ d.draft.scene.name || '小林' }}：{{ d.draft.scene.persona }}</dd>
+            <dt>场景（{{ d.draft.scene.type }}）</dt>
+            <dd>{{ d.draft.scene.setting }}</dd>
+            <dt>开场白</dt>
+            <dd class="say">{{ d.draft.scene.opening }}</dd>
+            <dt>带着的误解</dt>
+            <dd class="say">{{ d.draft.misconception_probe.line }}</dd>
+          </dl>
+          <div v-for="p in d.draft.key_points" :key="p.no" class="point">
+            <div class="point-title">要点 {{ p.no }}：{{ d.keyPoints[p.no - 1] }}</div>
+            <div class="grid">
+              <span class="sw-tag teal">讲清</span><span>{{ p.understood_if }}</span>
+              <span class="sw-tag gray">不完整</span><span>{{ p.partial_if }}</span>
+              <b>L1</b><span>{{ p.L1 }}</span>
+              <b>L2</b><span>{{ p.L2 }}</span>
+              <b>L3</b><span>{{ p.L3 }}</span>
+              <b>之后</b><span>不给答案，指向：{{ p.pointer }}</span>
+            </div>
           </div>
-        </div>
         </template>
       </article>
       <div class="actions">
