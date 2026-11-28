@@ -30,6 +30,8 @@ def split_header(text):
     if BEGIN in text:
         notes = re.search(r'<!-- 说明 -->\n(.*?)\n<!-- 说明完 -->', text, re.S)
         body = text[text.index(END) + len(END):].lstrip('\n')
+        while body.startswith('---'):  # 上次写进去的分隔线，这次会重新加（不然每跑一次多一条）
+            body = body[3:].lstrip('\n')
         return (notes.group(1).split('\n') if notes else []), body
     head, body = text.split('\n## ', 1)
     body = '## ' + body

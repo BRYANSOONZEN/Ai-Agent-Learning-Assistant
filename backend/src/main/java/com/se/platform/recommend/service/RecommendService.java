@@ -161,7 +161,13 @@ public class RecommendService {
                     Boolean.TRUE.equals(a.getIsCorrect()), v.analysis(), null, a.getScore() == null ? 0 : a.getScore(),
                     0, 1, a.getStatus(), v.reasons(), null, null, List.of(), v.reference(), List.of());
         }
-        return Grader.grade(v, a.getAnswer());
+        // 对错和得分用当时存下的（判分规则改过时，重新判可能和当时不一样）；答案、解析、误解说明用重新判的
+        QuestionResult g = Grader.grade(v, a.getAnswer());
+        boolean correct = a.getIsCorrect() != null ? a.getIsCorrect() : g.correct();
+        double score = a.getScore() != null ? a.getScore() : g.score();
+        return new QuestionResult(g.id(), g.type(), g.stem(), g.options(), g.chosen(), g.answer(), correct, g.analysis(),
+                correct ? null : g.note(), score, g.guess(), g.reliability(), g.status(), g.reasons(), g.reasonAnswer(),
+                g.reasonChosen(), g.accepts(), g.reference(), g.points());
     }
 
     /** 每道题这个学生的第一次作答 */

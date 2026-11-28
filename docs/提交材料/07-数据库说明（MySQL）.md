@@ -21,7 +21,7 @@
 **说明**
 
 <!-- 说明 -->
-- 这份文档把数据库的每一样东西都写清楚：数据存在哪些地方（第一节）、表怎么设计（第二节）、后端怎么调用（第三节）、JSON 列里面的结构（第四节）、怎么搬数据和备份（第五节）、换到 MySQL 时修好的问题（第六节）、**33 张表逐张的详细说明（第七节）**。
+- 这份文档把数据库的每一样东西都写清楚：数据存在哪些地方（第一节）、表怎么设计（第二节）、后端怎么调用（第三节）、JSON 列里面的结构（第四节）、怎么搬数据和备份（第五节）、换到 MySQL 时修好的问题（第六节）、**32 张表逐张的详细说明（第七节）**。
 - 例子都是在本机 MySQL 里查出来的真实数据。第七节由 `tools/docs/gen_db_report.py` 从建表语句、后端源码和 MySQL 直接生成，重新生成：`python tools/docs/build_docs.py`。
 <!-- 说明完 -->
 
@@ -36,7 +36,7 @@
   - 1.6 ⑥ 浏览器里存的东西（localStorage）
   - 1.7 ⑦ 连接数据库的配置
 - 二、怎么存：表的设计
-  - 2.1 33 张表，按用途分组
+  - 2.1 32 张表，按用途分组
   - 2.2 几条设计约定（为什么这样存）
   - 2.3 例子：`mastery` 表在 MySQL 里长什么样
   - 2.4 例子：资料转出来的文字（`material_text`）
@@ -55,7 +55,7 @@
   - 4.7 其他 JSON 列
 - 五、从 H2 搬到 MySQL、备份、恢复
 - 六、换到 MySQL 时发现并修好的问题
-- 七、33 张表逐张说明（自动生成）
+- 七、32 张表逐张说明（自动生成）
   - `user`（账号）
   - `course`（课程内容）
   - `chapter`（课程内容）
@@ -87,7 +87,6 @@
   - `remedy_round`（小助手）
   - `assistant_message`（小助手）
   - `assistant_notice`（小助手）
-  - `recommendation`（学习推荐）
   - `ai_call_log`（运维）
 - 八、每个功能调用数据库的实测记录（自动生成）
   - 8.1 总表：每个功能读、写了哪些表
@@ -97,19 +96,13 @@
 
 ---
 
----
-
----
-
----
-
 ## 一、所有存数据的地方
 
 平台的数据存在下面 **7 个地方**。真正的业务数据只在 ① MySQL 里；②③ 是另外两个数据库（开发、测试用）；④⑤ 是磁盘上的文件；⑥ 是每个用户浏览器里的小东西；⑦ 是连接数据库要用的配置。
 
 | # | 存在哪里 | 是什么 | 谁在用 | 里面有什么 |
 |---|---|---|---|---|
-| ① | **MySQL 8.4 库 `se_platform`** | 主数据库 | 网站正常运行（演示、录视频、答辩） | 全部业务数据，33 张表 |
+| ① | **MySQL 8.4 库 `se_platform`** | 主数据库 | 网站正常运行（演示、录视频、答辩） | 全部业务数据，32 张表 |
 | ② | H2 文件库 `backend/data/platform.mv.db`（约 3.5 MB） | 开发用的数据库 | 不加 `mysql` 配置启动后端时 | 11-27 搬到 MySQL 那一刻的数据，之后不再更新 |
 | ③ | H2 内存库（只在内存里） | 测试用的数据库 | 跑自动测试和 CI 时，每个测试类一个 | 只有 `data.sql` 的演示数据，测试结束就没了 |
 | ④ | 磁盘文件夹 `backend/uploads/年/月/`（现在 537 个文件，约 1.4 GB） | 资料文件本身 | 后端 | 老师上传的视频、课件 PDF、PPT、Word；PPT、Word 转好的 PDF（原文件名后加 `.pdf`） |
@@ -125,13 +118,13 @@
 | 程序位置 | `C:\ZI\mysql\mysql-8.4.11-winx64\`（不在 Git 仓库里，删掉这个文件夹就卸载了，不改系统） |
 | 数据文件位置 | `C:\ZI\mysql\data\`（InnoDB 的数据文件、日志都在这里） |
 | 配置文件 | `C:\ZI\mysql\my.ini`：端口 3306；只监听 `127.0.0.1`（别的电脑连不进来）；字符集 `utf8mb4`、排序规则 `utf8mb4_0900_ai_ci`；时区 `+08:00`；表名不区分大小写 |
-| 库 | `se_platform`，33 张表，存储引擎 InnoDB（支持事务、行锁，崩溃后能恢复） |
+| 库 | `se_platform`，32 张表，存储引擎 InnoDB（支持事务、行锁，崩溃后能恢复） |
 | 账号 | `root`：只用来管理（建库、建账号、备份）。`se_app`：后端用的账号，**只有 `se_platform` 这一个库的权限**，看不到也改不了别的库 |
 | 密码放在哪 | 两个密码都是随机生成的：`C:\ZI\mysql\本机密码.txt`（仓库外）；后端用的 `se_app` 密码另外写在 `backend/src/main/resources/application-local.yml`（这个文件被 `.gitignore` 排除，不会提交）。代码、提交记录、文档里都没有密码 |
 | 启动 MySQL | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysqld.exe --defaults-file=C:\ZI\mysql\my.ini --console` |
 | 后端连 MySQL | 在 `backend` 里 `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"`（后端端口 8080） |
 | 自己连上去看 | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysql.exe -u root -p -h 127.0.0.1 --default-character-set=utf8mb4 se_platform`，然后 `SHOW TABLES;`、`DESC mastery;`、`SELECT * FROM chapter_kp;` |
-| 空库第一次启动 | 后端自动执行 `schema.sql`（建 33 张表）和 `data.sql`（演示数据） |
+| 空库第一次启动 | 后端自动执行 `schema.sql`（建 32 张表）和 `data.sql`（演示数据） |
 | 已有的库再启动 | 不清空；`schema.sql` 里有、库里没有的表补建出来；`schema-upgrade.sql` 里的新列，库里没有才加（`KeepDataConfig`） |
 | 现在的数据 | 11-27 从 H2 开发库整体搬过来（29 张表、664 行），之后的新数据都写在这里 |
 
@@ -187,7 +180,7 @@
 
 ## 二、怎么存：表的设计
 
-### 2.1 33 张表，按用途分组
+### 2.1 32 张表，按用途分组
 
 | 用途 | 表 |
 |---|---|
@@ -197,7 +190,7 @@
 | AI 对话 | `feynman_setup`（老师确认的草稿）、`feynman_session`（一次对话及进度）、`feynman_message`（每一句）；旧版 `dialogue_*` 4 张 |
 | 学习记录 | `learning_event`（看了什么、学完什么）、`item_progress`（视频看过的时间段、文档阅读秒数）、`answer_record`（每一次作答） |
 | 诊断 / 画像 | `mastery`（每人每知识点一行）、`profile_snapshot`（学完时的画像快照） |
-| 干预 / 小助手 | `item_analysis`、`class_issue`、`class_push`（全班分析和推送）；`remedy_round`（补练、拓展）、`assistant_message`（聊天）、`assistant_notice`（提醒）、`recommendation` |
+| 干预 / 小助手 | `item_analysis`、`class_issue`、`class_push`（全班分析和推送）；`remedy_round`（补练、拓展；学习推荐页读它和 `class_push`）、`assistant_message`（聊天）、`assistant_notice`（提醒）、`recommendation` |
 | 运维 | `ai_call_log`（每次调用大模型的 token、耗时、费用） |
 
 ### 2.2 几条设计约定（为什么这样存）
@@ -325,7 +318,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 ### 3.4 全部功能的调用记录在第八节
 
-上面两个例子是简化的说明。**第八节**列出了 41 个功能（账号、建课、上传资料、识别知识点、AI 对话、出题、学习、做练习、画像、小助手、老师干预、管理员）每一个实际执行的全部 SQL：先后顺序、每条是读还是写、碰了哪张表，以及这个功能经过哪个 Controller 方法、调用了哪些 Service；还有一张“功能 × 读写了哪些表”的总表。
+上面两个例子是简化的说明。**第八节**列出了 42 个功能（账号、建课、上传资料、识别知识点、AI 对话、出题、学习、做练习、画像、小助手、老师干预、管理员）每一个实际执行的全部 SQL：先后顺序、每条是读还是写、碰了哪张表，以及这个功能经过哪个 Controller 方法、调用了哪些 Service；还有一张“功能 × 读写了哪些表”的总表。
 
 ---
 
@@ -444,13 +437,13 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 ---
 
-## 七、33 张表逐张说明（自动生成）
+## 七、32 张表逐张说明（自动生成）
 
 每张表写：属于哪个模块、用途、什么时候写入、和哪些表关联、主键 / 唯一约束 / 索引、**哪些代码写它、哪些代码读它**（扫描后端源码里每个 Mapper 的调用，写的是类名）、现在有几行、每一列的类型和含义、一行真实数据（密码哈希打码）。
 
 <!-- 以下由 tools/docs/gen_db_report.py 生成，重新生成：python tools/docs/build_docs.py -->
 
-共 33 张表。每张表的“谁写 / 谁读”是扫描后端源码里每个 Mapper 的调用得出的（类名）；“现在的数据”来自本机 MySQL `se_platform`（这次生成时 MySQL 没开，略去）。
+共 32 张表。每张表的“谁写 / 谁读”是扫描后端源码里每个 Mapper 的调用得出的（类名）；“现在的数据”来自本机 MySQL `se_platform`。
 
 ### `user`（账号）
 
@@ -459,7 +452,9 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **和哪些表关联**：被几乎所有表的 student_id / teacher_id / uploaded_by 引用。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_user_username UNIQUE (username)（登录名不能重复）
 - **谁写**：`AdminUserService`（修改、新增）；`AuthService`（修改、新增）
-- **谁读**：`AdminUserService`、`AuthInterceptor`、`AuthService`、`ClassPushService`、`CourseService（CourseMapper.findUserName 手写 SQL）`、`DiagnosisService（CourseMapper.findUserName 手写 SQL）`、`EnrollmentService`、`ExerciseReviewService`
+- **谁读**：`AdminUserService`、`AuthInterceptor`、`AuthService`、`ClassPushService`、`CourseService（CourseMapper.findUserName 手写 SQL）`、`DiagnosisService（CourseMapper.findUserName 手写 SQL）`、`EnrollmentService`、`ExerciseReviewService`、`RecommendService`
+- **现在的数据**：15
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -476,6 +471,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：1 = 已删除 |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `username` | admin |
+| `password_hash` | （BCrypt 哈希，打码） |
+| `name` | 管理员 |
+| `role` | admin |
+| `clazz_id` | NULL |
+| `status` | 1 |
+| `token_version` | 0 |
+| `must_change_password` | 0 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `course`（课程内容）
 
 - **用途**：一门课：课程名、简介、授课老师、状态（草稿 / 已发布 / 已归档）、开了哪些模块。
@@ -483,7 +497,9 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **和哪些表关联**：teacher_id → user；下面挂 chapter、chapter_item、knowledge_point、exercise、enrollment。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_course_teacher（teacher_id）
 - **谁写**：`CourseService`（修改、删除、新增）
-- **谁读**：`AssistantChatService`、`AssistantService`、`ClassPushService`、`CourseProfileService`、`CourseService`、`DeadlineService`、`DiagnosisService`、`EnrollmentService`、`ExerciseGenService`、`FeynmanDraftService`、`KpRecognizer`、`TeacherTodoService`
+- **谁读**：`AssistantChatService`、`AssistantService`、`ClassPushService`、`CourseProfileService`、`CourseService`、`DeadlineService`、`DiagnosisService`、`EnrollmentService`、`ExerciseGenService`、`FeynmanDraftService`、`KpRecognizer`、`RecommendService`、`TeacherTodoService`
+- **现在的数据**：6
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -497,6 +513,22 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `name` | 软件测试 |
+| `description` | 等价类划分、边界值分析等黑盒测试方法，以及白盒测试与自动化测试。 |
+| `teacher_id` | 2 |
+| `status` | published |
+| `modules` | video,document,knowledge,dialogue,exercise |
+| `created_at` | 2026-09-01 09:00:00 |
+| `updated_at` | 2026-09-01 09:00:00 |
+| `deleted
+` | 0
+ |
+
 ### `chapter`（课程内容）
 
 - **用途**：课程里的一章：标题、章节介绍、状态、顺序。
@@ -505,6 +537,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_chapter_course（course_id）
 - **谁写**：`ChapterService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`CourseProfileService`、`CourseService`、`DeadlineService`、`DiagnosisService`、`KpRecognizer`、`LearnService`、`ProgressService`、`RecommendService`、`RecordService`、`TeacherTodoService`
+- **现在的数据**：7
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -519,6 +553,23 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `parent_id` | NULL |
+| `title` | 第 1 章 边界值分析 |
+| `intro` | 学习目标：能说出边界值分析在边界上、边界外侧、边界内侧各取什么值，并解释为什么边界附近更容易发现错误。 概要：大量错误发生在输入范围的边界上。本章用订单数量、年… |
+| `status` | published |
+| `sort_order` | 0 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `chapter_item`（课程内容）
 
 - **用途**：章节里的一项内容：视频、文档、练习、AI 对话；顺序、截止时间、过期后能不能补交。
@@ -526,7 +577,9 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **和哪些表关联**：chapter_id → chapter；material_id → material；练习项下挂 exercise，AI 对话项下挂 feynman_setup；学生的学习记录都按内容项记。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_chapter_item_chapter（chapter_id）
 - **谁写**：`ChapterItemService`（修改、删除、新增）；`ClassPushService`（修改）
-- **谁读**：`AssistantService`、`ChapterItemService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`CompletionService`、`CourseProfileService`、`DeadlineService`、`DialogueService`、`ExerciseGenService`、`FeynmanDiagnosis`、`FeynmanDraftService`、`FeynmanEngine`、`KpRecognizer`、`LearnService`、`MaterialPipeline`、`ProgressService`、`RecommendService`、`RecordService`、`RemedyService`、`TeacherTodoService`
+- **谁读**：`AssistantService`、`ChapterItemService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`CompletionService`、`CourseProfileService`、`DeadlineService`、`DialogueService`、`ExerciseGenService`、`FeynmanDiagnosis`、`FeynmanDraftService`、`FeynmanEngine`、`KpRecognizer`、`LearnService`、`MaterialPipeline`、`ProgressService`、`RecordService`、`RemedyService`、`TeacherTodoService`
+- **现在的数据**：14
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -544,6 +597,26 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `chapter_id` | 1 |
+| `type` | document |
+| `title` | 阅读：边界值分析要点 |
+| `description` | 1. 大量错误发生在输入范围的边界上，而不是在范围内部。 2. 选取测试值时，在边界上、边界外侧、边界内侧各取一个值。 3. 例：数量范围 1～99，下边界取 … |
+| `material_id` | NULL |
+| `sort_order` | 0 |
+| `due_at` | NULL |
+| `allow_late` | 1 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `material`（资料）
 
 - **用途**：上传的文件信息：原文件名、磁盘上的相对路径、大小、类型。文件本身存在磁盘 backend/uploads/，不进数据库。
@@ -552,6 +625,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_material_chapter（chapter_id）
 - **谁写**：`MaterialService`（删除、新增）
 - **谁读**：`MaterialService`
+- **现在的数据**：11
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -568,6 +643,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `chapter_id` | 3 |
+| `knowledge_point_id` | NULL |
+| `title` | 6 智能测试生成与优化 |
+| `original_name` | 6 智能测试生成与优化.pdf |
+| `file_path` | 2026/11/3a611ba5-913f-4ce7-b73a-b041e2c0f596.pdf |
+| `file_size` | 4293296 |
+| `content_type` | application/pdf |
+| `uploaded_by` | 2 |
+| `created_at` | 2026-11-24 21:30:19 |
+| `deleted
+` | 0
+ |
+
 ### `material_job`（资料）
 
 - **用途**：每个视频 / 文档项的“转文字”任务：排队 → 处理中 → 完成 / 失败，失败原因、处理统计、同音字纠正做过没有。
@@ -576,6 +670,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_material_job UNIQUE (item_id)
 - **谁写**：`MaterialPipeline`（修改、删除、新增）；`VideoTermFixer`（修改）
 - **谁读**：`ChapterKpService`、`MaterialPipeline`、`VideoTermFixer`
+- **现在的数据**：6
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -592,6 +688,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `item_id` | 4 |
+| `chapter_id` | 3 |
+| `material_id` | 1 |
+| `status` | done |
+| `message` | 取到 34 页文字、29 张图的内容 |
+| `meta` | {"pages":39,"skipped_pages":[1,3,8,10,20],"text_sec":0.2,"images":29,"images_fai… |
+| `terms_checked` | NULL |
+| `started_at` | 2026-11-24 21:30:19 |
+| `finished_at` | 2026-11-24 21:33:49 |
+| `created_at` | 2026-11-24 21:30:19 |
+| `updated_at
+` | 2026-11-24 21:30:19
+ |
+
 ### `material_text`（资料）
 
 - **用途**：资料转出来的文字，一段一行：课件一页、一张图、视频 30～60 秒一段，带出处编号（seg_key）、页码或起止秒；同音字纠正前的原文。
@@ -600,6 +715,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_material_text_chapter（chapter_id, item_id）
 - **谁写**：`MaterialPipeline`（删除、新增）；`VideoTermFixer`（修改）
 - **谁读**：`KpRecognizer`、`VideoTermFixer`
+- **现在的数据**：195
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -615,6 +732,24 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `original` | TEXT |  | 视频同音字纠正前的原文（改过才有） |
 | `sort_order` | INT | NOT NULL | 顺序号，从 0 开始，越小越靠前（新加的取“最大顺序号 + 1”） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `item_id` | 4 |
+| `chapter_id` | 3 |
+| `seg_key` | P2 |
+| `kind` | pdf |
+| `page` | 2 |
+| `start_sec` | NULL |
+| `end_sec` | NULL |
+| `content` | 自动化测试概述：智能测试概述智能测试四大优化环节各环节实验对比与分析目录 CONTENTS |
+| `original` | NULL |
+| `sort_order
+` | 0
+ |
+
 ### `chapter_kp_state`（知识点）
 
 - **用途**：每章一行：识别知识点走到哪一步（等上传完 / 处理资料中 / 识别中 / 待确认 / 已确认 / 失败），老师点没点“上传完毕”。
@@ -623,6 +758,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_chapter_kp_state UNIQUE (chapter_id)
 - **谁写**：`ChapterKpService`（修改）；`KpRecognizer`（修改）；`MaterialPipeline`（修改、新增）
 - **谁读**：`ChapterKpService`、`FeynmanDraftService`、`KpRecognizer`、`MaterialPipeline`、`TeacherTodoService`
+- **现在的数据**：6
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -637,6 +774,23 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `chapter_id` | 3 |
+| `upload_done` | 1 |
+| `status` | confirmed |
+| `message` | 已确认 7 个知识点 |
+| `ai_call_id` | 1 |
+| `recognized_at` | 2026-11-24 21:39:29 |
+| `confirmed_at` | 2026-11-25 10:42:25 |
+| `created_at` | 2026-11-24 21:30:19 |
+| `updated_at
+` | 2026-11-24 21:30:19
+ |
+
 ### `chapter_kp`（知识点）
 
 - **用途**：大模型识别出的知识点（老师可以改）：名称、一句话说明、重点 / 一般、要点（每条带出处，JSON）、常见误解、出处。
@@ -645,6 +799,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_chapter_kp_chapter（chapter_id, sort_order）
 - **谁写**：`ChapterKpService`（修改、删除、新增）；`KpRecognizer`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`ChapterKpService`、`ClassAnalysisService`、`ClassPushService`、`ExerciseGenService`、`FeynmanDiagnosis`、`FeynmanDraftService`、`KpRecognizer`、`PracticeAnalysis`、`TeacherTodoService`
+- **现在的数据**：15
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -662,14 +818,36 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `chapter_id` | 3 |
+| `sort_order` | 0 |
+| `name` | 自动化测试的概念与局限 |
+| `summary` | 理解自动化测试的本质、核心价值及其五大局限性，从而认识智能测试出现的必然性。 |
+| `importance` | 重点 |
+| `key_points` | [{"text":"自动化测试是把以人为驱动的测试行为转化为机器执行的过程，用工具、脚本或代码控制执行并比较实际结果与预期结果。","sources":["D1… |
+| `misconceptions` | ["认为自动化测试可以完全脱离人的参与，不需要测试人员定义测试逻辑。","认为自动化测试覆盖度天然比手工测试高，不会遗漏边界和深层缺陷。"] |
+| `sources` | ["D1-P4","V1-02","V1-03","D1-P5","D1-P6","V1-04","V1-05"] |
+| `edited` | 0 |
+| `knowledge_point_id` | 3 |
+| `created_at` | 2026-11-24 21:39:29 |
+| `updated_at
+` | 2026-11-24 21:39:29
+ |
+
 ### `knowledge_point`（知识点）
 
 - **用途**：老师确认后的知识点：练习出题、掌握度、诊断、画像、小助手都按这张表的知识点算。
 - **什么时候写入**：老师确认识别结果时从 chapter_kp 同步过来；老师也可以手动加。
-- **和哪些表关联**：chapter_id → chapter；被 exercise_knowledge_point、mastery、remedy_round、class_issue、class_push、recommendation 引用。
+- **和哪些表关联**：chapter_id → chapter；被 exercise_knowledge_point、mastery、remedy_round、class_issue、class_push 引用。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_kp_chapter（chapter_id）
 - **谁写**：`ChapterKpService`（修改、新增）；`KnowledgePointService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`CourseProfileService`、`DiagnosisService`、`ExerciseGenService`、`ExerciseReviewService`、`ExerciseService`、`KnowledgePointService`、`MasteryService`、`RecommendService`、`RemedyService`
+- **现在的数据**：9
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -686,6 +864,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `chapter_id` | 1 |
+| `name` | 边界测试值的选取 |
+| `content` | 边界值分析：在边界上、边界外侧、边界内侧各取值进行测试。 |
+| `difficulty` | 2 |
+| `is_key` | 1 |
+| `is_difficult` | 0 |
+| `sort_order` | 0 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `exercise`（练习）
 
 - **用途**：一道题：题型（6 种）、考查类型、考第几条要点、题干、选项、答案、解析、每个选项的误解说明、简答的参考答案和要点、来源（老师手写 / 上传识别 / AI 生成 / 小助手 / 全班推送）、是不是草稿、程序检查结果。
@@ -694,6 +891,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_exercise_chapter（chapter_id）
 - **谁写**：`ClassAnalysisService`（删除）；`ClassPushService`（修改）；`ExerciseGenService`（修改、删除）；`ExerciseService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`ChapterItemService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`ExerciseGenService`、`ExerciseReviewService`、`ExerciseService`、`PracticeAnalysis`、`RecommendService`、`RemedyService`、`TeacherTodoService`
+- **现在的数据**：64
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -725,6 +924,40 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `chapter_id` | 1 |
+| `item_id` | 2 |
+| `type` | single_choice |
+| `assess_type` | concept |
+| `key_point_no` | NULL |
+| `stem` | 报名年龄要求为 18～60 岁。测试下边界时，下面哪组取值最合适？ |
+| `options` | ["17、18、19","18、30、60","0、18、100","18、19、20"] |
+| `answer` | A |
+| `analysis` | 下边界是 18：17 刚越过边界（应拒绝），18 在边界上，19 在边界内侧。 |
+| `option_notes` | ["","把上下边界和中间值混在一起，没有取边界外侧的值","取了离边界很远的值，测不出边界附近的错误","只取了边界和内侧，缺少越过边界的值"] |
+| `reasons` | NULL |
+| `reason_answer` | NULL |
+| `reason_notes` | NULL |
+| `accepts` | NULL |
+| `reference` | NULL |
+| `key_points` | NULL |
+| `source` | manual |
+| `draft` | 0 |
+| `check_note` | NULL |
+| `difficulty` | 2 |
+| `sort_order` | 0 |
+| `created_by` | 2 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `exercise_knowledge_point`（练习）
 
 - **用途**：题目和知识点的关联（一道题可以关联多个知识点）。
@@ -732,13 +965,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **和哪些表关联**：exercise_id → exercise；knowledge_point_id → knowledge_point。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_exercise_kp UNIQUE (exercise_id, knowledge_point_id)
 - **谁写**：`ChapterItemService`（删除）；`ClassAnalysisService`（删除）；`ExerciseService`（删除、新增）
-- **谁读**：`AssistantChatService`、`ClassAnalysisService`、`ClassPushService`、`DiagnosisService`、`ExerciseService`、`KnowledgePointService`、`MasteryService`、`RecommendService`
+- **谁读**：`AssistantChatService`、`ClassAnalysisService`、`ClassPushService`、`DiagnosisService`、`ExerciseService`、`KnowledgePointService`、`MasteryService`
+- **现在的数据**：47
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
 | `id` | BIGINT | NOT NULL AUTO_INCREMENT | 主键，自增 |
 | `exercise_id` | BIGINT | NOT NULL | 哪道题 → exercise.id |
 | `knowledge_point_id` | BIGINT | NOT NULL | 哪个知识点 → knowledge_point.id |
+
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `exercise_id` | 1 |
+| `knowledge_point_id
+` | 1
+ |
 
 ### `enrollment`（选课）
 
@@ -748,6 +993,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_enrollment UNIQUE (course_id, student_id)；索引 idx_enrollment_student（student_id）
 - **谁写**：`EnrollmentService`（新增）
 - **谁读**：`EnrollmentService`
+- **现在的数据**：60
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -755,6 +1002,17 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `course_id` | BIGINT | NOT NULL | → course.id |
 | `student_id` | BIGINT | NOT NULL | → user.id（学生） |
 | `created_at` | DATETIME | NOT NULL | 加入的时间 |
+
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `student_id` | 5 |
+| `created_at
+` | 2026-11-27 14:49:05
+ |
 
 ### `learning_event`（学习记录）
 
@@ -764,6 +1022,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_learning_event_student（student_id, created_at）
 - **谁写**：`FeynmanEngine`（新增）；`ProgressService`（新增）；`RecordService`（新增）
 - **谁读**：`AssistantService`、`CompletionService`、`CourseProfileService`、`DiagnosisService`、`ProfileService`、`RecordService`
+- **现在的数据**：36
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -775,6 +1035,20 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `duration_sec` | INT |  | view_item：这次停留了几秒 |
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 5 |
+| `event_type` | view_item |
+| `target_id` | 1 |
+| `course_id` | 1 |
+| `duration_sec` | 540 |
+| `created_at
+` | 2026-11-21 21:00:08
+ |
+
 ### `item_progress`（学习记录）
 
 - **用途**：每人每项一行：视频看过的时间段（合并后的 JSON）、总时长、上次位置；文档累计阅读秒数；什么时候判定学完。
@@ -783,6 +1057,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_item_progress UNIQUE (student_id, item_id)
 - **谁写**：`ProgressService`（修改、新增）
 - **谁读**：`ProgressService`
+- **现在的数据**：4
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -799,6 +1075,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 12 |
+| `item_id` | 4 |
+| `course_id` | 1 |
+| `duration_sec` | NULL |
+| `watched_ranges` | NULL |
+| `watched_sec` | 0.0 |
+| `read_sec` | 19 |
+| `last_position` | NULL |
+| `completed_at` | NULL |
+| `created_at` | 2026-11-25 01:25:03 |
+| `updated_at
+` | 2026-11-25 01:25:04
+ |
+
 ### `answer_record`（学习记录）
 
 - **用途**：每一次作答一行：答案、对错、得分、蒙对概率、可信度、状态（已判 / 等老师确认）、简答每条要点的判定、谁确认的。
@@ -807,6 +1102,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_answer_record_student（student_id, submitted_at）
 - **谁写**：`ExerciseReviewService`（修改）；`RecordService`（新增）
 - **谁读**：`ClassAnalysisService`、`ClassPushService`、`CompletionService`、`CourseProfileService`、`DiagnosisService`、`ExerciseReviewService`、`MasteryService`、`PracticeAnalysis`、`ProfileService`、`RecommendService`、`RecordService`、`RemedyService`、`TeacherTodoService`
+- **现在的数据**：213
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -826,6 +1123,28 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `time_spent_sec` | INT |  | 作答用时（首版不记） |
 | `submitted_at` | DATETIME | NOT NULL | 交卷时间（同一次交卷的几道题时间相同；判断“第一次作答”、按时交卷都看它） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 5 |
+| `exercise_id` | 1 |
+| `course_id` | 1 |
+| `item_id` | 2 |
+| `answer` | B |
+| `is_correct` | 0 |
+| `score` | NULL |
+| `guess` | NULL |
+| `reliability` | NULL |
+| `status` | graded |
+| `detail` | NULL |
+| `reviewed_by` | NULL |
+| `time_spent_sec` | NULL |
+| `submitted_at
+` | 2026-11-22 21:16:08
+ |
+
 ### `mastery`（诊断 / 画像）
 
 - **用途**：每个学生每个知识点一行：原始掌握度 F（练习里每道题第一次作答的平均分）、补练 R、当前掌握度、补练状态。颜色由程序从这一行现算。
@@ -834,6 +1153,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_mastery UNIQUE (student_id, knowledge_point_id)
 - **谁写**：`MasteryService`（修改、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ClassPushService`、`CourseProfileService`、`DiagnosisService`、`MasteryService`、`RemedyService`
+- **现在的数据**：22
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -850,6 +1171,25 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `remedy_status` | VARCHAR(16) |  | recovered 已补回来 / practicing 补练中 |
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 5 |
+| `knowledge_point_id` | 1 |
+| `mastery` | 0.0000 |
+| `attempt_count` | 1 |
+| `correct_count` | 0 |
+| `first_mastery` | 0.0000 |
+| `first_count` | 1 |
+| `remedy` | NULL |
+| `remedy_count` | 0 |
+| `remedy_status` | NULL |
+| `updated_at
+` | 2026-11-23 20:45:08
+ |
+
 ### `profile_snapshot`（诊断 / 画像）
 
 - **用途**：学完一门课那一刻的课程画像（四维和参考日，JSON），每人每门课一份，之后不再改。
@@ -858,6 +1198,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_profile_snapshot UNIQUE (student_id, course_id)
 - **谁写**：`CourseProfileService`（新增）
 - **谁读**：`CourseProfileService`
+- **现在的数据**：1
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -867,6 +1209,18 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `data` | TEXT | NOT NULL | JSON：当时的四维和每章画像 |
 | `created_at` | DATETIME | NOT NULL | 保存的时间（≈ 学完的时间） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 7 |
+| `course_id` | 1 |
+| `data` | {"savedAt":null,"refDate":"2026-11-28","dimensions":[{"key":"consistency","label… |
+| `created_at
+` | 2026-11-28 11:33:54
+ |
+
 ### `feynman_setup`（AI 对话）
 
 - **用途**：一个 AI 对话项的设置：老师选的知识点（最多 2 个）和大模型起草、老师确认的草稿（场景、每条要点的判断标准和三级提示，JSON）、状态（待确认 / 已确认）。
@@ -875,6 +1229,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_feynman_setup UNIQUE (item_id)
 - **谁写**：`FeynmanDraftService`（修改、新增）
 - **谁读**：`ChapterItemService`、`FeynmanDraftService`、`TeacherTodoService`
+- **现在的数据**：1
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -887,6 +1243,21 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `item_id` | 33 |
+| `chapter_id` | 3 |
+| `kp_ids` | 3 |
+| `drafts` | [{"kpId":3,"name":"智能测试四大优化环节","keyPoints":["四大优化环节是测试用例生成、测试用例执行与优化、缺陷自动检测与修复、测… |
+| `status` | confirmed |
+| `created_at` | 2026-11-24 21:43:19 |
+| `updated_at
+` | 2026-11-24 21:43:19
+ |
+
 ### `feynman_session`（AI 对话）
 
 - **用途**：一个学生的一次对话，进度整个存在 state（JSON）里：每个知识点每条要点的状态、提示级别、问了几次、怎么讲清的、学习情况小结。
@@ -895,6 +1266,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`FeynmanDraftService`（修改）；`FeynmanEngine`（修改、新增）
 - **谁读**：`FeynmanDiagnosis`、`FeynmanEngine`
+- **现在的数据**：6
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -906,6 +1279,20 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME | NOT NULL | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 12 |
+| `item_id` | 33 |
+| `status` | done |
+| `state` | {"idx":0,"kps":[{"kpId":3,"name":"智能测试四大优化环节","phase":"done","turns":10,"attempt… |
+| `created_at` | 2026-11-24 21:44:28 |
+| `updated_at
+` | 2026-11-24 21:45:32
+ |
+
 ### `feynman_message`（AI 对话）
 
 - **用途**：对话里的每一句：谁说的、内容；学生的话附上大模型的判断（JSON，存档、复核用）。
@@ -914,6 +1301,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_feynman_message_session（session_id）
 - **谁写**：`FeynmanEngine`（修改、新增）
 - **谁读**：`FeynmanEngine`
+- **现在的数据**：117
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -926,6 +1315,21 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `ai_call_id` | BIGINT |  | 这一句对应的那次大模型调用 → ai_call_log.id |
 | `created_at` | DATETIME | NOT NULL | 这一行创建的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `session_id` | 1 |
+| `kp_idx` | 0 |
+| `role` | system |
+| `content` | 这次请你把 1 个知识点讲给同学小林听：「智能测试四大优化环节」。讲不清的地方，小林会一直追问；不用担心说错，这里不打分。 |
+| `judgment` | NULL |
+| `ai_call_id` | NULL |
+| `created_at
+` | 2026-11-24 21:44:28
+ |
+
 ### `dialogue_topic`（AI 对话（旧版））
 
 - **用途**：旧版“话题式”对话的话题：情境问题、参考答案、要点、三级提示、变式题。
@@ -934,6 +1338,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_dialogue_topic_chapter（chapter_id）
 - **谁写**：`ChapterItemService`（删除）；`DialogueTopicService`（修改、删除、新增）
 - **谁读**：`ChapterItemService`、`ChapterService`、`DialogueTopicService`
+- **现在的数据**：2
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -959,6 +1365,34 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 | `deleted` | TINYINT | NOT NULL DEFAULT 0 | 逻辑删除：0 正常，1 已删除（查询时自动过滤） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `chapter_id` | 1 |
+| `item_id` | 3 |
+| `knowledge_point_id` | 1 |
+| `sort_order` | 0 |
+| `title` | 下边界取哪些值 |
+| `question` | 某网上商城规定每单购买数量为 1 到 99 件。测试"下限"时，你会挑哪几个数量来测？为什么？ |
+| `simple_question` | 每单最少能买几件？比它少一件、多一件分别是几件？ |
+| `key_points` | ["越过下边界的 0（应被拒绝）","正好在边界上的 1","边界内侧的 2","错误常发生在边界附近，所以要重点测"] |
+| `hints` | ["想想边界本身、边界外面、边界里面，各取一个值。","你只测了边界本身的话，比边界少一点的输入被错误接受了，能发现吗？","如果买 0 件，系统应该接受吗？"… |
+| `reveal_text` | 取 0、1、2。0 刚越过下边界，系统应拒绝；1 正好在边界上，应接受；2 在边界内侧，应接受。错误常发生在边界附近，所以要重点测这里。 |
+| `source_ref` | 课件第 13 页 |
+| `source_text` | 边界值分析：在边界上、边界外侧、边界内侧各取值进行测试。大量错误发生在输入或输出范围的边界上。 |
+| `transfer_question` | 某图书馆规定一次可以借 3 到 10 本书。测试"下限"时，你会挑哪几个数量来测？为什么？ |
+| `transfer_points` | ["越过下边界的 2（应被拒绝）","正好在边界上的 3","边界内侧的 4","错误常发生在边界附近，所以要重点测"] |
+| `transfer_reveal` | 取 2、3、4。2 刚越过下边界，系统应拒绝；3 正好在边界上，应接受；4 在边界内侧，应接受。错误常发生在边界附近，所以要重点测这里。 |
+| `created_by_ai` | 0 |
+| `enabled` | 1 |
+| `created_at` | 2026-11-24 21:30:08 |
+| `updated_at` | 2026-11-24 21:30:08 |
+| `deleted
+` | 0
+ |
+
 ### `dialogue_session`（AI 对话（旧版））
 
 - **用途**：旧版对话的一次会话。
@@ -967,6 +1401,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`DialogueService`（修改、新增）
 - **谁读**：`CompletionService`、`DiagnosisService`、`DialogueService`、`RecordService`
+- **现在的数据**：5
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -981,6 +1417,23 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 101 |
+| `student_id` | 7 |
+| `chapter_id` | 1 |
+| `item_id` | 3 |
+| `kind` | CHAPTER |
+| `status` | FINISHED |
+| `current_idx` | 2 |
+| `irrelevant_topics_in_row` | 0 |
+| `created_at` | 2026-11-22 21:20:08 |
+| `updated_at
+` | 2026-11-22 21:30:08
+ |
+
 ### `dialogue_topic_state`（AI 对话（旧版））
 
 - **用途**：旧版对话里每个话题的进度：答错次数、提示级别、答到的要点、结果。
@@ -989,6 +1442,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_topic_state UNIQUE (session_id, topic_idx)
 - **谁写**：`DialogueService`（修改、新增）
 - **谁读**：`DiagnosisService`、`DialogueService`
+- **现在的数据**：10
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1011,6 +1466,31 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `transfer_tries` | INT | NOT NULL DEFAULT 0 | 变式题作答了几次 |
 | `misconception` | VARCHAR(500) |  | 模型最近发现的错误想法，不算进展 |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1001 |
+| `session_id` | 101 |
+| `topic_idx` | 0 |
+| `topic_id` | 1 |
+| `wrong_count` | 0 |
+| `stuck_count` | 0 |
+| `irrelevant_count` | 0 |
+| `hint_level` | -1 |
+| `hit_points` | NULL |
+| `result` | SELF_CORRECT |
+| `phase` | ANSWER |
+| `turn_count` | 0 |
+| `answer_count` | 0 |
+| `refuse_count` | 0 |
+| `given_points` | NULL |
+| `transfer_hit_points` | NULL |
+| `transfer_tries` | 0 |
+| `misconception
+` | NULL
+ |
+
 ### `dialogue_message`（AI 对话（旧版））
 
 - **用途**：旧版对话的每一句。
@@ -1019,6 +1499,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_dialogue_message_session（session_id）
 - **谁写**：`DialogueService`（修改、新增）
 - **谁读**：`DialogueService`、`RecordService`
+- **现在的数据**：5
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1032,6 +1514,22 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `ai_call_id` | BIGINT |  | 这句对应的模型调用 → ai_call_log.id |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1001 |
+| `session_id` | 102 |
+| `topic_idx` | 0 |
+| `role` | AI |
+| `content` | 我们开始吧。先来讨论「下边界取哪些值」。 |
+| `source` | RULE |
+| `judged_type` | NULL |
+| `ai_call_id` | NULL |
+| `created_at
+` | 2026-11-22 21:20:08
+ |
+
 ### `item_analysis`（老师干预）
 
 - **用途**：每次练习的全班分析：按哪个截止时间分析、全班人数、截止前交卷人数、结果（已分析 / 交卷不到 80% 作废）。
@@ -1040,6 +1538,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_item_analysis（item_id）
 - **谁写**：`ClassAnalysisService`（新增）
 - **谁读**：`ClassAnalysisService`
+- **现在的数据**：2
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1051,6 +1551,20 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `submitted` | INT | NOT NULL | 截止前交卷的人数 |
 | `analyzed_at` | DATETIME |  | 分析的时间 |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `item_id` | 2 |
+| `due_at` | 2026-11-26 21:30:08 |
+| `status` | void |
+| `students` | 10 |
+| `submitted` | 7 |
+| `analyzed_at
+` | 2026-11-27 12:54:32
+ |
+
 ### `class_issue`（老师干预）
 
 - **用途**：全班分析发现的问题卡片：规则①一道题全班 ≥ 80% 做错（题目检查）；规则②某条要点在某种考查类型上错误率 > 50%。做错的学生、老师的处理状态。
@@ -1059,6 +1573,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_class_issue_item（item_id）
 - **谁写**：`ClassAnalysisService`（修改、删除、新增）；`ClassPushService`（修改）
 - **谁读**：`ClassAnalysisService`、`ClassPushService`
+- **现在的数据**：6
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1078,6 +1594,28 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 11 |
+| `analysis_id` | 4 |
+| `item_id` | 65 |
+| `course_id` | 1 |
+| `kind` | question |
+| `knowledge_point_id` | 6 |
+| `key_point_no` | 1 |
+| `assess_type` | concept |
+| `exercise_id` | 42 |
+| `attempts` | 8 |
+| `wrong` | 7 |
+| `student_ids` | 5,6,8,10,11,9,13 |
+| `status` | ok |
+| `created_at` | 2026-11-28 10:43:07 |
+| `updated_at
+` | 2026-11-28 10:43:07
+ |
+
 ### `class_push`（老师干预）
 
 - **用途**：老师对全班问题的处理：补充讲解（大模型起草或老师写）、新题、推送给哪些学生、推送前的错误率、状态（草稿 / 已推送）。
@@ -1085,7 +1623,9 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **和哪些表关联**：issue_ids → class_issue；exercise_ids → exercise（来源 class）；学生在小助手里看到。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`ClassPushService`（修改、新增）
-- **谁读**：`ClassPushService`
+- **谁读**：`ClassPushService`、`RecommendService`
+- **现在的数据**：1
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1099,6 +1639,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `explanation_by` | VARCHAR(16) |  | ai 大模型起草 / teacher 老师写的 |
 | `exercise_ids` | VARCHAR(255) |  | 新题（来源 class），逗号分隔 |
 | `student_ids` | VARCHAR(2000) | NOT NULL | 推送对象：做错的学生 |
+| `accepted_ids` | VARCHAR(2000) | NOT NULL DEFAULT '' | 在小助手里点了“接收”的学生（接收后存到学习推荐） |
 | `before_rate` | DOUBLE |  | 推送前的错误率（卡片上的） |
 | `status` | VARCHAR(16) | NOT NULL DEFAULT 'draft' | draft 老师还在改 / pushed 已推送 |
 | `due_at` | DATETIME |  | 学生做新题的期限 |
@@ -1106,14 +1647,40 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `course_id` | 1 |
+| `item_id` | 65 |
+| `issue_ids` | 18 |
+| `knowledge_point_id` | 6 |
+| `assess_type` | concept |
+| `explanation` | 四种技术不是“谁更强”，而是“谁更适合”。可以这样对比记：基于模型像按地图走路线，前提是系统行为能画成状态图，适合流程清楚、状态转换多的场景；基于自然语言处理像… |
+| `explanation_by` | ai |
+| `exercise_ids` | 170,171,172 |
+| `student_ids` | 5,6,8,10,11,9,13 |
+| `before_rate` | 0.88 |
+| `status` | pushed |
+| `due_at` | 2026-12-05 23:59:00 |
+| `pushed_at` | 2026-11-28 10:44:26 |
+| `created_at` | 2026-11-28 10:44:04 |
+| `updated_at` | 2026-11-28 10:44:04 |
+| `accepted_ids
+` | 5
+ |
+
 ### `remedy_round`（小助手）
 
 - **用途**：小助手的补练和拓展，每一轮一行：知识点、补练还是拓展、考查类型、第几轮、这一轮的题、平均分、2 轮后还没补回来。
 - **什么时候写入**：学生在小助手里点“做补练题”“来点更难的”时新增；交了以后更新。
 - **和哪些表关联**：student_id → user；knowledge_point_id → knowledge_point；exercise_ids → exercise（来源 assistant）。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_remedy_student（student_id, knowledge_point_id）
-- **谁写**：`RemedyService`（修改、新增）
-- **谁读**：`RemedyService`
+- **谁写**：`RecommendService`（修改）；`RemedyService`（修改、新增）
+- **谁读**：`RecommendService`、`RemedyService`
+- **现在的数据**：5
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1127,8 +1694,29 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `status` | VARCHAR(16) | NOT NULL DEFAULT 'open' | open 还没交 / done 交了 |
 | `score` | DOUBLE |  | 这一轮的平均分 |
 | `escalated` | TINYINT(1) | NOT NULL DEFAULT 0 | 2 轮做完还没补回来（只记录，老师能看到，不转给老师处理） |
+| `saved` | TINYINT(1) | NOT NULL DEFAULT 0 | 拓展：学生选了“保存到学习推荐”（补练一律保存，不看这一列） |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 | `finished_at` | DATETIME |  | 这一轮交卷的时间 |
+
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 12 |
+| `knowledge_point_id` | 5 |
+| `kind` | remedy |
+| `assess_type` | NULL |
+| `round_no` | 1 |
+| `exercise_ids` | 161,162,163 |
+| `status` | done |
+| `score` | 1 |
+| `escalated` | 0 |
+| `created_at` | 2026-11-25 20:45:07 |
+| `finished_at` | 2026-11-25 20:45:18 |
+| `saved
+` | 0
+ |
 
 ### `assistant_message`（小助手）
 
@@ -1138,6 +1726,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_assistant_message（student_id, chapter_id）
 - **谁写**：`AssistantChatService`（新增）
 - **谁读**：`AssistantChatService`
+- **现在的数据**：32
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1151,6 +1741,22 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `ai_call_id` | BIGINT |  | 这一句对应的那次大模型调用 → ai_call_log.id |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 12 |
+| `chapter_id` | 3 |
+| `role` | student |
+| `content` | 某团队把一套原本由测试人员手工点击执行的回归用例，改写成脚本后由机器定时执行，并自动比对页面返回内容与预期值。关于这一做法，下列说法最准确的是？ 选哪个？ |
+| `blocked` | NULL |
+| `original` | NULL |
+| `ai_call_id` | NULL |
+| `created_at
+` | 2026-11-25 20:45:40
+ |
+
 ### `assistant_notice`（小助手）
 
 - **用途**：老师给学生的提醒（例如分析作废时提醒没交卷的学生），显示在学生的小助手和消息铃铛里。
@@ -1159,6 +1765,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_assistant_notice（student_id）
 - **谁写**：`ClassPushService`（新增）
 - **谁读**：`ClassPushService`
+- **现在的数据**：0
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1168,28 +1776,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `content` | VARCHAR(500) | NOT NULL | 提醒的文字 |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 
-### `recommendation`（学习推荐）
-
-- **用途**：学习推荐页给学生推的题，一题一行：针对哪个薄弱知识点、理由、状态（新 / 做对了 / 不想做）。
-- **什么时候写入**：学生打开学习推荐页时按薄弱知识点选题写入；做对了、换一道时改状态。
-- **和哪些表关联**：student_id → user；target_id → exercise；knowledge_point_id → knowledge_point。
-- **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_recommendation UNIQUE (student_id, target_type, target_id)
-- **谁写**：`RecommendService`（修改、新增）
-- **谁读**：`RecommendService`
-
-| 列 | 类型 | 约束 / 默认值 | 含义 |
-|---|---|---|---|
-| `id` | BIGINT | NOT NULL AUTO_INCREMENT | 主键，自增 |
-| `student_id` | BIGINT | NOT NULL | 哪个学生 → user.id |
-| `target_type` | VARCHAR(16) | NOT NULL | exercise（首版只推题）/ material / knowledge_point |
-| `target_id` | BIGINT | NOT NULL | 推荐的对象 id（target_type = exercise 时 → exercise.id） |
-| `knowledge_point_id` | BIGINT |  | 针对的薄弱知识点 |
-| `reason` | VARCHAR(255) |  | 如「上次做错了」「还没做过」 |
-| `status` | VARCHAR(16) | NOT NULL DEFAULT 'new' | new / done 做对了 / dismissed 不想做 |
-| `source` | VARCHAR(16) | NOT NULL DEFAULT 'system' | system 系统推荐 / teacher 老师布置（干预） |
-| `intervention_id` | BIGINT |  | 旧版个人干预用（已去掉），现在一直为空 |
-| `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
-| `updated_at` | DATETIME |  | 这一行最后修改的时间（MyBatis-Plus 自动填） |
+（现在没有数据。）
 
 ### `ai_call_log`（运维）
 
@@ -1199,6 +1786,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`AiCallLogService`（修改、新增）
 - **谁读**：`AiCallLogService`
+- **现在的数据**：128
+ 行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
@@ -1217,12 +1806,33 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `response_json` | TEXT |  | 模型返回的文字 |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `task` | KP_EXTRACT |
+| `model` | deepseek-flash |
+| `prompt_version` | kp_extract_v1 |
+| `input_tokens` | 14539 |
+| `output_tokens` | 2536 |
+| `cost_cny` | 0.054049 |
+| `latency_ms` | 10837 |
+| `success` | 1 |
+| `passed_check` | NULL |
+| `error` | NULL |
+| `request_json` | {"messages":[{"role":"user","content":"你是大学《软件测试》课程的助教。下面是第 3 章「智能测试生成与优化」的全部教学资… |
+| `response_json` | {"knowledge_points":[{"name":"自动化测试的概念与局限","summary":"理解自动化测试的本质、核心价值及其五大局限性，从而认… |
+| `created_at
+` | 2026-11-24 21:39:29
+ |
+
 
 ---
 
 ## 八、每个功能调用数据库的实测记录（自动生成）
 
-下面是 **41 个功能** 实际执行的全部 SQL，按功能的使用顺序排列。记录方法：`SqlTraceIT` 用内存库和演示数据把这些功能真实走一遍，截下 MyBatis 打印的每一条 SQL（大模型和资料处理服务用假的，只为了让流程走通，不影响 SQL）；MySQL 上执行的是同样的 SQL。`?` 是参数占位，值由 JDBC 单独传；`SELECT … FROM` 省略了列名（就是这张表的全部列）；连续重复的同一条 SQL 合并写“×次数”（例如交卷时每道题各存一行）。
+下面是 **42 个功能** 实际执行的全部 SQL，按功能的使用顺序排列。记录方法：`SqlTraceIT` 用内存库和演示数据把这些功能真实走一遍，截下 MyBatis 打印的每一条 SQL（大模型和资料处理服务用假的，只为了让流程走通，不影响 SQL）；MySQL 上执行的是同样的 SQL。`?` 是参数占位，值由 JDBC 单独传；`SELECT … FROM` 省略了列名（就是这张表的全部列）；连续重复的同一条 SQL 合并写“×次数”（例如交卷时每道题各存一行）。
 
 ### 8.1 总表：每个功能读、写了哪些表
 
@@ -1233,7 +1843,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 3 | 我的课程列表 | 老师（李老师） | `GET /api/courses/mine` | 11 | chapter、course、enrollment、user | — |
 | 4 | 打开建课页：课程大纲 | 老师（李老师） | `GET /api/courses/{id}/chapters` | 2 | chapter、course | — |
 | 5 | 新建章节 | 老师（李老师） | `POST /api/chapters` | 7 | chapter、chapter_item、course、dialogue_topic、exercise、knowledge_point | chapter |
-| 6 | 新建内容项（文档） | 老师（李老师） | `POST /api/chapter-items` | 4 | chapter、chapter_item、course | chapter_item |
+| 6 | 新建内容项（文档） | 老师（李老师） | `POST /api/chapter-items` | 6 | chapter、chapter_item、course | chapter_item |
 | 7 | 上传课件（马上排队转文字；测试里同步处理完） | 老师（李老师） | `POST /api/chapter-items/{id}/file` | 20 | chapter、chapter_item、chapter_kp_state、course、material、material_job | chapter_item、chapter_kp_state、material、material_job、material_text |
 | 8 | 查看转文字进度 | 老师（李老师） | `GET /api/chapters/{id}/kp-status` | 6 | chapter、chapter_item、chapter_kp、chapter_kp_state、course、material_job | — |
 | 9 | 老师点“上传完毕”→ 识别知识点 | 老师（李老师） | `POST /api/chapters/{id}/kp/upload-done` | 24 | chapter、chapter_item、chapter_kp、chapter_kp_state、course、material_job、material_text | ai_call_log、chapter_kp、chapter_kp_state |
@@ -1260,15 +1870,16 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 30 | 快到期的任务（首页、消息铃铛） | 学生（学生08） | `GET /api/learn/deadlines` | 7 | answer_record、chapter、chapter_item、course、dialogue_session、enrollment、learning_event | — |
 | 31 | 学习情况（每个知识点的结论和下一步） | 学生（学生01） | `GET /api/assistant/summary` | 30 | answer_record、chapter、chapter_item、chapter_kp、course、exercise、exercise_knowledge_point、feynman_session、knowledge_point、learning_event、mastery、material_text、remedy_round | — |
 | 32 | 开始补练（按自己的错题当场出题） | 学生（学生01） | `POST /api/assistant/remedy/{kpId}/start` | 37 | answer_record、chapter、chapter_item、chapter_kp、course、exercise、exercise_knowledge_point、knowledge_point、mastery、material_text、remedy_round | ai_call_log、exercise、exercise_knowledge_point、remedy_round |
-| 33 | 聊天问一句 | 学生（学生08） | `POST /api/assistant/chat` | 26 | answer_record、assistant_message、chapter、chapter_item、chapter_kp、course、exercise、exercise_knowledge_point、knowledge_point、mastery、material_text | ai_call_log、assistant_message |
-| 34 | 全班分析（练习截止后） | 老师（李老师） | `GET /api/class-analysis` | 18 | answer_record、chapter、chapter_item、class_issue、class_push、course、enrollment、exercise、exercise_knowledge_point、item_analysis、knowledge_point、user | class_issue、item_analysis |
-| 35 | 侧边栏待处理数 | 老师（李老师） | `GET /api/class-analysis/open-count` | 20 | answer_record、chapter、chapter_item、class_issue、class_push、course、enrollment、exercise、item_analysis、knowledge_point、user | — |
-| 36 | 截止情况（谁没做、谁迟交） | 老师（李老师） | `GET /api/teacher/deadlines` | 8 | answer_record、chapter、chapter_item、course、dialogue_session、enrollment、learning_event、user | — |
-| 37 | 首页“待你确认” | 老师（李老师） | `GET /api/teacher/todo` | 7 | answer_record、chapter、chapter_item、chapter_kp_state、course、exercise、feynman_setup | — |
-| 38 | 全班诊断 | 老师（李老师） | `GET /api/diagnosis/courses/{id}` | 7 | answer_record、chapter、course、exercise、exercise_knowledge_point、knowledge_point、mastery | — |
-| 39 | 简答待确认列表（老师） | 老师（李老师） | `GET /api/exercises/short-answers` | 1 | exercise | — |
-| 40 | 用户列表 | 管理员 | `GET /api/admin/users` | 2 | user | — |
-| 41 | AI 调用记录 | 管理员 | `GET /api/ai/logs` | 2 | ai_call_log | — |
+| 33 | 学习推荐（小助手的延伸：补练、拓展、老师推送） | 学生（学生01） | `GET /api/recommendations` | 12 | answer_record、chapter、class_push、course、exercise、exercise_knowledge_point、knowledge_point、remedy_round、user | — |
+| 34 | 聊天问一句 | 学生（学生08） | `POST /api/assistant/chat` | 26 | answer_record、assistant_message、chapter、chapter_item、chapter_kp、course、exercise、exercise_knowledge_point、knowledge_point、mastery、material_text | ai_call_log、assistant_message |
+| 35 | 全班分析（练习截止后） | 老师（李老师） | `GET /api/class-analysis` | 18 | answer_record、chapter、chapter_item、class_issue、class_push、course、enrollment、exercise、exercise_knowledge_point、item_analysis、knowledge_point、user | class_issue、item_analysis |
+| 36 | 侧边栏待处理数 | 老师（李老师） | `GET /api/class-analysis/open-count` | 20 | answer_record、chapter、chapter_item、class_issue、class_push、course、enrollment、exercise、item_analysis、knowledge_point、user | — |
+| 37 | 截止情况（谁没做、谁迟交） | 老师（李老师） | `GET /api/teacher/deadlines` | 8 | answer_record、chapter、chapter_item、course、dialogue_session、enrollment、learning_event、user | — |
+| 38 | 首页“待你确认” | 老师（李老师） | `GET /api/teacher/todo` | 7 | answer_record、chapter、chapter_item、chapter_kp_state、course、exercise、feynman_setup | — |
+| 39 | 全班诊断 | 老师（李老师） | `GET /api/diagnosis/courses/{id}` | 7 | answer_record、chapter、course、exercise、exercise_knowledge_point、knowledge_point、mastery | — |
+| 40 | 简答待确认列表（老师） | 老师（李老师） | `GET /api/exercises/short-answers` | 1 | exercise | — |
+| 41 | 用户列表 | 管理员 | `GET /api/admin/users` | 2 | user | — |
+| 42 | AI 调用记录 | 管理员 | `GET /api/ai/logs` | 2 | ai_call_log | — |
 
 ### 8.2 每个功能的调用链和 SQL
 
@@ -1347,7 +1958,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 - 接口：`POST /api/chapter-items`
 - 调用链：`ChapterContentController.createItem` → `ChapterItemService.create`
-- 共执行 4 条 SQL：
+- 共执行 6 条 SQL：
 
 | 序 | 读 / 写 | 表 | SQL |
 |---|---|---|---|
@@ -1355,6 +1966,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 2 | 读 | course | `SELECT … FROM course WHERE id=? AND deleted=0` |
 | 3 | 读 | chapter_item | `SELECT … FROM chapter_item WHERE deleted=0 AND (chapter_id = ?)` |
 | 4 | 写 | chapter_item | `INSERT INTO chapter_item ( course_id, chapter_id, type, title, sort_order, allow_late, created_at, updated_at ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ? )` |
+| 5 | 读 | chapter_item | `SELECT … FROM chapter_item WHERE deleted=0 AND (chapter_id = ?) ORDER BY sort_order ASC,id ASC` |
+| 6 | 读 | chapter_item | `SELECT … FROM chapter_item WHERE id=? AND deleted=0` |
 
 #### ① 上传资料
 
@@ -1666,8 +2279,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 3 | 读 | chapter | `SELECT … FROM chapter WHERE deleted=0 AND (course_id = ? AND status = ?) ORDER BY sort_order ASC,id ASC` |
 | 4 | 读 | chapter | `SELECT … FROM chapter WHERE id=? AND deleted=0` |
 | 5 | 读 | chapter_item | `SELECT … FROM chapter_item WHERE deleted=0 AND (chapter_id = ?) ORDER BY sort_order ASC,id ASC` |
-| 6 | 读 | exercise | `SELECT COUNT( * ) AS total FROM exercise WHERE deleted=0 AND (item_id = ?)` |
-| 7 | 读 | dialogue_topic | `SELECT COUNT( * ) AS total FROM dialogue_topic WHERE deleted=0 AND (item_id = ?)` |
+| 6 | 读 | dialogue_topic | `SELECT COUNT( * ) AS total FROM dialogue_topic WHERE deleted=0 AND (item_id = ?)` |
+| 7 | 读 | exercise | `SELECT COUNT( * ) AS total FROM exercise WHERE deleted=0 AND (item_id = ?)` |
 | 8 | 读 | learning_event | `SELECT … FROM learning_event WHERE (event_type = ? AND target_id IN (?,?,?) AND student_id IN (?))` |
 | 9 | 读 | answer_record | `SELECT … FROM answer_record WHERE (item_id IN (?,?,?) AND student_id IN (?))` |
 | 10 | 读 | dialogue_session | `SELECT … FROM dialogue_session WHERE (status = ? AND item_id IN (?,?,?) AND student_id IN (?))` |
@@ -2007,7 +2620,28 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 35 | 读 | exercise | `SELECT … FROM exercise WHERE id=? AND deleted=0` |
 | 36 | 读 | exercise_knowledge_point | `SELECT … FROM exercise_knowledge_point WHERE (exercise_id = ?)` |
 
-**33. 聊天问一句**（学生（学生08））
+**33. 学习推荐（小助手的延伸：补练、拓展、老师推送）**（学生（学生01））
+
+- 接口：`GET /api/recommendations`
+- 调用链：`RecommendController.mine` → `RecommendService.student`、`RecordService.currentStudentId`
+- 共执行 12 条 SQL：
+
+| 序 | 读 / 写 | 表 | SQL |
+|---|---|---|---|
+| 1 | 读 | remedy_round | `SELECT … FROM remedy_round WHERE (student_id = ?)` |
+| 2 | 读 | knowledge_point | `SELECT … FROM knowledge_point WHERE id=? AND deleted=0` |
+| 3 | 读 | chapter | `SELECT … FROM chapter WHERE id=? AND deleted=0` |
+| 4 | 读 | course | `SELECT … FROM course WHERE id=? AND deleted=0` |
+| 5 | 读 | answer_record | `SELECT … FROM answer_record WHERE (student_id = ? AND exercise_id IN (?,?)) ORDER BY submitted_at ASC,id ASC` |
+| 6 | 读 | exercise | `SELECT … FROM exercise WHERE id IN ( ? , ? ) AND deleted=0` |
+| 7 | 读 | exercise_knowledge_point | `SELECT … FROM exercise_knowledge_point WHERE (exercise_id = ?)` |
+| 8 | 读 | knowledge_point | `SELECT … FROM knowledge_point WHERE id=? AND deleted=0` |
+| 9 | 读 | exercise_knowledge_point | `SELECT … FROM exercise_knowledge_point WHERE (exercise_id = ?)` |
+| 10 | 读 | knowledge_point | `SELECT … FROM knowledge_point WHERE id=? AND deleted=0` |
+| 11 | 读 | class_push | `SELECT … FROM class_push WHERE (status = ?)` |
+| 12 | 读 | user | `SELECT … FROM `user` WHERE id=? AND deleted=0` |
+
+**34. 聊天问一句**（学生（学生08））
 
 - 接口：`POST /api/assistant/chat`
 - 调用链：`AssistantController.chat` → `AssistantChatService.chat`、`RecordService.currentStudentId`
@@ -2044,7 +2678,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 #### ⑤ 老师干预
 
-**34. 全班分析（练习截止后）**（老师（李老师））
+**35. 全班分析（练习截止后）**（老师（李老师））
 
 - 接口：`GET /api/class-analysis`
 - 调用链：`ClassAnalysisController.board` → `ClassAnalysisService.board`
@@ -2070,7 +2704,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 16 | 读 | class_push | `SELECT … FROM class_push WHERE (item_id = ?) ORDER BY id DESC` |
 | 17 | 读 | chapter_item | `SELECT … FROM chapter_item WHERE deleted=0 AND (chapter_id = ? AND type = ?) ORDER BY sort_order ASC,id ASC` |
 
-**35. 侧边栏待处理数**（老师（李老师））
+**36. 侧边栏待处理数**（老师（李老师））
 
 - 接口：`GET /api/class-analysis/open-count`
 - 调用链：`ClassAnalysisController.openCount` → `ClassAnalysisService.openCount`
@@ -2101,7 +2735,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 #### 老师学情
 
-**36. 截止情况（谁没做、谁迟交）**（老师（李老师））
+**37. 截止情况（谁没做、谁迟交）**（老师（李老师））
 
 - 接口：`GET /api/teacher/deadlines`
 - 调用链：`DeadlineController.teacher` → `DeadlineService.teacher`
@@ -2118,7 +2752,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 7 | 读 | answer_record | `SELECT … FROM answer_record WHERE (item_id IN (?,?) AND student_id IN (?,?,?,?,?,?,?,?,?,?))` |
 | 8 | 读 | dialogue_session | `SELECT … FROM dialogue_session WHERE (status = ? AND item_id IN (?,?) AND student_id IN (?,?,?,?,?,?,?,?,?,?))` |
 
-**37. 首页“待你确认”**（老师（李老师））
+**38. 首页“待你确认”**（老师（李老师））
 
 - 接口：`GET /api/teacher/todo`
 - 调用链：`TeacherTodoController.todo` → `TeacherTodoService.mine`
@@ -2134,7 +2768,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 6 | 读 | exercise | `SELECT … FROM exercise WHERE deleted=0 AND (item_id IN (?,?,?,?) AND draft = ?)` |
 | 7 | 读 | answer_record | `SELECT … FROM answer_record WHERE (item_id IN (?,?,?,?) AND status = ?)` |
 
-**38. 全班诊断**（老师（李老师））
+**39. 全班诊断**（老师（李老师））
 
 - 接口：`GET /api/diagnosis/courses/{id}`
 - 调用链：`DiagnosisController.course` → `DiagnosisService.course`
@@ -2152,7 +2786,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 #### ⑥ 做练习
 
-**39. 简答待确认列表（老师）**（老师（李老师））
+**40. 简答待确认列表（老师）**（老师（李老师））
 
 - 接口：`GET /api/exercises/short-answers`
 - 调用链：`ExerciseToolController.shortAnswers` → `ExerciseReviewService.shortAnswers`
@@ -2164,7 +2798,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 #### 管理员
 
-**40. 用户列表**（管理员）
+**41. 用户列表**（管理员）
 
 - 接口：`GET /api/admin/users`
 - 调用链：`AdminUserController.page` → `AdminUserService.page`
@@ -2175,7 +2809,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 1 | 读 | user | `SELECT COUNT(*) AS total FROM `user` WHERE deleted = 0` |
 | 2 | 读 | user | `SELECT … FROM `user` WHERE deleted=0 ORDER BY id DESC LIMIT ?` |
 
-**41. AI 调用记录**（管理员）
+**42. AI 调用记录**（管理员）
 
 - 接口：`GET /api/ai/logs`
 - 调用链：`AiCallLogController.list` → `AiCallLogService.totals`、`AiCallLogService.recent`

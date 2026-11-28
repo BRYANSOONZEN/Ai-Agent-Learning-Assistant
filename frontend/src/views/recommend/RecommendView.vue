@@ -137,7 +137,7 @@ function openAssistant() {
               {{ LETTERS[k] }}. {{ o }}
             </li>
           </ul>
-          <p v-if="q.type === 'two_tier' && q.reasons?.length" class="muted">
+          <p v-if="q.type === 'two_tier' && q.reasonChosen" class="muted">
             理由：你选 {{ q.reasonChosen || '—' }}，正确 {{ q.reasonAnswer }}
           </p>
           <p v-if="!q.options?.length" class="muted">你的回答：{{ q.chosen }}</p>

@@ -223,6 +223,8 @@ class SqlTraceIT {
                 .then("{\"answers\": [\"A\"]}");
         trace("⑦ 小助手", "开始补练（按自己的错题当场出题）", "学生（学生01）", "POST", "/api/assistant/remedy/{kpId}/start",
                 as("5", post("/api/assistant/remedy/1/start")));
+        trace("⑦ 小助手", "学习推荐（小助手的延伸：补练、拓展、老师推送）", "学生（学生01）", "GET", "/api/recommendations",
+                as("5", get("/api/recommendations")));
         fake.reply("边界外的值也要测，因为错误常发生在边界附近。");
         trace("⑦ 小助手", "聊天问一句", S, "POST", "/api/assistant/chat",
                 as("12", jsonBody(post("/api/assistant/chat"), "{\"chapterId\": 1, \"message\": \"边界值要怎么取？\"}")));

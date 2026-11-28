@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-生成《数据库说明》第六节：33 张表逐张写清楚。
+生成《数据库说明》第六节：32 张表逐张写清楚。
 每张表：模块、用途、什么时候写入、和哪些表关联（手写，在 TABLES 里）；
         每一列的类型、约束、含义（从 schema.sql 读）；主键、唯一约束、索引；
         哪些代码写它、哪些代码读它（扫描后端源码里每个 Mapper 的调用）；
@@ -35,7 +35,7 @@ TABLES = {
     'material_text': ('资料', '资料转出来的文字，一段一行：课件一页、一张图、视频 30～60 秒一段，带出处编号（seg_key）、页码或起止秒；同音字纠正前的原文。', '资料处理完成时一段一行写入；视频同音字纠正改正文、原文存进 original；重新上传时整份删掉重写。', 'item_id → chapter_item；识别知识点时整章的文字交给大模型；知识点要点的出处编号指向这里的 seg_key。'),
     'chapter_kp_state': ('知识点', '每章一行：识别知识点走到哪一步（等上传完 / 处理资料中 / 识别中 / 待确认 / 已确认 / 失败），老师点没点“上传完毕”。', '老师点“上传完毕”、开始识别、识别完成、老师确认、资料有增删时。', 'chapter_id → chapter；ai_call_id → ai_call_log。'),
     'chapter_kp': ('知识点', '大模型识别出的知识点（老师可以改）：名称、一句话说明、重点 / 一般、要点（每条带出处，JSON）、常见误解、出处。', '识别完成时整章写入；老师改、加、删知识点时；老师确认时写上对应的 knowledge_point_id。', 'chapter_id → chapter；knowledge_point_id → knowledge_point（确认后）；feynman_setup.kp_ids 引用它。'),
-    'knowledge_point': ('知识点', '老师确认后的知识点：练习出题、掌握度、诊断、画像、小助手都按这张表的知识点算。', '老师确认识别结果时从 chapter_kp 同步过来；老师也可以手动加。', 'chapter_id → chapter；被 exercise_knowledge_point、mastery、remedy_round、class_issue、class_push、recommendation 引用。'),
+    'knowledge_point': ('知识点', '老师确认后的知识点：练习出题、掌握度、诊断、画像、小助手都按这张表的知识点算。', '老师确认识别结果时从 chapter_kp 同步过来；老师也可以手动加。', 'chapter_id → chapter；被 exercise_knowledge_point、mastery、remedy_round、class_issue、class_push 引用。'),
     'exercise': ('练习', '一道题：题型（6 种）、考查类型、考第几条要点、题干、选项、答案、解析、每个选项的误解说明、简答的参考答案和要点、来源（老师手写 / 上传识别 / AI 生成 / 小助手 / 全班推送）、是不是草稿、程序检查结果。', '老师手动出题、AI 出题（先存草稿，老师确认）、小助手补练和拓展当场出题、老师全班推送出新题时。', 'item_id → chapter_item（练习项）；和知识点的关系在 exercise_knowledge_point；被 answer_record 引用。'),
     'exercise_knowledge_point': ('练习', '题目和知识点的关联（一道题可以关联多个知识点）。', '出题时一起写入。', 'exercise_id → exercise；knowledge_point_id → knowledge_point。'),
     'enrollment': ('选课', '谁加入了哪门课。加入后才能学；老师的全班分析、截止情况、课程人数只算这里的学生。', '学生在“课程学习”里点“加入课程”时；演示数据里所有学生已加入所有课程。', 'course_id → course；student_id → user。'),
@@ -57,7 +57,6 @@ TABLES = {
     'remedy_round': ('小助手', '小助手的补练和拓展，每一轮一行：知识点、补练还是拓展、考查类型、第几轮、这一轮的题、平均分、2 轮后还没补回来。', '学生在小助手里点“做补练题”“来点更难的”时新增；交了以后更新。', 'student_id → user；knowledge_point_id → knowledge_point；exercise_ids → exercise（来源 assistant）。'),
     'assistant_message': ('小助手', '小助手聊天的每一句；被程序拦下的回复记下原因和原文（给开发看，学生看到的是固定的话）。', '学生在小助手里问一句、小助手回一句时。', 'student_id → user；chapter_id → chapter；ai_call_id → ai_call_log。每天最多 20 句也按这张表数。'),
     'assistant_notice': ('小助手', '老师给学生的提醒（例如分析作废时提醒没交卷的学生），显示在学生的小助手和消息铃铛里。', '老师在干预管理页点“提醒没交的学生”时。', 'student_id → user；item_id → chapter_item。'),
-    'recommendation': ('学习推荐', '学习推荐页给学生推的题，一题一行：针对哪个薄弱知识点、理由、状态（新 / 做对了 / 不想做）。', '学生打开学习推荐页时按薄弱知识点选题写入；做对了、换一道时改状态。', 'student_id → user；target_id → exercise；knowledge_point_id → knowledge_point。'),
     'ai_call_log': ('运维', '每一次调用大模型：任务名、提示词版本、输入 / 输出 token、耗时、费用、成功或失败原因、程序检查结果。', '每次调用大模型（看图、识别知识点、AI 对话、出题、判简答、聊天、补充讲解、同音字纠正）都写一行。', '被 chapter_kp_state、feynman_message、dialogue_message、assistant_message 的 ai_call_id 引用；管理员在“AI 调用记录”页查看。'),
 }
 

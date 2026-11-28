@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 生成《数据库说明》第八节：每个功能调用数据库的实测记录。
-数据来自 backend/target/sql-trace.json（SqlTraceIT 把 41 个功能真实走一遍，截下 MyBatis 打印的每条 SQL）；
+数据来自 backend/target/sql-trace.json（SqlTraceIT 把 42 个功能真实走一遍，截下 MyBatis 打印的每条 SQL）；
 调用链（Controller 方法 → 调了哪些 Service）从后端源码里找。
 用法：python tools/docs/gen_db_calls.py   （由 build_docs.py 调用）
 """

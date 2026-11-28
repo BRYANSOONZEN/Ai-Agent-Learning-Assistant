@@ -506,26 +506,9 @@ CREATE TABLE mastery (
     CONSTRAINT uk_mastery UNIQUE (student_id, knowledge_point_id)
 );
 
--- ---------------------------------------------------------------------
--- 「荐」：学习推荐（docs/database.md 4.4，算法见 docs/design.md 5.2）
--- 打开推荐页时按薄弱知识点选题，一题一行；学生做对了 done，点"换一道" dismissed，以后不再推
--- ---------------------------------------------------------------------
+-- 「荐」学习推荐没有自己的表：它是小助手的延伸，读 remedy_round（补练、拓展）和 class_push（老师推送）。
+-- 旧的 recommendation 表（从练习里挑题）2026-11-28 去掉了。
 DROP TABLE IF EXISTS recommendation;
-CREATE TABLE recommendation (
-    id                 BIGINT       NOT NULL AUTO_INCREMENT,
-    student_id         BIGINT       NOT NULL,
-    target_type        VARCHAR(16)  NOT NULL,              -- exercise（首版只推题）/ material / knowledge_point
-    target_id          BIGINT       NOT NULL,
-    knowledge_point_id BIGINT,                             -- 针对的薄弱知识点
-    reason             VARCHAR(255),                       -- 如「上次做错了」「还没做过」
-    status             VARCHAR(16)  NOT NULL DEFAULT 'new', -- new / done 做对了 / dismissed 不想做
-    source             VARCHAR(16)  NOT NULL DEFAULT 'system', -- system 系统推荐 / teacher 老师布置（干预）
-    intervention_id    BIGINT,                             -- 旧版个人干预用（已去掉），现在一直为空
-    created_at         DATETIME,
-    updated_at         DATETIME,
-    PRIMARY KEY (id),
-    CONSTRAINT uk_recommendation UNIQUE (student_id, target_type, target_id)
-);
 
 -- ---------------------------------------------------------------------
 -- 小助手自动干预：每一轮补练（docs/模块说明/小助手-自动干预与聊天.md 第四节）
