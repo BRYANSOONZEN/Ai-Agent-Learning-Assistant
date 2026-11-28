@@ -20,7 +20,7 @@
 | 设计文档 · 界面设计 | SE-G2-05 | 界面设计说明书 | [05-界面设计.md](05-界面设计.md)（截图在 `界面截图/`） |
 | （补充）测试 | SE-G2-06 | 测试报告 | [06-测试说明.md](06-测试说明.md) |
 | 答辩 PPT | — | 最终答辩 PPT | `docs/汇报-最终答辩-完整版.pptx` |
-| 系统演示视频 | — | — | 待录制 |
+| 系统演示视频 | — | 老师端、学生端演示视频（无声，配讲稿） | 单独提交 `演示视频材料.zip`（老师端约 11 分 38 秒、学生端约 27 分钟、两份讲稿、四维画像补图）；录制脚本在 `tools/demo/` |
 
 ## 二、每份文档的内容
 
@@ -56,3 +56,10 @@ cd backend
 ```
 
 （重新记录 42 个功能执行的 SQL）
+
+```powershell
+$env:DEMO_SEGMENTS = "segments_teacher.mjs"; node tools/demo/record.mjs
+```
+
+（自动录老师端演示：真实操作平台、真实速度；学生端把 `segments_teacher.mjs` 换成 `segments_student.mjs`；录完用 `python tools/demo/encode.py 帧目录 输出.mp4 段名…` 合成视频）
+
