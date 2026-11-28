@@ -1,8 +1,105 @@
-# 数据库说明（MySQL）
+# 软件工程智能学习平台 · 数据库说明书（MySQL）
 
-> 软件工程智能学习平台 · 第 2 组 · 2026-11-27
-> 这份文档把数据库的每一样东西都写清楚：数据存在哪些地方（第一节）、表怎么设计（第二节）、后端怎么调用（第三节）、JSON 列里面的结构（第四节）、怎么搬数据和备份（第五节）、换到 MySQL 时修好的问题（第六节）、**33 张表逐张的详细说明（第七节）**。
-> 例子都是在本机 MySQL 里查出来的真实数据。第七节由 `tools/docs/gen_db_report.py` 从建表语句、后端源码和 MySQL 直接生成，重新生成：`python tools/docs/build_docs.py`。
+<!-- 文档信息 开始 -->
+
+| 项目 | 内容 |
+|---|---|
+| 项目名称 | 软件工程智能学习平台 |
+| 文档名称 | 数据库说明书（MySQL） |
+| 文档编号 | SE-G2-07 |
+| 版本 | V1.0 |
+| 日期 | 2026-11-28 |
+| 编写 | 第 2 组 |
+| 代码仓库 | GitHub：BRYANSOONZEN/Ai-Agent-Learning-Assistant，分支 feature/ai-learning-studywise |
+
+**修订记录**
+
+| 版本 | 日期 | 说明 |
+|---|---|---|
+| V1.0 | 2026-11-28 | 按提交时的代码整理，首次提交 |
+
+**说明**
+
+<!-- 说明 -->
+- 这份文档把数据库的每一样东西都写清楚：数据存在哪些地方（第一节）、表怎么设计（第二节）、后端怎么调用（第三节）、JSON 列里面的结构（第四节）、怎么搬数据和备份（第五节）、换到 MySQL 时修好的问题（第六节）、**33 张表逐张的详细说明（第七节）**。
+- 例子都是在本机 MySQL 里查出来的真实数据。第七节由 `tools/docs/gen_db_report.py` 从建表语句、后端源码和 MySQL 直接生成，重新生成：`python tools/docs/build_docs.py`。
+<!-- 说明完 -->
+
+**目录**
+
+- 一、所有存数据的地方
+  - 1.1 ① MySQL 主库
+  - 1.2 ② H2 文件库
+  - 1.3 ③ H2 内存库（测试）
+  - 1.4 ④ 资料文件
+  - 1.5 ⑤ 资料处理服务的缓存
+  - 1.6 ⑥ 浏览器里存的东西（localStorage）
+  - 1.7 ⑦ 连接数据库的配置
+- 二、怎么存：表的设计
+  - 2.1 33 张表，按用途分组
+  - 2.2 几条设计约定（为什么这样存）
+  - 2.3 例子：`mastery` 表在 MySQL 里长什么样
+  - 2.4 例子：资料转出来的文字（`material_text`）
+- 三、怎么调用：从页面到 SQL
+  - 3.1 分层
+  - 3.2 例子：学生交卷时，数据库发生了什么
+  - 3.3 例子：老师上传课件，到识别出知识点
+  - 3.4 全部功能的调用记录在第八节
+- 四、JSON 列里面存的是什么
+  - 4.1 `chapter_kp.key_points`：知识点的要点（每条带出处）
+  - 4.2 `chapter_kp.misconceptions`、`chapter_kp.sources`
+  - 4.3 `exercise` 表里的 JSON 列
+  - 4.4 `feynman_setup.drafts`：AI 对话的草稿（每个知识点一份）
+  - 4.5 `feynman_session.state`：一次 AI 对话的全部进度
+  - 4.6 `feynman_message.judgment`：大模型对学生每一句的判断
+  - 4.7 其他 JSON 列
+- 五、从 H2 搬到 MySQL、备份、恢复
+- 六、换到 MySQL 时发现并修好的问题
+- 七、33 张表逐张说明（自动生成）
+  - `user`（账号）
+  - `course`（课程内容）
+  - `chapter`（课程内容）
+  - `chapter_item`（课程内容）
+  - `material`（资料）
+  - `material_job`（资料）
+  - `material_text`（资料）
+  - `chapter_kp_state`（知识点）
+  - `chapter_kp`（知识点）
+  - `knowledge_point`（知识点）
+  - `exercise`（练习）
+  - `exercise_knowledge_point`（练习）
+  - `enrollment`（选课）
+  - `learning_event`（学习记录）
+  - `item_progress`（学习记录）
+  - `answer_record`（学习记录）
+  - `mastery`（诊断 / 画像）
+  - `profile_snapshot`（诊断 / 画像）
+  - `feynman_setup`（AI 对话）
+  - `feynman_session`（AI 对话）
+  - `feynman_message`（AI 对话）
+  - `dialogue_topic`（AI 对话（旧版））
+  - `dialogue_session`（AI 对话（旧版））
+  - `dialogue_topic_state`（AI 对话（旧版））
+  - `dialogue_message`（AI 对话（旧版））
+  - `item_analysis`（老师干预）
+  - `class_issue`（老师干预）
+  - `class_push`（老师干预）
+  - `remedy_round`（小助手）
+  - `assistant_message`（小助手）
+  - `assistant_notice`（小助手）
+  - `recommendation`（学习推荐）
+  - `ai_call_log`（运维）
+- 八、每个功能调用数据库的实测记录（自动生成）
+  - 8.1 总表：每个功能读、写了哪些表
+  - 8.2 每个功能的调用链和 SQL
+
+<!-- 文档信息 结束 -->
+
+---
+
+---
+
+---
 
 ---
 
@@ -31,8 +128,8 @@
 | 库 | `se_platform`，33 张表，存储引擎 InnoDB（支持事务、行锁，崩溃后能恢复） |
 | 账号 | `root`：只用来管理（建库、建账号、备份）。`se_app`：后端用的账号，**只有 `se_platform` 这一个库的权限**，看不到也改不了别的库 |
 | 密码放在哪 | 两个密码都是随机生成的：`C:\ZI\mysql\本机密码.txt`（仓库外）；后端用的 `se_app` 密码另外写在 `backend/src/main/resources/application-local.yml`（这个文件被 `.gitignore` 排除，不会提交）。代码、提交记录、文档里都没有密码 |
-| 启动 MySQL | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysqld.exe --defaults-file=C:\ZI\mysql\my.ini --console`（或 Claude 启动项 `se-mysql`） |
-| 后端连 MySQL | 在 `backend` 里 `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"`（或启动项 `se-backend-mysql`，端口 8080） |
+| 启动 MySQL | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysqld.exe --defaults-file=C:\ZI\mysql\my.ini --console` |
+| 后端连 MySQL | 在 `backend` 里 `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"`（后端端口 8080） |
 | 自己连上去看 | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysql.exe -u root -p -h 127.0.0.1 --default-character-set=utf8mb4 se_platform`，然后 `SHOW TABLES;`、`DESC mastery;`、`SELECT * FROM chapter_kp;` |
 | 空库第一次启动 | 后端自动执行 `schema.sql`（建 33 张表）和 `data.sql`（演示数据） |
 | 已有的库再启动 | 不清空；`schema.sql` 里有、库里没有的表补建出来；`schema-upgrade.sql` 里的新列，库里没有才加（`KeepDataConfig`） |

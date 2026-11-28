@@ -19,3 +19,6 @@ for name, script in JOBS:
                   for sc in (script if isinstance(script, list) else [script]))
     open(path, "w", encoding="utf-8", newline="\n").write(head + "\n" + out)
     print("updated", name)
+
+# 清单变了，目录跟着刷新
+subprocess.run([sys.executable, os.path.join(HERE, "normalize_docs.py")], check=True)
