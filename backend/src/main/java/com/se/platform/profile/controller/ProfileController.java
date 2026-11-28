@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 学生画像，前缀 /api/profiles（docs/api.md 第 5 节）。打开时现算，不存快照 */
+/** 学生画像，前缀 /api/profiles：每章画像、课程四维画像、综合画像；老师查看单个学生。打开时现算，课程学完时另存一份快照 */
 @RestController
 @RequestMapping("/api/profiles")
 public class ProfileController {
@@ -45,7 +45,7 @@ public class ProfileController {
         return Result.ok(courseProfileService.profile(s, courseMapper.findUserName(s), id));
     }
 
-    /** GET /api/profiles/me：当前学生的画像（登录没做，是演示学生） */
+    /** GET /api/profiles/me：当前登录学生的综合画像 */
     @GetMapping("/me")
     public Result<StudentProfile> me() {
         return Result.ok(profileService.student(recordService.currentStudentId()));

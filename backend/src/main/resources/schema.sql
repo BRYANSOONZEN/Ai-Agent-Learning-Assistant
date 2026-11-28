@@ -1,6 +1,6 @@
 -- =====================================================================
 -- 建表语句：Spring Boot 启动时自动执行（application.yml 里 spring.sql.init.mode=always）
--- 表结构以 docs/database.md 为准，改表要先改文档。
+-- 表结构说明见 docs/提交材料/04-数据设计.md（由本文件生成）。
 -- 写法同时兼容 H2（MySQL 模式）和 MySQL 8：不写 ENGINE、CHARSET 这类只有 MySQL 认识的选项。
 -- =====================================================================
 
@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS course;
 DROP TABLE IF EXISTS `user`;
 
 -- ---------------------------------------------------------------------
--- 用户（docs/database.md 4.1）
+-- 用户
 -- user 在 H2 里是关键字，所以表名加反引号；application.yml 里的 NON_KEYWORDS=USER 也是为了它
 -- ---------------------------------------------------------------------
 CREATE TABLE `user` (
@@ -19,7 +19,7 @@ CREATE TABLE `user` (
     password_hash VARCHAR(100) NOT NULL,                -- BCrypt 哈希，不存明文
     name          VARCHAR(32)  NOT NULL,                -- 显示姓名
     role          VARCHAR(16)  NOT NULL,                -- student / teacher / admin
-    clazz_id      BIGINT,                               -- 学生所在班级（班级表以后再建）
+    clazz_id      BIGINT,                               -- 学生所在班级（预留；全班按选课统计）
     status        TINYINT      NOT NULL DEFAULT 1,      -- 1 正常，0 禁用
     token_version INT          NOT NULL DEFAULT 0,      -- 令牌版本：退出登录、改密码、管理员重置密码时加 1，旧令牌立即失效
     must_change_password TINYINT NOT NULL DEFAULT 0,    -- 1 = 管理员开的账号或重置过的密码，第一次登录要先改密码
@@ -31,7 +31,7 @@ CREATE TABLE `user` (
 );
 
 -- ---------------------------------------------------------------------
--- 课程（docs/database.md 4.1）
+-- 课程
 -- 前端要的 teacher（教师姓名）、chapterCount、studentCount 不存在这里，查询时计算
 -- ---------------------------------------------------------------------
 CREATE TABLE course (
@@ -52,7 +52,7 @@ CREATE TABLE course (
 CREATE INDEX idx_course_teacher ON course (teacher_id);
 
 -- ---------------------------------------------------------------------
--- 章节（docs/database.md 4.1，按新版设计加了 intro、status）
+-- 章节
 -- 一章 = 章节介绍 + 一串内容项（chapter_item：视频、文档、练习、AI 对话，数量和顺序由老师定）
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS chapter;
@@ -98,7 +98,7 @@ CREATE TABLE chapter_item (
 CREATE INDEX idx_chapter_item_chapter ON chapter_item (chapter_id);
 
 -- ---------------------------------------------------------------------
--- 知识点（docs/database.md 4.1）
+-- 知识点
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS knowledge_point;
 CREATE TABLE knowledge_point (
@@ -119,7 +119,7 @@ CREATE TABLE knowledge_point (
 CREATE INDEX idx_kp_chapter ON knowledge_point (chapter_id);
 
 -- ---------------------------------------------------------------------
--- 习题（docs/database.md 4.1，加了 chapter_id 和 option_notes）
+-- 习题
 -- option_notes：每个选项的误解说明，学生选错时错题讲解用；正确选项那一项留空
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS exercise;
@@ -166,7 +166,7 @@ CREATE TABLE exercise_knowledge_point (
 );
 
 -- ---------------------------------------------------------------------
--- 教学资料（docs/database.md 4.1）：课件、文档、视频。文件存磁盘，表里只存路径
+-- 教学资料：课件、文档、视频。文件存磁盘，表里只存路径
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS material;
 CREATE TABLE material (
@@ -187,7 +187,7 @@ CREATE TABLE material (
 CREATE INDEX idx_material_chapter ON material (chapter_id);
 
 -- ---------------------------------------------------------------------
--- 对话话题（docs/ai-implementation.md 2.1）：老师确认过的巩固问题，学生的 AI 对话从这里取题
+-- 对话话题：老师确认过的巩固问题，学生的 AI 对话从这里取题
 -- 老师填写情境问题和参考答案，AI 拆出要点、简单问法和提示，老师修改后保存
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS dialogue_topic;
@@ -218,7 +218,7 @@ CREATE TABLE dialogue_topic (
 CREATE INDEX idx_dialogue_topic_chapter ON dialogue_topic (chapter_id);
 
 -- ---------------------------------------------------------------------
--- 一次对话（docs/ai-implementation.md 2.2）：学生在某一章开始的一次巩固对话
+-- 一次对话：学生在某一章开始的一次巩固对话
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS dialogue_session;
 CREATE TABLE dialogue_session (
@@ -281,7 +281,7 @@ CREATE TABLE dialogue_message (
 CREATE INDEX idx_dialogue_message_session ON dialogue_message (session_id);
 
 -- ---------------------------------------------------------------------
--- AI 调用日志（docs/ai-implementation.md 2.5）：每次调模型记一条，老师拆要点和学生对话共用
+-- AI 调用日志：每次调模型记一条，所有调用大模型的功能共用
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS ai_call_log;
 CREATE TABLE ai_call_log (
@@ -303,7 +303,7 @@ CREATE TABLE ai_call_log (
 );
 
 -- ---------------------------------------------------------------------
--- 「记」：答题记录（docs/database.md 4.2）。每次作答都插新记录，重做也保留历史
+-- 「记」：答题记录。每次作答都插新记录，重做也保留历史
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS answer_record;
 CREATE TABLE answer_record (
@@ -327,7 +327,7 @@ CREATE TABLE answer_record (
 CREATE INDEX idx_answer_record_student ON answer_record (student_id, submitted_at);
 
 -- ---------------------------------------------------------------------
--- 「记」：学习行为（docs/database.md 4.2）
+-- 「记」：学习行为
 -- event_type：view_item 看了一项内容（duration_sec = 停留秒数）/ finish_item 学完一项
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS learning_event;
@@ -349,7 +349,7 @@ CREATE INDEX idx_learning_event_student ON learning_event (student_id, created_a
 --   文档：累计阅读 >= 30 秒，并且学生自己点了"我已读完"
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
--- 「资料 → 知识点」：老师上传的课件、视频转成文字，再由大模型识别本章知识点（设计见 docs/模块说明/设计方案-费曼式AI对话.md）
+-- 「资料 → 知识点」：老师上传的课件、视频转成文字，再由大模型识别本章知识点
 --   流程：上传一份就马上转文字（material_job）→ 老师点“上传完毕” → 资料都处理好就自动识别知识点（chapter_kp_state）
 --         → 知识点草稿（chapter_kp）→ 老师修改、确认 → 学生能看到知识点地图
 -- ---------------------------------------------------------------------
@@ -424,7 +424,7 @@ CREATE TABLE chapter_kp (                        -- 识别出的知识点（老�
 CREATE INDEX idx_chapter_kp_chapter ON chapter_kp (chapter_id, sort_order);
 
 -- ---------------------------------------------------------------------
--- 费曼式 AI 对话：学生把知识点讲给 AI 扮演的同学“小林”听（规则见 docs/模块说明/设计方案-费曼式AI对话.md 第十二节）
+-- 费曼式 AI 对话：学生把知识点讲给 AI 扮演的同学“小林”听
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS feynman_setup;
 CREATE TABLE feynman_setup (                     -- 一个 AI 对话项：老师选的知识点（最多 2 个）和大模型起草、老师确认的草稿
@@ -485,8 +485,8 @@ CREATE TABLE item_progress (
 );
 
 -- ---------------------------------------------------------------------
--- 「诊」：知识点掌握度（docs/database.md 4.2，算法见 docs/design.md 5.1）
--- 每人每知识点一行，交卷后重算；画像和预警都读这张表
+-- 「诊」：知识点掌握度
+-- 每人每知识点一行，交卷后重算；诊断、画像和小助手都读这张表
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS mastery;
 CREATE TABLE mastery (
@@ -511,7 +511,7 @@ CREATE TABLE mastery (
 DROP TABLE IF EXISTS recommendation;
 
 -- ---------------------------------------------------------------------
--- 小助手自动干预：每一轮补练（docs/模块说明/小助手-自动干预与聊天.md 第四节）
+-- 小助手自动干预：每一轮补练
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS remedy_round;
 CREATE TABLE remedy_round (
@@ -533,7 +533,7 @@ CREATE TABLE remedy_round (
 CREATE INDEX idx_remedy_student ON remedy_round (student_id, knowledge_point_id);
 
 -- ---------------------------------------------------------------------
--- 小助手聊天记录（docs/模块说明/小助手-自动干预与聊天.md 第三节）
+-- 小助手聊天记录
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS assistant_message;
 CREATE TABLE assistant_message (
@@ -551,7 +551,7 @@ CREATE TABLE assistant_message (
 CREATE INDEX idx_assistant_message ON assistant_message (student_id, chapter_id);
 
 -- ---------------------------------------------------------------------
--- 老师干预：每次练习的全班分析（docs/模块说明/老师干预-全班分析.md）
+-- 老师干预：每次练习的全班分析
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS item_analysis;
 CREATE TABLE item_analysis (
@@ -587,7 +587,7 @@ CREATE TABLE class_issue (
 );
 CREATE INDEX idx_class_issue_item ON class_issue (item_id);
 
--- 老师确认后推给做错的学生：补充讲解 + 新题（docs/模块说明/老师干预-全班分析.md 第四、五节）
+-- 老师确认后推给做错的学生：补充讲解 + 新题
 DROP TABLE IF EXISTS class_push;
 CREATE TABLE class_push (
     id                 BIGINT       NOT NULL AUTO_INCREMENT,
@@ -623,7 +623,7 @@ CREATE TABLE assistant_notice (
 CREATE INDEX idx_assistant_notice ON assistant_notice (student_id);
 
 -- ---------------------------------------------------------------------
--- 「画」：学完一门课时的画像快照（docs/模块说明/学生画像-设计.md）
+-- 「画」：学完一门课时的画像快照
 -- 全部章节学完、第一次打开课程画像时存一份，之后不再改；平时的画像仍然每次现算
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS profile_snapshot;

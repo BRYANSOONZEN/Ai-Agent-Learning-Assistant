@@ -17,20 +17,20 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 CSS = """
-body { font-family: "宋体", SimSun, serif; font-size: 12pt; line-height: 1.5; }
-h1 { font-family: "黑体", SimHei, sans-serif; font-size: 22pt; text-align: center; margin: 24pt 0 18pt; }
-h2 { font-family: "黑体", SimHei, sans-serif; font-size: 16pt; margin: 18pt 0 8pt; }
-h3 { font-family: "黑体", SimHei, sans-serif; font-size: 14pt; margin: 12pt 0 6pt; }
-h4 { font-family: "黑体", SimHei, sans-serif; font-size: 12pt; margin: 10pt 0 4pt; }
-p { margin: 4pt 0; text-align: justify; }
-table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; }
-th, td { border: 1px solid #000; padding: 3pt 5pt; font-size: 10.5pt; vertical-align: top; }
+body { font-family: "宋体", SimSun, serif; font-size: 10.5pt; line-height: 1.4; }
+h1 { font-family: "黑体", SimHei, sans-serif; font-size: 18pt; text-align: center; margin: 24pt 0 18pt; }
+h2 { font-family: "黑体", SimHei, sans-serif; font-size: 14pt; margin: 14pt 0 6pt; }
+h3 { font-family: "黑体", SimHei, sans-serif; font-size: 12pt; margin: 10pt 0 4pt; }
+h4 { font-family: "黑体", SimHei, sans-serif; font-size: 10.5pt; margin: 8pt 0 3pt; }
+p { margin: 3pt 0; text-align: justify; }
+li { font-size: 10.5pt; }
+table { border-collapse: collapse; width: 100%; margin: 4pt 0 8pt; }
+th, td { border: 1px solid #000; padding: 2pt 4pt; font-size: 9pt; vertical-align: top; }
 th { background: #D9D9D9; font-family: "黑体", SimHei, sans-serif; font-weight: normal; }
-code { font-family: Consolas, monospace; font-size: 10pt; }
-pre { font-family: Consolas, monospace; font-size: 9.5pt; background: #F2F2F2; padding: 6pt; }
-blockquote { margin: 4pt 0 4pt 18pt; color: #333; }
-.fig { text-align: center; margin: 8pt 0; }
-.caption { text-align: center; font-size: 10.5pt; margin-bottom: 10pt; }
+code { font-family: Consolas, monospace; font-size: 9pt; }
+pre { font-family: Consolas, monospace; font-size: 8.5pt; background: #F2F2F2; padding: 5pt; }
+blockquote { margin: 3pt 0 3pt 18pt; color: #333; }
+.fig { text-align: center; margin: 6pt 0; }
 """
 
 
@@ -112,13 +112,13 @@ def convert(md, src_dir, img_dir):
                 rows.append(cells(lines[i]))
                 i += 1
             # 列宽：按显示宽度算（汉字算 2、字母数字算 1）。短列（编号、优先级、标签）给刚好放得下的宽度，
-            # 长文字列分剩下的宽度；一行大约 84 个半角宽
+            # 长文字列分剩下的宽度；一行大约 100 个半角宽（表格 9 磅字）
             def dw(x):
                 return sum(2 if ord(ch) > 127 else 1 for ch in re.sub(r'[`*]', '', x))
             widest = [max(dw(r[k]) if k < len(r) else 0 for r in [head] + rows) for k in range(len(head))]
             fixed = {k: w + 3 for k, w in enumerate(widest) if w <= 18}
             flex = {k: min(w, 80) for k, w in enumerate(widest) if k not in fixed}
-            room = max(84 - sum(fixed.values()), 24 * max(1, len(flex)))
+            room = max(100 - sum(fixed.values()), 28 * max(1, len(flex)))
             units = [fixed[k] if k in fixed else room * flex[k] / sum(flex.values()) for k in range(len(head))]
             total = sum(units)
             pct = [100 * u / total for u in units]
@@ -173,17 +173,22 @@ def main(src, dst):
         fj = os.path.join(work, 'figs.json')
         json.dump(figs, open(fj, 'w', encoding='utf-8'), ensure_ascii=False)
         subprocess.run(['node', os.path.join(HERE, 'render_mermaid.mjs'), fj, img_dir], check=True)
-        # 图片按实际大小（2 倍图的一半）显示，最宽 600 像素（约 16 厘米）
-        from PIL import Image
-        def size(m):
-            p = m.group(1)
-            w, h = Image.open(p).size
-            k = min(1.0, 600 / (w / 2), 820 / (h / 2))  # 最宽约 16 厘米、最高约 22 厘米（一页以内）
-            return '<img src="%s" width="%d" height="%d"' % (p, int(w / 2 * k), int(h / 2 * k))
-        body = re.sub(r'<img src="([^"]+\.png)" data-fig="[^"]+"', size, body)
     # 相对路径的图片（界面截图）换成绝对路径
     body = re.sub(r'<img src="(?!/|[A-Za-z]:)([^"]+)"',
                   lambda m: '<img src="%s"' % os.path.join(os.path.dirname(src), m.group(1)).replace('\\', '/'), body)
+    # 所有图片都放进页面里：最宽约 16 厘米（600 像素）、最高约 22 厘米（820 像素）。
+    # 流程图是 2 倍清晰度渲染的，按一半大小算原始尺寸；截图按原尺寸算
+    from PIL import Image
+    def size(m):
+        p = m.group(1)
+        if not os.path.exists(p):
+            return m.group(0)
+        w, h = Image.open(p).size
+        if 'data-fig' in m.group(0):
+            w, h = w / 2, h / 2
+        k = min(1.0, 600 / w, 820 / h)
+        return '<img src="%s" width="%d" height="%d"' % (p, int(w * k), int(h * k))
+    body = re.sub(r'<img src="([^"]+)"(?: data-fig="[^"]+")?', size, body)
     page = os.path.join(work, 'doc.html')
     open(page, 'w', encoding='utf-8').write(
         '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>%s</body></html>' % (CSS, body))

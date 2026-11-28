@@ -14,7 +14,8 @@ DATE = '2026-11-28'
 REPO = 'GitHub：BRYANSOONZEN/Ai-Agent-Learning-Assistant，分支 feature/ai-learning-studywise'
 
 # 只放标题和目录、不放文档信息表和修订记录的文档（按提交要求逐份改成规范格式）
-PLAIN = {'01-需求分析.md'}
+PLAIN = {'01-需求分析.md', '02-组件设计.md', '03-接口设计.md', '04-数据设计.md', '05-界面设计.md',
+         '06-测试说明.md', '07-数据库说明（MySQL）.md'}
 
 DOCS_INFO = [
     ('01-需求分析.md', 'SE-G2-01', '需求分析说明书'),
@@ -55,6 +56,36 @@ def split_header(text):
     return merged, body
 
 
+CN = '一二三四五六七八九十'
+
+
+def renumber(body):
+    """正文标题统一编号：## 1 标题、### 1.1 标题（原来的“一、”“3.1 ”等编号去掉重排；“（自动生成）”去掉）。
+    界面设计里的截图编号（### 01 登录）改成“### 4.1 登录（截图 01）”。代码块里的 # 不动。"""
+    out, h2, h3, fence = [], 0, 0, False
+    for line in body.split('\n'):
+        if line.strip().startswith('```'):
+            fence = not fence
+        m = None if fence else re.match(r'^(#{2,3}) (.+)$', line)
+        if not m:
+            out.append(line)
+            continue
+        level, t = m.group(1), m.group(2).replace('（自动生成）', '').strip()
+        if level == '##':
+            t = re.sub(r'^([%s]+、|\d+(\.\d+)*[ 、])\s*' % CN, '', t)
+            h2 += 1
+            h3 = 0
+            out.append('## %d %s' % (h2, t))
+        else:
+            code = re.match(r'^(\d{2}b?) (.+)$', t)
+            if code:
+                t = '%s（截图 %s）' % (code.group(2), code.group(1))
+            t = re.sub(r'^\d+\.\d+\s+', '', t)
+            h3 += 1
+            out.append('### %d.%d %s' % (h2, h3, t))
+    return '\n'.join(out)
+
+
 def toc(body):
     items = []
     for line in body.split('\n'):
@@ -70,6 +101,7 @@ def main():
         text = open(p, encoding='utf-8').read()
         notes, body = split_header(text)
         if name in PLAIN:
+            body = renumber(body)
             out = '\n'.join(['# 软件工程智能学习平台 · %s' % title, '', BEGIN, '', '**目录**', '', toc(body), '', END, '', '---', ''])
             open(p, 'w', encoding='utf-8', newline='\n').write(out + '\n' + body)
             print('ok', name)

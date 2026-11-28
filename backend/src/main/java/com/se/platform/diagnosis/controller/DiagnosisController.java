@@ -11,9 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 学情诊断，前缀 /api/diagnosis（docs/api.md 第 4 节）。
- * 掌握度在交卷时就更新好了（MasteryService），这里只读。
- * 班级表还没建，老师先按课程看全部学生的汇总。
+ * 学情诊断，前缀 /api/diagnosis：学生看自己的诊断；老师看课程的全班诊断和单个学生。
+ * 掌握度在交卷时已经算好（MasteryService），这里只读；全班指加入了这门课的学生。
  */
 @RestController
 @RequestMapping("/api/diagnosis")
@@ -27,7 +26,7 @@ public class DiagnosisController {
         this.recordService = recordService;
     }
 
-    /** GET /api/diagnosis/me：当前学生自己的诊断（登录没做，是演示学生） */
+    /** GET /api/diagnosis/me：当前登录学生自己的诊断 */
     @GetMapping("/me")
     public Result<StudentDiagnosis> me() {
         return Result.ok(diagnosisService.student(recordService.currentStudentId()));

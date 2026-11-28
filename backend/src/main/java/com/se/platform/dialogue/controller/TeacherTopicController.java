@@ -22,9 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 老师管理对话话题的接口，前缀 /api/teacher/topics。
- *
- * <p>章节表还没建，chapterId 先默认 1。登录和权限还没做，暂时不检查是不是老师。
+ * 话题式 AI 对话的话题管理（老师），前缀 /api/teacher/topics：话题的增删改、排序和起草。
  */
 @RestController
 @RequestMapping("/api/teacher/topics")

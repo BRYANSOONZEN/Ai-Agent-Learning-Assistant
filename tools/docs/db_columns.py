@@ -14,7 +14,7 @@ COL = {
     'item_id': '哪个内容项 → chapter_item.id',
     'knowledge_point_id': '哪个知识点 → knowledge_point.id',
     'exercise_id': '哪道题 → exercise.id',
-    'session_id': '属于哪次对话（费曼对话 → feynman_session.id；旧版 → dialogue_session.id）',
+    'session_id': '属于哪次对话（讲给 AI 同学听 → feynman_session.id；话题式 → dialogue_session.id）',
     'analysis_id': '属于哪次全班分析 → item_analysis.id',
     'ai_call_id': '这一句对应的那次大模型调用 → ai_call_log.id',
     'uploaded_by': '上传的老师 → user.id',

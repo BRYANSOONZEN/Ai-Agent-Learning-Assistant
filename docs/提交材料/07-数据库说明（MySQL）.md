@@ -2,115 +2,105 @@
 
 <!-- 文档信息 开始 -->
 
-| 项目 | 内容 |
-|---|---|
-| 项目名称 | 软件工程智能学习平台 |
-| 文档名称 | 数据库说明书（MySQL） |
-| 文档编号 | SE-G2-07 |
-| 版本 | V1.0 |
-| 日期 | 2026-11-28 |
-| 编写 | 第 2 组 |
-| 代码仓库 | GitHub：BRYANSOONZEN/Ai-Agent-Learning-Assistant，分支 feature/ai-learning-studywise |
-
-**修订记录**
-
-| 版本 | 日期 | 说明 |
-|---|---|---|
-| V1.0 | 2026-11-28 | 按提交时的代码整理，首次提交 |
-
-**说明**
-
-<!-- 说明 -->
-- 这份文档把数据库的每一样东西都写清楚：数据存在哪些地方（第一节）、表怎么设计（第二节）、后端怎么调用（第三节）、JSON 列里面的结构（第四节）、怎么搬数据和备份（第五节）、换到 MySQL 时修好的问题（第六节）、**32 张表逐张的详细说明（第七节）**。
-- 例子都是在本机 MySQL 里查出来的真实数据。第七节由 `tools/docs/gen_db_report.py` 从建表语句、后端源码和 MySQL 直接生成，重新生成：`python tools/docs/build_docs.py`。
-<!-- 说明完 -->
-
 **目录**
 
-- 一、所有存数据的地方
-  - 1.1 ① MySQL 主库
-  - 1.2 ② H2 文件库
-  - 1.3 ③ H2 内存库（测试）
-  - 1.4 ④ 资料文件
-  - 1.5 ⑤ 资料处理服务的缓存
-  - 1.6 ⑥ 浏览器里存的东西（localStorage）
-  - 1.7 ⑦ 连接数据库的配置
-- 二、怎么存：表的设计
-  - 2.1 32 张表，按用途分组
-  - 2.2 几条设计约定（为什么这样存）
-  - 2.3 例子：`mastery` 表在 MySQL 里长什么样
-  - 2.4 例子：资料转出来的文字（`material_text`）
-- 三、怎么调用：从页面到 SQL
-  - 3.1 分层
-  - 3.2 例子：学生交卷时，数据库发生了什么
-  - 3.3 例子：老师上传课件，到识别出知识点
-  - 3.4 全部功能的调用记录在第八节
-- 四、JSON 列里面存的是什么
-  - 4.1 `chapter_kp.key_points`：知识点的要点（每条带出处）
-  - 4.2 `chapter_kp.misconceptions`、`chapter_kp.sources`
-  - 4.3 `exercise` 表里的 JSON 列
-  - 4.4 `feynman_setup.drafts`：AI 对话的草稿（每个知识点一份）
-  - 4.5 `feynman_session.state`：一次 AI 对话的全部进度
-  - 4.6 `feynman_message.judgment`：大模型对学生每一句的判断
-  - 4.7 其他 JSON 列
-- 五、从 H2 搬到 MySQL、备份、恢复
-- 六、换到 MySQL 时发现并修好的问题
-- 七、32 张表逐张说明（自动生成）
-  - `user`（账号）
-  - `course`（课程内容）
-  - `chapter`（课程内容）
-  - `chapter_item`（课程内容）
-  - `material`（资料）
-  - `material_job`（资料）
-  - `material_text`（资料）
-  - `chapter_kp_state`（知识点）
-  - `chapter_kp`（知识点）
-  - `knowledge_point`（知识点）
-  - `exercise`（练习）
-  - `exercise_knowledge_point`（练习）
-  - `enrollment`（选课）
-  - `learning_event`（学习记录）
-  - `item_progress`（学习记录）
-  - `answer_record`（学习记录）
-  - `mastery`（诊断 / 画像）
-  - `profile_snapshot`（诊断 / 画像）
-  - `feynman_setup`（AI 对话）
-  - `feynman_session`（AI 对话）
-  - `feynman_message`（AI 对话）
-  - `dialogue_topic`（AI 对话（旧版））
-  - `dialogue_session`（AI 对话（旧版））
-  - `dialogue_topic_state`（AI 对话（旧版））
-  - `dialogue_message`（AI 对话（旧版））
-  - `item_analysis`（老师干预）
-  - `class_issue`（老师干预）
-  - `class_push`（老师干预）
-  - `remedy_round`（小助手）
-  - `assistant_message`（小助手）
-  - `assistant_notice`（小助手）
-  - `ai_call_log`（运维）
-- 八、每个功能调用数据库的实测记录（自动生成）
-  - 8.1 总表：每个功能读、写了哪些表
-  - 8.2 每个功能的调用链和 SQL
+- 1 引言
+  - 1.1 编写目的
+  - 1.2 范围
+- 2 数据存放位置
+  - 2.1 ① MySQL 主库
+  - 2.2 ② H2 文件库
+  - 2.3 ③ H2 内存库（测试）
+  - 2.4 ④ 资料文件
+  - 2.5 ⑤ 资料处理服务的缓存
+  - 2.6 ⑥ 浏览器里存的东西（localStorage）
+  - 2.7 ⑦ 连接数据库的配置
+- 3 表的设计
+  - 3.1 32 张表，按用途分组
+  - 3.2 几条设计约定（为什么这样存）
+  - 3.3 例子：`mastery` 表在 MySQL 里长什么样
+  - 3.4 例子：资料转出来的文字（`material_text`）
+- 4 调用方式：从页面请求到 SQL
+  - 4.1 分层
+  - 4.2 例子：学生交卷时，数据库发生了什么
+  - 4.3 例子：老师上传课件，到识别出知识点
+  - 4.4 全部功能的调用记录
+- 5 JSON 列的结构
+  - 5.1 `chapter_kp.key_points`：知识点的要点（每条带出处）
+  - 5.2 `chapter_kp.misconceptions`、`chapter_kp.sources`
+  - 5.3 `exercise` 表里的 JSON 列
+  - 5.4 `feynman_setup.drafts`：AI 对话的草稿（每个知识点一份）
+  - 5.5 `feynman_session.state`：一次 AI 对话的全部进度
+  - 5.6 `feynman_message.judgment`：大模型对学生每一句的判断
+  - 5.7 其他 JSON 列
+- 6 备份、恢复和数据导入
+- 7 MySQL 兼容性设计
+- 8 数据表逐张说明（共 32 张）
+  - 8.1 `user`（账号）
+  - 8.2 `course`（课程内容）
+  - 8.3 `chapter`（课程内容）
+  - 8.4 `chapter_item`（课程内容）
+  - 8.5 `material`（资料）
+  - 8.6 `material_job`（资料）
+  - 8.7 `material_text`（资料）
+  - 8.8 `chapter_kp_state`（知识点）
+  - 8.9 `chapter_kp`（知识点）
+  - 8.10 `knowledge_point`（知识点）
+  - 8.11 `exercise`（练习）
+  - 8.12 `exercise_knowledge_point`（练习）
+  - 8.13 `enrollment`（选课）
+  - 8.14 `learning_event`（学习记录）
+  - 8.15 `item_progress`（学习记录）
+  - 8.16 `answer_record`（学习记录）
+  - 8.17 `mastery`（诊断 / 画像）
+  - 8.18 `profile_snapshot`（诊断 / 画像）
+  - 8.19 `feynman_setup`（AI 对话）
+  - 8.20 `feynman_session`（AI 对话）
+  - 8.21 `feynman_message`（AI 对话）
+  - 8.22 `dialogue_topic`（AI 对话（话题式））
+  - 8.23 `dialogue_session`（AI 对话（话题式））
+  - 8.24 `dialogue_topic_state`（AI 对话（话题式））
+  - 8.25 `dialogue_message`（AI 对话（话题式））
+  - 8.26 `item_analysis`（老师干预）
+  - 8.27 `class_issue`（老师干预）
+  - 8.28 `class_push`（老师干预）
+  - 8.29 `remedy_round`（小助手）
+  - 8.30 `assistant_message`（小助手）
+  - 8.31 `assistant_notice`（小助手）
+  - 8.32 `ai_call_log`（运维）
+- 9 每个功能调用数据库的实测记录
+  - 9.1 总表：每个功能读、写了哪些表
+  - 9.2 每个功能的调用链和 SQL
 
 <!-- 文档信息 结束 -->
 
 ---
 
-## 一、所有存数据的地方
+## 1 引言
 
-平台的数据存在下面 **7 个地方**。真正的业务数据只在 ① MySQL 里；②③ 是另外两个数据库（开发、测试用）；④⑤ 是磁盘上的文件；⑥ 是每个用户浏览器里的小东西；⑦ 是连接数据库要用的配置。
+### 1.1 编写目的
+
+本说明书完整说明平台数据库的存储和调用：数据存放在哪些地方、表如何设计、后端如何从页面请求一直调用到 SQL、JSON 列的内部结构、备份恢复，以及全部 32 张表的逐表说明和 42 个功能实际执行的 SQL。表结构的设计约定见《数据设计说明书》。
+
+### 1.2 范围
+
+包括 MySQL 8.4 主库、自动测试用的 H2 内存库、资料文件、资料处理服务的缓存、浏览器本地存储和数据库连接配置。第 8、9 章由脚本从后端源码、运行中的 MySQL 和自动测试的 SQL 记录生成，与代码和数据一致。
+
+## 2 数据存放位置
+
+平台的数据存放在下面 **7 个地方**。业务数据只在 ① MySQL 中；②③ 是开发和自动测试用的数据库；④⑤ 是磁盘上的文件；⑥ 是用户浏览器中的少量本地数据；⑦ 是连接数据库的配置。
 
 | # | 存在哪里 | 是什么 | 谁在用 | 里面有什么 |
 |---|---|---|---|---|
-| ① | **MySQL 8.4 库 `se_platform`** | 主数据库 | 网站正常运行（演示、录视频、答辩） | 全部业务数据，32 张表 |
-| ② | H2 文件库 `backend/data/platform.mv.db`（约 3.5 MB） | 开发用的数据库 | 不加 `mysql` 配置启动后端时 | 11-27 搬到 MySQL 那一刻的数据，之后不再更新 |
+| ① | **MySQL 8.4 库 `se_platform`** | 主数据库 | 平台正常运行时 | 全部业务数据，32 张表 |
+| ② | H2 文件库 `backend/data/platform.mv.db` | 不安装 MySQL 时的开发库 | 不加 `mysql` 配置启动后端时 | 与 MySQL 相同的表结构（同一份建表语句） |
 | ③ | H2 内存库（只在内存里） | 测试用的数据库 | 跑自动测试和 CI 时，每个测试类一个 | 只有 `data.sql` 的演示数据，测试结束就没了 |
-| ④ | 磁盘文件夹 `backend/uploads/年/月/`（现在 537 个文件，约 1.4 GB） | 资料文件本身 | 后端 | 老师上传的视频、课件 PDF、PPT、Word；PPT、Word 转好的 PDF（原文件名后加 `.pdf`） |
+| ④ | 磁盘文件夹 `backend/uploads/年/月/` | 资料文件本身 | 后端 | 老师上传的视频、课件 PDF、PPT、Word；PPT、Word 转好的 PDF（原文件名后加 `.pdf`） |
 | ⑤ | 磁盘文件夹 `tools/material_kp/.cache/` | 资料处理服务的缓存 | Python 资料处理服务 | 每份处理过的文件一个 JSON：转出的文字和统计；按文件内容的 SHA-256 命名，同一个文件再传就直接用，不再花时间和费用 |
-| ⑥ | 用户浏览器的 localStorage | 每个人自己浏览器里的小东西 | 前端 | 登录令牌、本地学习进度副本、读过的消息，见 1.6 |
-| ⑦ | 配置文件 | 连接数据库用的地址、账号 | 后端启动时读 | 见 1.7 |
+| ⑥ | 用户浏览器的 localStorage | 用户本地的少量数据 | 前端 | 登录令牌、本地学习进度副本、已读消息等，见下文 |
+| ⑦ | 配置文件 | 连接数据库用的地址、账号 | 后端启动时读 | 见下文 |
 
-### 1.1 ① MySQL 主库
+### 2.1 ① MySQL 主库
 
 | 项目 | 内容 |
 |---|---|
@@ -126,34 +116,34 @@
 | 自己连上去看 | `C:\ZI\mysql\mysql-8.4.11-winx64\bin\mysql.exe -u root -p -h 127.0.0.1 --default-character-set=utf8mb4 se_platform`，然后 `SHOW TABLES;`、`DESC mastery;`、`SELECT * FROM chapter_kp;` |
 | 空库第一次启动 | 后端自动执行 `schema.sql`（建 32 张表）和 `data.sql`（演示数据） |
 | 已有的库再启动 | 不清空；`schema.sql` 里有、库里没有的表补建出来；`schema-upgrade.sql` 里的新列，库里没有才加（`KeepDataConfig`） |
-| 现在的数据 | 11-27 从 H2 开发库整体搬过来（29 张表、664 行），之后的新数据都写在这里 |
+| 现有数据 | 演示课程「软件测试」「智能软件工程」的课程内容、知识点、题目，以及演示学生的学习记录 |
 
-### 1.2 ② H2 文件库
+### 2.2 ② H2 文件库
 
 - 文件：`backend/data/platform.mv.db`（被 `.gitignore` 排除）。连接：`jdbc:h2:file:./data/platform;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;AUTO_SERVER=TRUE`，账号 `sa`、空密码。
 - 用的是和 MySQL **同一份** `schema.sql`，MySQL 兼容模式，表结构一样。
-- 11-27 数据搬到 MySQL 以后就不再用了；如果不加 `mysql` 配置启动后端，用的就是它，看不到 11-27 以后的新数据。
+- 用于没有安装 MySQL 的开发环境：不加 `mysql` 配置启动后端时使用它；平台正式运行使用 MySQL。
 - 用这个库启动时，可以在浏览器打开 `http://localhost:8080/h2-console` 直接看表（连 MySQL 时关掉了）。
 
-### 1.3 ③ H2 内存库（测试）
+### 2.3 ③ H2 内存库（测试）
 
 - 连接：`jdbc:h2:mem:platform;…`（`backend/src/test/resources/config/application.yml`）。
 - 每个测试类启动时建表、放演示数据，测试之间互不影响；测试结束就没了。158 个自动测试和 GitHub 上的 CI 都用它，不需要装 MySQL。
 
-### 1.4 ④ 资料文件
+### 2.4 ④ 资料文件
 
 - 老师上传的文件存成 `backend/uploads/2026/11/<随机 uuid>.<扩展名>`，用随机名字，避免重名、也避免别人猜到文件名。
 - 数据库 `material` 表只存这个相对路径、原文件名、大小、类型；学生和老师通过 `GET /api/materials/{id}/file` 取文件（要登录，视频支持拖动进度条）。
 - PPT、Word 用本机 Office 转好的 PDF 放在原文件旁边：`<uuid>.pptx.pdf`，通过 `…/file?pdf=true` 取。
 - 替换或删除资料时，数据库里的 `material` 记录是逻辑删除，磁盘文件先保留（可以恢复）。
 
-### 1.5 ⑤ 资料处理服务的缓存
+### 2.5 ⑤ 资料处理服务的缓存
 
 - 位置 `tools/material_kp/.cache/`（被 `.gitignore` 排除），文件名 = 文件内容的 SHA-256 + 类型，例如 `e87f…-pdf-img.json`、`3942…-video.json`。
 - 内容：转出来的每一段文字（页码 / 起止秒）和统计（页数、图片数、耗时、看图用的 token）。
 - 作用：同一个文件再上传（或重新处理）时直接用缓存，不再跑语音识别、不再花钱看图。删掉缓存不影响数据库里已经存好的文字。
 
-### 1.6 ⑥ 浏览器里存的东西（localStorage）
+### 2.6 ⑥ 浏览器里存的东西（localStorage）
 
 这些只在用户自己的浏览器里，只是为了方便，丢了不影响任何数据（服务器上都有）。
 
@@ -164,13 +154,13 @@
 | `se-platform-learn-last:<用户 id>` | 上次学到哪里（首页“接着上次学习”） | 首页不显示“接着上次学习” |
 | `se-messages-read-<用户 id>` | 消息铃铛里哪些消息已读 | 消息重新显示成未读 |
 | `se-assistant-seen` | 小助手里哪些新内容已经看过（角标数字用） | 角标重新出现 |
-| `se-platform-dialogue-session:<章>:<项>` | 旧版 AI 对话正在进行的会话 id（刷新后接着聊） | 旧版对话从最近一次接着显示 |
+| `se-platform-dialogue-session:<章>:<项>` | 话题式 AI 对话正在进行的会话 id（刷新后接着聊） | 从最近一次会话接着显示 |
 
-### 1.7 ⑦ 连接数据库的配置
+### 2.7 ⑦ 连接数据库的配置
 
 | 文件 | 内容 | 进不进 Git |
 |---|---|---|
-| `backend/src/main/resources/application.yml` | 默认连 H2 文件库；MyBatis-Plus 设置（列名转驼峰、逻辑删除字段、打印 SQL） | 进 |
+| `backend/src/main/resources/application.yml` | 公共设置：MyBatis-Plus（列名转驼峰、逻辑删除字段、打印 SQL）；不加 `mysql` 配置时连 H2 文件库 | 进 |
 | `backend/src/main/resources/application-mysql.yml` | 加 `mysql` 配置时用：MySQL 地址 `jdbc:mysql://127.0.0.1:3306/se_platform`、账号 `se_app`、密码从环境变量 `MYSQL_PASSWORD` 或 `application-local.yml` 读 | 进（里面没有密码） |
 | `backend/src/main/resources/application-local.yml` | 本机私有：大模型 API key、MySQL 密码 | **不进**（`.gitignore`） |
 | `backend/src/test/resources/config/application.yml` | 测试：H2 内存库 | 进 |
@@ -178,27 +168,27 @@
 
 ---
 
-## 二、怎么存：表的设计
+## 3 表的设计
 
-### 2.1 32 张表，按用途分组
+### 3.1 32 张表，按用途分组
 
 | 用途 | 表 |
 |---|---|
 | 账号 | `user` |
 | 课程内容 | `course` → `chapter` → `chapter_item`（视频 / 文档 / 练习 / AI 对话）；`material`（文件信息）；`knowledge_point`；`exercise`、`exercise_knowledge_point`；`enrollment`（选课） |
 | 资料 → 文字 → 知识点 | `material_job`（转文字进度）、`material_text`（转出的文字，一段一行）、`chapter_kp_state`、`chapter_kp`（识别出的知识点） |
-| AI 对话 | `feynman_setup`（老师确认的草稿）、`feynman_session`（一次对话及进度）、`feynman_message`（每一句）；旧版 `dialogue_*` 4 张 |
+| AI 对话 | `feynman_setup`（老师确认的草稿）、`feynman_session`（一次对话及进度）、`feynman_message`（每一句）；话题式对话 `dialogue_*` 4 张 |
 | 学习记录 | `learning_event`（看了什么、学完什么）、`item_progress`（视频看过的时间段、文档阅读秒数）、`answer_record`（每一次作答） |
 | 诊断 / 画像 | `mastery`（每人每知识点一行）、`profile_snapshot`（学完时的画像快照） |
-| 干预 / 小助手 | `item_analysis`、`class_issue`、`class_push`（全班分析和推送）；`remedy_round`（补练、拓展；学习推荐页读它和 `class_push`）、`assistant_message`（聊天）、`assistant_notice`（提醒）、`recommendation` |
+| 干预 / 小助手 | `item_analysis`、`class_issue`、`class_push`（全班分析和推送）；`remedy_round`（补练、拓展；学习推荐页读它和 `class_push`）、`assistant_message`（聊天）、`assistant_notice`（提醒） |
 | 运维 | `ai_call_log`（每次调用大模型的 token、耗时、费用） |
 
-### 2.2 几条设计约定（为什么这样存）
+### 3.2 几条设计约定（为什么这样存）
 
 | 约定 | 例子 | 为什么 |
 |---|---|---|
 | 每张表 `id BIGINT AUTO_INCREMENT` 主键 | — | 简单、插入快 |
-| **不建外键约束**，引用关系写在列注释里 | `chapter.course_id → course.id` | H2 和 MySQL 两边都要能跑；删除时由业务代码决定是一起删还是拒绝 |
+| **不建外键约束**，引用关系写在列注释里 | `chapter.course_id → course.id` | 建表语句在 MySQL 和测试用的 H2 上都要能执行；删除时由业务代码决定是一起删还是拒绝 |
 | “每人每项一行”用唯一约束保证 | `mastery (student_id, knowledge_point_id)`、`enrollment (course_id, student_id)`、`item_progress (student_id, item_id)` | 并发时也不会出现两行；查询直接走这个索引 |
 | 结构化的内容存成 JSON 字符串（`TEXT`） | `exercise.options = ["8、12、16","7、8、16、17",…]`；`chapter_kp.key_points = [{"text":"…","sources":["D1-P4"]}]`；`feynman_session.state` 存整段对话的进度 | 这些内容总是整块读、整块写，不需要按里面的字段查；表结构简单 |
 | 记录只增不改 | `answer_record` 每次作答新增一行；`learning_event` 每个行为一行 | 掌握度、画像都从记录重算，算法改了可以用原始记录重新算一遍 |
@@ -206,7 +196,7 @@
 | 逻辑删除 | `deleted = 1` | 误删可以恢复；查询时 MyBatis-Plus 自动加 `deleted = 0` |
 | 时间列自动填 | `created_at`、`updated_at` | MyBatis-Plus 插入、更新时自动填 |
 
-### 2.3 例子：`mastery` 表在 MySQL 里长什么样
+### 3.3 例子：`mastery` 表在 MySQL 里长什么样
 
 ```sql
 CREATE TABLE `mastery` (
@@ -241,7 +231,7 @@ CREATE TABLE `mastery` (
 
 颜色不存数据库，由 `MasteryService.color()` 按 `first_mastery` 和 `remedy_status` 现算，所以练习、小助手、画像、老师端看到的颜色永远一致。
 
-### 2.4 例子：资料转出来的文字（`material_text`）
+### 3.4 例子：资料转出来的文字（`material_text`）
 
 | id | item_id | seg_key | kind | page | start_sec | content（前 30 字） |
 |---|---|---|---|---|---|---|
@@ -252,12 +242,12 @@ CREATE TABLE `mastery` (
 
 ---
 
-## 三、怎么调用：从页面到 SQL
+## 4 调用方式：从页面请求到 SQL
 
-### 3.1 分层
+### 4.1 分层
 
 ```mermaid
-flowchart LR
+flowchart TB
     V[页面 Vue] -->|HTTP + JWT| C[Controller]
     C --> S[Service：业务规则]
     S --> M[Mapper：MyBatis-Plus]
@@ -287,7 +277,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **连接**：Spring Boot 的 HikariCP 连接池，启动时建好一批连接，请求来了借一个、用完还回去。
 - **事务**：一次请求里要一起成功或一起失败的写操作（例如交卷：写作答记录 + 更新掌握度）放在 `@Transactional` 方法里。
 
-### 3.2 例子：学生交卷时，数据库发生了什么
+### 4.2 例子：学生交卷时，数据库发生了什么
 
 `POST /api/learn/items/65/submit` → `LearnService.submit`：
 
@@ -307,7 +297,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ==> Parameters: 12(Long)
 ```
 
-### 3.3 例子：老师上传课件，到识别出知识点
+### 4.3 例子：老师上传课件，到识别出知识点
 
 | 步 | 表 |
 |---|---|
@@ -316,17 +306,17 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 老师点“上传完毕”、都转完了 | `UPDATE chapter_kp_state SET status='recognizing'`；视频同音字纠正 `UPDATE material_text SET content=?, original=?`；识别 `INSERT chapter_kp`（每个知识点一行，要点和出处是 JSON）；`UPDATE chapter_kp_state SET status='draft'` |
 | 老师确认 | `INSERT/UPDATE knowledge_point`；`UPDATE chapter_kp SET knowledge_point_id=?`；`UPDATE chapter_kp_state SET status='confirmed'` |
 
-### 3.4 全部功能的调用记录在第八节
+### 4.4 全部功能的调用记录
 
-上面两个例子是简化的说明。**第八节**列出了 42 个功能（账号、建课、上传资料、识别知识点、AI 对话、出题、学习、做练习、画像、小助手、老师干预、管理员）每一个实际执行的全部 SQL：先后顺序、每条是读还是写、碰了哪张表，以及这个功能经过哪个 Controller 方法、调用了哪些 Service；还有一张“功能 × 读写了哪些表”的总表。
+上面两个例子是简化的说明。**第 9 章**列出了 42 个功能（账号、建课、上传资料、识别知识点、AI 对话、出题、学习、做练习、画像、小助手、老师干预、管理员）每一个实际执行的全部 SQL：先后顺序、每条是读还是写、碰了哪张表，以及这个功能经过哪个 Controller 方法、调用了哪些 Service；还有一张“功能 × 读写了哪些表”的总表。
 
 ---
 
-## 四、JSON 列里面存的是什么
+## 5 JSON 列的结构
 
 有些内容总是整块读、整块写，不需要按里面的字段查，就存成 JSON 字符串（`TEXT` 列）。下面每一个 JSON 列的结构都写出来，例子是 MySQL 里的真实数据（太长的截断了）。
 
-### 4.1 `chapter_kp.key_points`：知识点的要点（每条带出处）
+### 5.1 `chapter_kp.key_points`：知识点的要点（每条带出处）
 
 ```json
 [{"text": "自动化测试是把以人为驱动的测试行为转化为机器执行的过程，用工具、脚本或代码控制执行并比较实际结果与预期结果。",
@@ -337,7 +327,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - `text`：要点原文（老师确认后就是 AI 对话和判分的标准答案）；每个知识点最多 3 条。
 - `sources`：出处编号，对应 `material_text.seg_key`：`D1-P4` = 第 1 份文档第 4 页，`D1-P13-图1` = 第 13 页的第 1 张图，`V1-02` = 第 1 个视频第 2 段。识别时程序核对，编出来的编号会被去掉。
 
-### 4.2 `chapter_kp.misconceptions`、`chapter_kp.sources`
+### 5.2 `chapter_kp.misconceptions`、`chapter_kp.sources`
 
 ```json
 ["认为自动化测试可以完全脱离人的参与，不需要测试人员定义测试逻辑。", "认为自动化测试覆盖度天然比手工测试高，……"]
@@ -346,7 +336,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 常见误解（字符串数组，出题时用来写错误选项）；这个知识点所有出处的合集。
 
-### 4.3 `exercise` 表里的 JSON 列
+### 5.3 `exercise` 表里的 JSON 列
 
 | 列 | 结构 | 例子 |
 |---|---|---|
@@ -358,7 +348,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `reference` | 简答题参考答案（普通文字，不是 JSON） | `自动化测试的核心价值在于……` |
 | `accepts` | 填空题可以接受的答案数组（判分时去掉空格、标点，大小写不分后比对） | 格式：`["写法一", "写法二"]`（现在库里没有填空题，没有真实例子） |
 
-### 4.4 `feynman_setup.drafts`：AI 对话的草稿（每个知识点一份）
+### 5.4 `feynman_setup.drafts`：AI 对话的草稿（每个知识点一份）
 
 ```json
 [{"kpId": 3, "name": "智能测试四大优化环节",
@@ -376,7 +366,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - `draft`：大模型起草、老师确认的内容：场景和 AI 同学（`scene`）、带着误解的一句话（`misconception_probe`）、**每条要点一组**判断标准（`understood_if` 讲清楚、`partial_if` 不完整）和三级提示（`L1`、`L2`、`L3`）、讲不出时的指引（`pointer`）、结束时复述要覆盖的内容（`recap`）。
 - `checks`：程序检查 4 项的结果（每条要点都有、各项都写了、每句不超过 80 字、提示没照抄要点原文）。
 
-### 4.5 `feynman_session.state`：一次 AI 对话的全部进度
+### 5.5 `feynman_session.state`：一次 AI 对话的全部进度
 
 ```json
 {"idx": 0,
@@ -393,7 +383,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - `target`：现在追问第几条要点；`misconAsked` / `misconFixed`：问过误解没有、学生有没有指出误解错在哪。
 - `review`：建议回看的资料；`statusSummary`：学习情况小结（不给学生看，给小助手和画像用）。
 
-### 4.6 `feynman_message.judgment`：大模型对学生每一句的判断
+### 5.6 `feynman_message.judgment`：大模型对学生每一句的判断
 
 ```json
 {"kind": "explain", "attempt": true,
@@ -404,7 +394,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 `kind`：explain 在讲解 / question 提问 / stuck 卡住 / chat 闲聊；`attempt`：是不是认真在讲；`points`：每条要点的判断和摘录的原话；`ack`：AI 同学的短反应。存下来是为了复核：程序按这个判断更新 `feynman_session.state`。
 
-### 4.7 其他 JSON 列
+### 5.7 其他 JSON 列
 
 | 列 | 结构 | 例子 |
 |---|---|---|
@@ -416,28 +406,31 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 ---
 
-## 五、从 H2 搬到 MySQL、备份、恢复
+## 6 备份、恢复和数据导入
 
-| 操作 | 怎么做 |
+| 操作 | 方法 |
 |---|---|
-| H2 → MySQL | ① 用 H2 自带工具把开发库导出成 SQL（`SCRIPT SIMPLE COLUMNS`）；② `python tools/db/h2_to_mysql.py h2dump.sql mysql_cols.tsv out.sql`：转成 MySQL 的写法（`"表"` → `` `表` ``、H2 的 Unicode 转义还原成中文、跳过已删掉的旧表）；③ 在 MySQL 里执行 `out.sql`（先清空再导入，用 `NO_BACKSLASH_ESCAPES` 保证 JSON 里的反斜杠原样存）。本机已经做过一次：29 张表、664 行全部导入，中文和 JSON 都正常 |
 | 备份 | `mysqldump -u root -p --default-character-set=utf8mb4 se_platform > backup.sql` |
 | 恢复 | `mysql -u root -p se_platform < backup.sql` |
-| 回到干净的演示数据 | `DROP DATABASE se_platform; CREATE DATABASE se_platform DEFAULT CHARACTER SET utf8mb4;`，再启动后端（自动建表、放演示数据） |
+| 恢复到初始演示数据 | `DROP DATABASE se_platform; CREATE DATABASE se_platform DEFAULT CHARACTER SET utf8mb4;`，再启动后端（自动建表、导入演示数据） |
+| 从 H2 开发库导入 MySQL | ① 用 H2 自带工具把开发库导出成 SQL（`SCRIPT SIMPLE COLUMNS`）；② `python tools/db/h2_to_mysql.py h2dump.sql mysql_cols.tsv out.sql` 转成 MySQL 的写法（引号、Unicode 转义还原成中文）；③ 在 MySQL 中执行 `out.sql`（使用 `NO_BACKSLASH_ESCAPES`，保证 JSON 中的反斜杠原样保存） |
 
 ---
 
-## 六、换到 MySQL 时发现并修好的问题
+## 7 MySQL 兼容性设计
 
-| 问题 | 原因 | 怎么修的 |
+建表语句和升级逻辑同时支持 MySQL 和 H2，下面几处做了专门处理：
+
+| 设计点 | 说明 | 实现 |
 |---|---|---|
-| 已有的 MySQL 库重启时报“升级数据库失败” | 升级脚本用的 `ADD COLUMN IF NOT EXISTS` 是 H2 的写法，MySQL 不支持 | `KeepDataConfig` 认出是 MySQL 时，先查这一列在不在，不在才加 |
-| 判断“表在不在”可能看错库 | 原来查所有库的 `INFORMATION_SCHEMA`，MySQL 自带的系统库里也有一张 `user` 表 | 改成只看当前连接的库（JDBC 元数据），H2 上也有测试（`KeepDataConfigTest`） |
-| 上传资料后转文字报“资料不存在” | “上传后排队”放在事务提交后的回调里做，那时连接还没切回自动提交，排队记录要等连接清理时才真正写进去；后台线程抢先去读，读到了已删除的旧文件。H2 碰巧赶得上，MySQL（默认隔离级别可重复读）就读不到 | 提交后的这一步交给单独的线程、用新的连接做，写完立即生效（`MaterialPipeline.afterCommit`） |
+| 给已有的表加列 | MySQL 不支持 `ADD COLUMN IF NOT EXISTS` | `KeepDataConfig` 在 MySQL 上先查这一列是否存在，不存在才加；升级脚本可以重复执行 |
+| 判断表是否存在 | MySQL 的系统库中也有名为 `user` 的表，不能查所有库 | 用 JDBC 元数据只查当前连接的库（`KeepDataConfigTest` 覆盖） |
+| 上传后排队转文字 | MySQL 默认隔离级别为可重复读，事务提交后的回调中写入的数据，后台线程可能读不到 | 提交后的排队由单独的线程用新的连接完成，写入立即生效（`MaterialPipeline.afterCommit`） |
+| 字符集 | 中文、JSON 内容 | 库和连接统一使用 `utf8mb4` |
 
 ---
 
-## 七、32 张表逐张说明（自动生成）
+## 8 数据表逐张说明（共 32 张）
 
 每张表写：属于哪个模块、用途、什么时候写入、和哪些表关联、主键 / 唯一约束 / 索引、**哪些代码写它、哪些代码读它**（扫描后端源码里每个 Mapper 的调用，写的是类名）、现在有几行、每一列的类型和含义、一行真实数据（密码哈希打码）。
 
@@ -445,7 +438,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 共 32 张表。每张表的“谁写 / 谁读”是扫描后端源码里每个 Mapper 的调用得出的（类名）；“现在的数据”来自本机 MySQL `se_platform`。
 
-### `user`（账号）
+### 8.1 `user`（账号）
 
 - **用途**：所有登录账号：学生、老师、管理员。
 - **什么时候写入**：学生注册时、管理员开通老师 / 学生账号时新增；改密码、禁用、退出登录（令牌版本 +1）时修改。
@@ -463,7 +456,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `password_hash` | VARCHAR(100) | NOT NULL | BCrypt 哈希，不存明文 |
 | `name` | VARCHAR(32) | NOT NULL | 显示姓名 |
 | `role` | VARCHAR(16) | NOT NULL | student / teacher / admin |
-| `clazz_id` | BIGINT |  | 学生所在班级（班级表以后再建） |
+| `clazz_id` | BIGINT |  | 学生所在班级（预留；全班按选课统计） |
 | `status` | TINYINT | NOT NULL DEFAULT 1 | 1 正常，0 禁用 |
 | `token_version` | INT | NOT NULL DEFAULT 0 | 令牌版本：退出登录、改密码、管理员重置密码时加 1，旧令牌立即失效 |
 | `must_change_password` | TINYINT | NOT NULL DEFAULT 0 | 1 = 管理员开的账号或重置过的密码，第一次登录要先改密码 |
@@ -490,7 +483,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `course`（课程内容）
+### 8.2 `course`（课程内容）
 
 - **用途**：一门课：课程名、简介、授课老师、状态（草稿 / 已发布 / 已归档）、开了哪些模块。
 - **什么时候写入**：老师新建、编辑、发布课程时。
@@ -529,7 +522,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `chapter`（课程内容）
+### 8.3 `chapter`（课程内容）
 
 - **用途**：课程里的一章：标题、章节介绍、状态、顺序。
 - **什么时候写入**：老师在建课页新建、编辑、发布章节时；发布前后端检查章节完整。
@@ -570,7 +563,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `chapter_item`（课程内容）
+### 8.4 `chapter_item`（课程内容）
 
 - **用途**：章节里的一项内容：视频、文档、练习、AI 对话；顺序、截止时间、过期后能不能补交。
 - **什么时候写入**：老师在建课页加内容项、改标题和截止时间、上传文件（写 material_id）时。
@@ -617,7 +610,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `material`（资料）
+### 8.5 `material`（资料）
 
 - **用途**：上传的文件信息：原文件名、磁盘上的相对路径、大小、类型。文件本身存在磁盘 backend/uploads/，不进数据库。
 - **什么时候写入**：老师给视频 / 文档项上传或替换文件时新增；替换或删除时逻辑删除旧的（deleted = 1）。
@@ -662,7 +655,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `material_job`（资料）
+### 8.6 `material_job`（资料）
 
 - **用途**：每个视频 / 文档项的“转文字”任务：排队 → 处理中 → 完成 / 失败，失败原因、处理统计、同音字纠正做过没有。
 - **什么时候写入**：上传文件后马上排队；后台线程处理时改状态；识别知识点前做同音字纠正后标记 terms_checked。
@@ -707,7 +700,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:30:19
  |
 
-### `material_text`（资料）
+### 8.7 `material_text`（资料）
 
 - **用途**：资料转出来的文字，一段一行：课件一页、一张图、视频 30～60 秒一段，带出处编号（seg_key）、页码或起止秒；同音字纠正前的原文。
 - **什么时候写入**：资料处理完成时一段一行写入；视频同音字纠正改正文、原文存进 original；重新上传时整份删掉重写。
@@ -750,7 +743,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `chapter_kp_state`（知识点）
+### 8.8 `chapter_kp_state`（知识点）
 
 - **用途**：每章一行：识别知识点走到哪一步（等上传完 / 处理资料中 / 识别中 / 待确认 / 已确认 / 失败），老师点没点“上传完毕”。
 - **什么时候写入**：老师点“上传完毕”、开始识别、识别完成、老师确认、资料有增删时。
@@ -791,7 +784,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:30:19
  |
 
-### `chapter_kp`（知识点）
+### 8.9 `chapter_kp`（知识点）
 
 - **用途**：大模型识别出的知识点（老师可以改）：名称、一句话说明、重点 / 一般、要点（每条带出处，JSON）、常见误解、出处。
 - **什么时候写入**：识别完成时整章写入；老师改、加、删知识点时；老师确认时写上对应的 knowledge_point_id。
@@ -838,7 +831,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:39:29
  |
 
-### `knowledge_point`（知识点）
+### 8.10 `knowledge_point`（知识点）
 
 - **用途**：老师确认后的知识点：练习出题、掌握度、诊断、画像、小助手都按这张表的知识点算。
 - **什么时候写入**：老师确认识别结果时从 chapter_kp 同步过来；老师也可以手动加。
@@ -883,7 +876,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `exercise`（练习）
+### 8.11 `exercise`（练习）
 
 - **用途**：一道题：题型（6 种）、考查类型、考第几条要点、题干、选项、答案、解析、每个选项的误解说明、简答的参考答案和要点、来源（老师手写 / 上传识别 / AI 生成 / 小助手 / 全班推送）、是不是草稿、程序检查结果。
 - **什么时候写入**：老师手动出题、AI 出题（先存草稿，老师确认）、小助手补练和拓展当场出题、老师全班推送出新题时。
@@ -958,7 +951,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `exercise_knowledge_point`（练习）
+### 8.12 `exercise_knowledge_point`（练习）
 
 - **用途**：题目和知识点的关联（一道题可以关联多个知识点）。
 - **什么时候写入**：出题时一起写入。
@@ -985,7 +978,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 1
  |
 
-### `enrollment`（选课）
+### 8.13 `enrollment`（选课）
 
 - **用途**：谁加入了哪门课。加入后才能学；老师的全班分析、截止情况、课程人数只算这里的学生。
 - **什么时候写入**：学生在“课程学习”里点“加入课程”时；演示数据里所有学生已加入所有课程。
@@ -1014,7 +1007,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-27 14:49:05
  |
 
-### `learning_event`（学习记录）
+### 8.14 `learning_event`（学习记录）
 
 - **用途**：学习行为，一个行为一行：看了一项内容（停留秒数）、学完一项。
 - **什么时候写入**：学生打开内容项、离开时（停留秒数）、视频看到 90% / 文档读满 30 秒点“我已读完”、AI 对话结束时。
@@ -1049,7 +1042,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-21 21:00:08
  |
 
-### `item_progress`（学习记录）
+### 8.15 `item_progress`（学习记录）
 
 - **用途**：每人每项一行：视频看过的时间段（合并后的 JSON）、总时长、上次位置；文档累计阅读秒数；什么时候判定学完。
 - **什么时候写入**：学生看视频时每约 10 秒上报一次、读文档时计时上报。
@@ -1094,7 +1087,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-25 01:25:04
  |
 
-### `answer_record`（学习记录）
+### 8.16 `answer_record`（学习记录）
 
 - **用途**：每一次作答一行：答案、对错、得分、蒙对概率、可信度、状态（已判 / 等老师确认）、简答每条要点的判定、谁确认的。
 - **什么时候写入**：学生交卷、做补练题、做拓展题、做老师推送的新题时；老师确认或改判简答时修改。
@@ -1145,7 +1138,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-22 21:16:08
  |
 
-### `mastery`（诊断 / 画像）
+### 8.17 `mastery`（诊断 / 画像）
 
 - **用途**：每个学生每个知识点一行：原始掌握度 F（练习里每道题第一次作答的平均分）、补练 R、当前掌握度、补练状态。颜色由程序从这一行现算。
 - **什么时候写入**：每次交卷、做补练题或推送的新题后重算并更新。
@@ -1190,7 +1183,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-23 20:45:08
  |
 
-### `profile_snapshot`（诊断 / 画像）
+### 8.18 `profile_snapshot`（诊断 / 画像）
 
 - **用途**：学完一门课那一刻的课程画像（四维和参考日，JSON），每人每门课一份，之后不再改。
 - **什么时候写入**：学生全部章节学完后第一次打开课程画像时。
@@ -1221,7 +1214,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-28 11:33:54
  |
 
-### `feynman_setup`（AI 对话）
+### 8.19 `feynman_setup`（AI 对话）
 
 - **用途**：一个 AI 对话项的设置：老师选的知识点（最多 2 个）和大模型起草、老师确认的草稿（场景、每条要点的判断标准和三级提示，JSON）、状态（待确认 / 已确认）。
 - **什么时候写入**：老师生成草稿、修改草稿、确认草稿时。
@@ -1258,7 +1251,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:43:19
  |
 
-### `feynman_session`（AI 对话）
+### 8.20 `feynman_session`（AI 对话）
 
 - **用途**：一个学生的一次对话，进度整个存在 state（JSON）里：每个知识点每条要点的状态、提示级别、问了几次、怎么讲清的、学习情况小结。
 - **什么时候写入**：学生开始对话时新增；每说一句更新 state；结束时状态改成 done；老师重新生成草稿时没聊完的改成 expired。
@@ -1293,7 +1286,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:45:32
  |
 
-### `feynman_message`（AI 对话）
+### 8.21 `feynman_message`（AI 对话）
 
 - **用途**：对话里的每一句：谁说的、内容；学生的话附上大模型的判断（JSON，存档、复核用）。
 - **什么时候写入**：学生每说一句、AI 同学每回一句时。
@@ -1307,7 +1300,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
 | `id` | BIGINT | NOT NULL AUTO_INCREMENT | 主键，自增 |
-| `session_id` | BIGINT | NOT NULL | 属于哪次对话（费曼对话 → feynman_session.id；旧版 → dialogue_session.id） |
+| `session_id` | BIGINT | NOT NULL | 属于哪次对话（讲给 AI 同学听 → feynman_session.id；话题式 → dialogue_session.id） |
 | `kp_idx` | INT | NOT NULL | 第几个知识点（从 0 开始） |
 | `role` | VARCHAR(10) | NOT NULL | student / ai / system |
 | `content` | TEXT | NOT NULL | 这一句说的话 |
@@ -1330,10 +1323,10 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-24 21:44:28
  |
 
-### `dialogue_topic`（AI 对话（旧版））
+### 8.22 `dialogue_topic`（AI 对话（话题式））
 
-- **用途**：旧版“话题式”对话的话题：情境问题、参考答案、要点、三级提示、变式题。
-- **什么时候写入**：老师在旧版话题页编辑时。老师没有配置费曼对话的对话项才用旧版。
+- **用途**：话题式对话的话题：情境问题、参考答案、要点、三级提示、变式题。
+- **什么时候写入**：老师在话题管理页编辑时。用于没有设置“讲给 AI 同学听”的对话项。
 - **和哪些表关联**：item_id → chapter_item；knowledge_point_id → knowledge_point。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_dialogue_topic_chapter（chapter_id）
 - **谁写**：`ChapterItemService`（删除）；`DialogueTopicService`（修改、删除、新增）
@@ -1393,10 +1386,10 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `dialogue_session`（AI 对话（旧版））
+### 8.23 `dialogue_session`（AI 对话（话题式））
 
-- **用途**：旧版对话的一次会话。
-- **什么时候写入**：学生开始旧版对话、结束时。
+- **用途**：话题式对话的一次会话。
+- **什么时候写入**：学生开始、结束话题式对话时。
 - **和哪些表关联**：student_id → user；item_id → chapter_item。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`DialogueService`（修改、新增）
@@ -1434,10 +1427,10 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-22 21:30:08
  |
 
-### `dialogue_topic_state`（AI 对话（旧版））
+### 8.24 `dialogue_topic_state`（AI 对话（话题式））
 
-- **用途**：旧版对话里每个话题的进度：答错次数、提示级别、答到的要点、结果。
-- **什么时候写入**：旧版对话每一轮。
+- **用途**：话题式对话里每个话题的进度：答错次数、提示级别、答到的要点、结果。
+- **什么时候写入**：话题式对话每一轮。
 - **和哪些表关联**：session_id → dialogue_session；topic_id → dialogue_topic。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_topic_state UNIQUE (session_id, topic_idx)
 - **谁写**：`DialogueService`（修改、新增）
@@ -1448,7 +1441,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
 | `id` | BIGINT | NOT NULL AUTO_INCREMENT | 主键，自增 |
-| `session_id` | BIGINT | NOT NULL | 属于哪次对话（费曼对话 → feynman_session.id；旧版 → dialogue_session.id） |
+| `session_id` | BIGINT | NOT NULL | 属于哪次对话（讲给 AI 同学听 → feynman_session.id；话题式 → dialogue_session.id） |
 | `topic_idx` | INT | NOT NULL | 第几个话题 |
 | `topic_id` | BIGINT |  | → dialogue_topic.id |
 | `wrong_count` | INT | NOT NULL DEFAULT 0 | 答错 / 部分对的次数 |
@@ -1491,10 +1484,10 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | NULL
  |
 
-### `dialogue_message`（AI 对话（旧版））
+### 8.25 `dialogue_message`（AI 对话（话题式））
 
-- **用途**：旧版对话的每一句。
-- **什么时候写入**：旧版对话每一轮。
+- **用途**：话题式对话的每一句。
+- **什么时候写入**：话题式对话每一轮。
 - **和哪些表关联**：session_id → dialogue_session；ai_call_id → ai_call_log。
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_dialogue_message_session（session_id）
 - **谁写**：`DialogueService`（修改、新增）
@@ -1505,7 +1498,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 列 | 类型 | 约束 / 默认值 | 含义 |
 |---|---|---|---|
 | `id` | BIGINT | NOT NULL AUTO_INCREMENT | 主键，自增 |
-| `session_id` | BIGINT | NOT NULL | 属于哪次对话（费曼对话 → feynman_session.id；旧版 → dialogue_session.id） |
+| `session_id` | BIGINT | NOT NULL | 属于哪次对话（讲给 AI 同学听 → feynman_session.id；话题式 → dialogue_session.id） |
 | `topic_idx` | INT |  | 这一句属于第几个话题（从 0 开始） |
 | `role` | VARCHAR(16) | NOT NULL | STUDENT / AI |
 | `content` | TEXT | NOT NULL | 这一句说的话 |
@@ -1530,7 +1523,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-22 21:20:08
  |
 
-### `item_analysis`（老师干预）
+### 8.26 `item_analysis`（老师干预）
 
 - **用途**：每次练习的全班分析：按哪个截止时间分析、全班人数、截止前交卷人数、结果（已分析 / 交卷不到 80% 作废）。
 - **什么时候写入**：练习到截止时间（或全班都交完）后，老师打开干预管理页时分析一次；延期后重新分析。
@@ -1565,7 +1558,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-28 15:28:24
  |
 
-### `class_issue`（老师干预）
+### 8.27 `class_issue`（老师干预）
 
 - **用途**：全班分析发现的问题卡片：规则①一道题全班 ≥ 80% 做错（题目检查）；规则②某条要点在某种考查类型上错误率 > 50%。做错的学生、老师的处理状态。
 - **什么时候写入**：分析时写入；老师点“没问题 / 已修正 / 作废 / 忽略”、推送后改状态。
@@ -1616,7 +1609,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-28 15:28:24
  |
 
-### `class_push`（老师干预）
+### 8.28 `class_push`（老师干预）
 
 - **用途**：老师对全班问题的处理：补充讲解（大模型起草或老师写）、新题、推送给哪些学生、推送前的错误率、状态（草稿 / 已推送）。
 - **什么时候写入**：老师处理卡片时新增草稿；修改、重新生成、推送时更新。
@@ -1671,7 +1664,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 5,6,8,9,10,11,13
  |
 
-### `remedy_round`（小助手）
+### 8.29 `remedy_round`（小助手）
 
 - **用途**：小助手的补练和拓展，每一轮一行：知识点、补练还是拓展、考查类型、第几轮、这一轮的题、平均分、2 轮后还没补回来。
 - **什么时候写入**：学生在小助手里点“做补练题”“来点更难的”时新增；交了以后更新。
@@ -1718,7 +1711,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 0
  |
 
-### `assistant_message`（小助手）
+### 8.30 `assistant_message`（小助手）
 
 - **用途**：小助手聊天的每一句；被程序拦下的回复记下原因和原文（给开发看，学生看到的是固定的话）。
 - **什么时候写入**：学生在小助手里问一句、小助手回一句时。
@@ -1757,7 +1750,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-25 20:45:40
  |
 
-### `assistant_notice`（小助手）
+### 8.31 `assistant_notice`（小助手）
 
 - **用途**：老师给学生的提醒（例如分析作废时提醒没交卷的学生），显示在学生的小助手和消息铃铛里。
 - **什么时候写入**：老师在干预管理页点“提醒没交的学生”时。
@@ -1788,7 +1781,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 ` | 2026-11-28 15:28:47
  |
 
-### `ai_call_log`（运维）
+### 8.32 `ai_call_log`（运维）
 
 - **用途**：每一次调用大模型：任务名、提示词版本、输入 / 输出 token、耗时、费用、成功或失败原因、程序检查结果。
 - **什么时候写入**：每次调用大模型（看图、识别知识点、AI 对话、出题、判简答、聊天、补充讲解、同音字纠正）都写一行。
@@ -1840,11 +1833,11 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 ---
 
-## 八、每个功能调用数据库的实测记录（自动生成）
+## 9 每个功能调用数据库的实测记录
 
 下面是 **42 个功能** 实际执行的全部 SQL，按功能的使用顺序排列。记录方法：`SqlTraceIT` 用内存库和演示数据把这些功能真实走一遍，截下 MyBatis 打印的每一条 SQL（大模型和资料处理服务用假的，只为了让流程走通，不影响 SQL）；MySQL 上执行的是同样的 SQL。`?` 是参数占位，值由 JDBC 单独传；`SELECT … FROM` 省略了列名（就是这张表的全部列）；连续重复的同一条 SQL 合并写“×次数”（例如交卷时每道题各存一行）。
 
-### 8.1 总表：每个功能读、写了哪些表
+### 9.1 总表：每个功能读、写了哪些表
 
 | # | 功能 | 谁用 | 接口 | SQL 条数 | 读的表 | 写的表 |
 |---|---|---|---|---|---|---|
@@ -1891,7 +1884,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | 41 | 用户列表 | 管理员 | `GET /api/admin/users` | 2 | user | — |
 | 42 | AI 调用记录 | 管理员 | `GET /api/ai/logs` | 2 | ai_call_log | — |
 
-### 8.2 每个功能的调用链和 SQL
+### 9.2 每个功能的调用链和 SQL
 
 #### 账号
 

@@ -24,8 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 章节接口，前缀 /api/chapters（docs/api.md 3.2）。
- * 本章的资料、知识点、题目也从这里按章节查：GET /api/chapters/{id}/materials 等。
+ * 章节接口（老师），前缀 /api/chapters：章节的增删改、内容项排序；按章节查询内容项、知识点和题目。
  */
 @RestController
 @RequestMapping("/api/chapters")

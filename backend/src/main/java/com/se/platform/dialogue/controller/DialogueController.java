@@ -15,8 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 学生 AI 对话的接口，前缀 /api/dialogue。每个操作都返回整份 DialogueView。
- * 登录还没做，学生固定为演示学生；章节先默认 1。
+ * 话题式 AI 对话（学生），前缀 /api/dialogue：按老师写好的话题提问和追问。每个操作都返回整份 DialogueView。
  */
 @RestController
 @RequestMapping("/api/dialogue")

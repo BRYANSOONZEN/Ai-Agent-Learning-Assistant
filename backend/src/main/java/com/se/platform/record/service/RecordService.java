@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service;
  *   <li>看内容 / 学完一项：前端调 POST /api/learn/events，存成 learning_event</li>
  *   <li>AI 对话：本来就存在 dialogue_session / dialogue_message 里，这里直接读</li>
  * </ul>
- * 登录还没做，学生固定为对话用的同一个演示学生。
+ * 当前学生由登录令牌确定（currentStudentId）。
  */
 @Service
 public class RecordService {

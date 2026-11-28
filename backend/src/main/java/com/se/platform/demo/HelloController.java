@@ -9,10 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 演示用的接口，用来验证骨架能跑通。课程模块做好后可以删除这个包。
- *
- * <p>{@code @RestController}：这个类处理 HTTP 请求，方法的返回值自动转成 JSON。
- * {@code @RequestMapping("/api/hello")}：这个类里所有接口的路径都以 /api/hello 开头。
+ * 服务自检接口，前缀 /api/hello：检查后端是否正常运行，以及统一返回格式和错误处理是否生效。
  */
 @RestController
 @RequestMapping("/api/hello")

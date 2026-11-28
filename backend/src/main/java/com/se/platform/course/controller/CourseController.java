@@ -21,8 +21,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 课程接口，前缀 /api/courses（docs/api.md 3.1）。
- * 登录和权限还没做，暂时不检查角色，也不按"学生只看已发布"过滤。
+ * 课程接口（老师），前缀 /api/courses：课程的增删改查、模块设置、发布；章节列表和排序。
+ * 老师只能操作自己的课程。
  */
 @RestController
 @RequestMapping("/api/courses")

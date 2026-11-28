@@ -26,8 +26,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 个人学习助手，前缀 /api/assistant（docs/计划-个人学习助手.md）。
- * 登录还没做，学生是演示学生（见 DemoIdentity）。
+ * 小助手（学生），前缀 /api/assistant：学习报告、补练题、拓展题、老师推送的接收和作答、提醒、自由提问。
+ * 学生只能读写自己的数据。
  */
 @RestController
 @RequestMapping("/api/assistant")

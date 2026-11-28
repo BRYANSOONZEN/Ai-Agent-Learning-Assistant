@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 学生学习的接口，前缀 /api/learn。只返回已发布的课程和章节；题目在提交前不带答案。
- * AI 对话还是用 /api/dialogue（带上 itemId）。
+ * 学生学习的接口，前缀 /api/learn：课程列表、加入课程、学习页（大纲、学完和锁住的项）、取题、交卷。
+ * 只返回已发布的课程和章节；题目在交卷前不带答案。
  */
 @RestController
 @RequestMapping("/api/learn")

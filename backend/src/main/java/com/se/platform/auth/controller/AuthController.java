@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 账号接口，前缀 /api/auth（docs/api.md 第 2 节）。登录和注册不用令牌，其他要登录 */
+/** 账号接口，前缀 /api/auth：登录、注册、退出、当前用户、修改密码。登录和注册不需要令牌，其他接口需要登录 */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {

@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 登录接口：对应 docs/test-plan.md 的 T-A-01 到 T-A-03，以及禁用账号和空参数 */
+/** 登录接口：正常登录、密码错误、用户不存在，以及禁用账号和空参数 */
 @SpringBootTest
 @AutoConfigureMockMvc
 class AuthControllerTest {

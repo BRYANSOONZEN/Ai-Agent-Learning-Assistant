@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 资料 → 知识点。老师：看进度、上传完毕、重新识别、改知识点、确认、看地图；学生：看已确认的知识点地图。
- * 上传文件本身还是走原来的 POST /api/chapter-items/{id}/file，上传后自动排队转文字。
+ * 上传文件用 POST /api/chapter-items/{id}/file，上传后自动排队转文字。
  */
 @RestController
 public class ChapterKpController {
