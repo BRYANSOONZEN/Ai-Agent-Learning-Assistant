@@ -9,7 +9,7 @@
  * 练习里的题不在这里。
  */
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import RemedyBox from '@/components/RemedyBox.vue'
@@ -17,7 +17,6 @@ import PushBox from '@/components/PushBox.vue'
 import { getRecommendations, saveExtend } from '@/api/recommend'
 
 const route = useRoute()
-const router = useRouter()
 
 const data = ref(null)
 const loading = ref(false)

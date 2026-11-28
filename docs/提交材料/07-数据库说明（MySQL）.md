@@ -498,7 +498,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_course_teacher（teacher_id）
 - **谁写**：`CourseService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ClassPushService`、`CourseProfileService`、`CourseService`、`DeadlineService`、`DiagnosisService`、`EnrollmentService`、`ExerciseGenService`、`FeynmanDraftService`、`KpRecognizer`、`RecommendService`、`TeacherTodoService`
-- **现在的数据**：6
+- **现在的数据**：2
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -537,7 +537,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_chapter_course（course_id）
 - **谁写**：`ChapterService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`CourseProfileService`、`CourseService`、`DeadlineService`、`DiagnosisService`、`KpRecognizer`、`LearnService`、`ProgressService`、`RecommendService`、`RecordService`、`TeacherTodoService`
-- **现在的数据**：7
+- **现在的数据**：4
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -578,7 +578,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_chapter_item_chapter（chapter_id）
 - **谁写**：`ChapterItemService`（修改、删除、新增）；`ClassPushService`（修改）
 - **谁读**：`AssistantService`、`ChapterItemService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`CompletionService`、`CourseProfileService`、`DeadlineService`、`DialogueService`、`ExerciseGenService`、`FeynmanDiagnosis`、`FeynmanDraftService`、`FeynmanEngine`、`KpRecognizer`、`LearnService`、`MaterialPipeline`、`ProgressService`、`RecordService`、`RemedyService`、`TeacherTodoService`
-- **现在的数据**：14
+- **现在的数据**：17
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -625,7 +625,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_material_chapter（chapter_id）
 - **谁写**：`MaterialService`（删除、新增）
 - **谁读**：`MaterialService`
-- **现在的数据**：11
+- **现在的数据**：10
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -670,7 +670,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_material_job UNIQUE (item_id)
 - **谁写**：`MaterialPipeline`（修改、删除、新增）；`VideoTermFixer`（修改）
 - **谁读**：`ChapterKpService`、`MaterialPipeline`、`VideoTermFixer`
-- **现在的数据**：6
+- **现在的数据**：10
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -715,7 +715,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_material_text_chapter（chapter_id, item_id）
 - **谁写**：`MaterialPipeline`（删除、新增）；`VideoTermFixer`（修改）
 - **谁读**：`KpRecognizer`、`VideoTermFixer`
-- **现在的数据**：195
+- **现在的数据**：218
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -758,7 +758,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_chapter_kp_state UNIQUE (chapter_id)
 - **谁写**：`ChapterKpService`（修改）；`KpRecognizer`（修改）；`MaterialPipeline`（修改、新增）
 - **谁读**：`ChapterKpService`、`FeynmanDraftService`、`KpRecognizer`、`MaterialPipeline`、`TeacherTodoService`
-- **现在的数据**：6
+- **现在的数据**：4
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -846,7 +846,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_kp_chapter（chapter_id）
 - **谁写**：`ChapterKpService`（修改、新增）；`KnowledgePointService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`CourseProfileService`、`DiagnosisService`、`ExerciseGenService`、`ExerciseReviewService`、`ExerciseService`、`KnowledgePointService`、`MasteryService`、`RecommendService`、`RemedyService`
-- **现在的数据**：9
+- **现在的数据**：17
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -891,7 +891,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_exercise_chapter（chapter_id）
 - **谁写**：`ClassAnalysisService`（删除）；`ClassPushService`（修改）；`ExerciseGenService`（修改、删除）；`ExerciseService`（修改、删除、新增）
 - **谁读**：`AssistantChatService`、`ChapterItemService`、`ChapterService`、`ClassAnalysisService`、`ClassPushService`、`ExerciseGenService`、`ExerciseReviewService`、`ExerciseService`、`PracticeAnalysis`、`RecommendService`、`RemedyService`、`TeacherTodoService`
-- **现在的数据**：64
+- **现在的数据**：138
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -966,7 +966,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_exercise_kp UNIQUE (exercise_id, knowledge_point_id)
 - **谁写**：`ChapterItemService`（删除）；`ClassAnalysisService`（删除）；`ExerciseService`（删除、新增）
 - **谁读**：`AssistantChatService`、`ClassAnalysisService`、`ClassPushService`、`DiagnosisService`、`ExerciseService`、`KnowledgePointService`、`MasteryService`
-- **现在的数据**：47
+- **现在的数据**：121
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -993,7 +993,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_enrollment UNIQUE (course_id, student_id)；索引 idx_enrollment_student（student_id）
 - **谁写**：`EnrollmentService`（新增）
 - **谁读**：`EnrollmentService`
-- **现在的数据**：60
+- **现在的数据**：11
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1022,7 +1022,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_learning_event_student（student_id, created_at）
 - **谁写**：`FeynmanEngine`（新增）；`ProgressService`（新增）；`RecordService`（新增）
 - **谁读**：`AssistantService`、`CompletionService`、`CourseProfileService`、`DiagnosisService`、`ProfileService`、`RecordService`
-- **现在的数据**：36
+- **现在的数据**：46
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1057,7 +1057,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_item_progress UNIQUE (student_id, item_id)
 - **谁写**：`ProgressService`（修改、新增）
 - **谁读**：`ProgressService`
-- **现在的数据**：4
+- **现在的数据**：9
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1102,7 +1102,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_answer_record_student（student_id, submitted_at）
 - **谁写**：`ExerciseReviewService`（修改）；`RecordService`（新增）
 - **谁读**：`ClassAnalysisService`、`ClassPushService`、`CompletionService`、`CourseProfileService`、`DiagnosisService`、`ExerciseReviewService`、`MasteryService`、`PracticeAnalysis`、`ProfileService`、`RecommendService`、`RecordService`、`RemedyService`、`TeacherTodoService`
-- **现在的数据**：213
+- **现在的数据**：269
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1153,7 +1153,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_mastery UNIQUE (student_id, knowledge_point_id)
 - **谁写**：`MasteryService`（修改、新增）
 - **谁读**：`AssistantChatService`、`AssistantService`、`ChapterKpService`、`ClassPushService`、`CourseProfileService`、`DiagnosisService`、`MasteryService`、`RemedyService`
-- **现在的数据**：22
+- **现在的数据**：37
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1198,7 +1198,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_profile_snapshot UNIQUE (student_id, course_id)
 - **谁写**：`CourseProfileService`（新增）
 - **谁读**：`CourseProfileService`
-- **现在的数据**：1
+- **现在的数据**：2
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1229,7 +1229,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；CONSTRAINT uk_feynman_setup UNIQUE (item_id)
 - **谁写**：`FeynmanDraftService`（修改、新增）
 - **谁读**：`ChapterItemService`、`FeynmanDraftService`、`TeacherTodoService`
-- **现在的数据**：1
+- **现在的数据**：2
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1266,7 +1266,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`FeynmanDraftService`（修改）；`FeynmanEngine`（修改、新增）
 - **谁读**：`FeynmanDiagnosis`、`FeynmanEngine`
-- **现在的数据**：6
+- **现在的数据**：7
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1301,7 +1301,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_feynman_message_session（session_id）
 - **谁写**：`FeynmanEngine`（修改、新增）
 - **谁读**：`FeynmanEngine`
-- **现在的数据**：117
+- **现在的数据**：158
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1538,7 +1538,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_item_analysis（item_id）
 - **谁写**：`ClassAnalysisService`（新增）
 - **谁读**：`ClassAnalysisService`
-- **现在的数据**：2
+- **现在的数据**：3
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1555,14 +1555,14 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 | 列 | 值 |
 |---|---|
-| `id` | 1 |
+| `id` | 5 |
 | `item_id` | 2 |
 | `due_at` | 2026-11-26 21:30:08 |
 | `status` | void |
 | `students` | 10 |
 | `submitted` | 7 |
 | `analyzed_at
-` | 2026-11-27 12:54:32
+` | 2026-11-28 15:28:24
  |
 
 ### `class_issue`（老师干预）
@@ -1573,7 +1573,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_class_issue_item（item_id）
 - **谁写**：`ClassAnalysisService`（修改、删除、新增）；`ClassPushService`（修改）
 - **谁读**：`ClassAnalysisService`、`ClassPushService`
-- **现在的数据**：6
+- **现在的数据**：12
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1598,8 +1598,8 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 | 列 | 值 |
 |---|---|
-| `id` | 11 |
-| `analysis_id` | 4 |
+| `id` | 20 |
+| `analysis_id` | 6 |
 | `item_id` | 65 |
 | `course_id` | 1 |
 | `kind` | question |
@@ -1611,9 +1611,9 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `wrong` | 7 |
 | `student_ids` | 5,6,8,10,11,9,13 |
 | `status` | ok |
-| `created_at` | 2026-11-28 10:43:07 |
+| `created_at` | 2026-11-28 15:28:24 |
 | `updated_at
-` | 2026-11-28 10:43:07
+` | 2026-11-28 15:28:24
  |
 
 ### `class_push`（老师干预）
@@ -1651,24 +1651,24 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 
 | 列 | 值 |
 |---|---|
-| `id` | 1 |
+| `id` | 2 |
 | `course_id` | 1 |
 | `item_id` | 65 |
-| `issue_ids` | 18 |
+| `issue_ids` | 27 |
 | `knowledge_point_id` | 6 |
 | `assess_type` | concept |
-| `explanation` | 四种技术不是“谁更强”，而是“谁更适合”。可以这样对比记：基于模型像按地图走路线，前提是系统行为能画成状态图，适合流程清楚、状态转换多的场景；基于自然语言处理像… |
+| `explanation` | 四种技术不是四个“段位”，而是四把不同形状的工具，别拿一把锤子敲所有钉子。基于模型像照着地铁线路图找换乘路径，适合流程清楚、状态变化明确的系统；基于自然语言处理… |
 | `explanation_by` | ai |
-| `exercise_ids` | 170,171,172 |
+| `exercise_ids` | 211,212,213 |
 | `student_ids` | 5,6,8,10,11,9,13 |
 | `before_rate` | 0.88 |
 | `status` | pushed |
-| `due_at` | 2026-12-05 23:59:00 |
-| `pushed_at` | 2026-11-28 10:44:26 |
-| `created_at` | 2026-11-28 10:44:04 |
-| `updated_at` | 2026-11-28 10:44:04 |
+| `due_at` | 2026-12-05 23:02:12 |
+| `pushed_at` | 2026-11-28 15:30:32 |
+| `created_at` | 2026-11-28 15:29:47 |
+| `updated_at` | 2026-11-28 15:29:47 |
 | `accepted_ids
-` | 5
+` | 5,6,8,9,10,11,13
  |
 
 ### `remedy_round`（小助手）
@@ -1679,7 +1679,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_remedy_student（student_id, knowledge_point_id）
 - **谁写**：`RecommendService`（修改）；`RemedyService`（修改、新增）
 - **谁读**：`RecommendService`、`RemedyService`
-- **现在的数据**：5
+- **现在的数据**：7
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1726,7 +1726,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_assistant_message（student_id, chapter_id）
 - **谁写**：`AssistantChatService`（新增）
 - **谁读**：`AssistantChatService`
-- **现在的数据**：32
+- **现在的数据**：34
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1765,7 +1765,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)；索引 idx_assistant_notice（student_id）
 - **谁写**：`ClassPushService`（新增）
 - **谁读**：`ClassPushService`
-- **现在的数据**：0
+- **现在的数据**：3
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
@@ -1776,7 +1776,17 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 | `content` | VARCHAR(500) | NOT NULL | 提醒的文字 |
 | `created_at` | DATETIME |  | 这一行创建的时间（MyBatis-Plus 自动填） |
 
-（现在没有数据。）
+一行真实数据（长的内容截断到 80 字）：
+
+| 列 | 值 |
+|---|---|
+| `id` | 1 |
+| `student_id` | 12 |
+| `item_id` | 2 |
+| `content` | 老师提醒：「练习：边界值小测」你还没交，记得完成。 |
+| `created_at
+` | 2026-11-28 15:28:47
+ |
 
 ### `ai_call_log`（运维）
 
@@ -1786,7 +1796,7 @@ FROM mastery WHERE (student_id = ? AND knowledge_point_id = ?)
 - **主键 / 唯一约束 / 索引**：PRIMARY KEY (id)
 - **谁写**：`AiCallLogService`（修改、新增）
 - **谁读**：`AiCallLogService`
-- **现在的数据**：128
+- **现在的数据**：243
  行
 
 | 列 | 类型 | 约束 / 默认值 | 含义 |
