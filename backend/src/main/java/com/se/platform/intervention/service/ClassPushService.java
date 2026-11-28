@@ -299,11 +299,28 @@ public class ClassPushService {
             }
             List<ExerciseView> qs = questions(p);
             boolean done = !qs.isEmpty() && answered(studentId, qs.stream().map(ExerciseView::id).toList());
+            boolean accepted = ClassAnalysisService.split(p.getAcceptedIds()).contains(studentId);
             out.add(new MyPush(p.getId(), kpName(p), keyPoints(p), assessLabel(p), p.getExplanation(), p.getDueAt(),
-                    done, qs.stream().map(v -> new QuizQuestion(v.id(), v.type(), v.stem(), v.options(), v.reasons()))
+                    done, accepted, qs.stream().map(v -> new QuizQuestion(v.id(), v.type(), v.stem(), v.options(), v.reasons()))
                     .toList()));
         }
         return out;
+    }
+
+    /** 学生在小助手里“接收”老师的推送：接收后存到学习推荐（可以重复点，不重复记） */
+    @Transactional
+    public void accept(long studentId, Long pushId) {
+        ClassPush p = pushMapper.selectById(pushId);
+        if (p == null || !ClassPush.PUSHED.equals(p.getStatus())
+                || !ClassAnalysisService.split(p.getStudentIds()).contains(studentId)) {
+            throw BusinessException.notFound("老师的补充讲解");
+        }
+        List<Long> ids = new ArrayList<>(ClassAnalysisService.split(p.getAcceptedIds()));
+        if (!ids.contains(studentId)) {
+            ids.add(studentId);
+            p.setAcceptedIds(ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")));
+            pushMapper.updateById(p);
+        }
     }
 
     /** 学生做老师推送的新题：算进补练（不属于任何练习），只算第一次 */
@@ -314,6 +331,7 @@ public class ClassPushService {
                 || !ClassAnalysisService.split(p.getStudentIds()).contains(studentId)) {
             throw BusinessException.notFound("老师的补充讲解");
         }
+        accept(studentId, pushId); // 做了就算接收了
         List<ExerciseView> qs = questions(p);
         List<Long> ids = qs.stream().map(ExerciseView::id).toList();
         if (answered(studentId, ids)) {

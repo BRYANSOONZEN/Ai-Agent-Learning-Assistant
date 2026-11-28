@@ -3,6 +3,7 @@ package com.se.platform.assistant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.jayway.jsonpath.JsonPath;
@@ -131,9 +132,43 @@ class RemedyAndChatTest {
         mockMvc.perform(as(5, get("/api/diagnosis/me")))
                 .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].color").value("orange"))
                 .andExpect(jsonPath("$.data.courses[0].chapters[0].points[1].color").value("green"));
-        // 其他学生的推荐里没有这些题
+        // 做过的这一轮存到学习推荐（小助手的延伸）：每道题我的答案、对错、正确答案、解析
+        mockMvc.perform(as(5, get("/api/recommendations")))
+                .andExpect(jsonPath("$.data.remedyCount").value(1))
+                .andExpect(jsonPath("$.data.sets[0].kind").value("remedy"))
+                .andExpect(jsonPath("$.data.sets[0].status").value("done"))
+                .andExpect(jsonPath("$.data.sets[0].round").value(1))
+                .andExpect(jsonPath("$.data.sets[0].knowledgePointName").value("边界测试值的选取"))
+                .andExpect(jsonPath("$.data.sets[0].score").value(1.0))
+                .andExpect(jsonPath("$.data.sets[0].questions.length()").value(3))
+                .andExpect(jsonPath("$.data.sets[0].questions[0].chosen").value("A"))
+                .andExpect(jsonPath("$.data.sets[0].questions[0].correct").value(true))
+                .andExpect(jsonPath("$.data.sets[0].questions[0].answer").value("A"))
+                .andExpect(jsonPath("$.data.sets[0].questions[0].analysis").isNotEmpty());
+        // 补练题只给他自己：别的学生的学习推荐里没有
         mockMvc.perform(as(6, get("/api/recommendations")))
-                .andExpect(jsonPath("$..exerciseId", Matchers.not(Matchers.hasItem(10))));
+                .andExpect(jsonPath("$.data.sets.length()").value(0));
+    }
+
+    @Test
+    void learningRecommendation_onlyWhatCameThroughAssistant() throws Exception {
+        // 还没在小助手里做过补练：学习推荐是空的（不会从练习里挑题）
+        mockMvc.perform(as(5, get("/api/recommendations")))
+                .andExpect(jsonPath("$.data.sets.length()").value(0));
+        // 小助手出了题、还没交：显示这一轮，只有题目，不给答案（去小助手接着做）
+        fake.reply(THREE).then(SOLVED);
+        start(5).andExpect(jsonPath("$.data.questions.length()").value(3));
+        mockMvc.perform(as(5, get("/api/recommendations")))
+                .andExpect(jsonPath("$.data.sets.length()").value(1))
+                .andExpect(jsonPath("$.data.sets[0].status").value("open"))
+                .andExpect(jsonPath("$.data.sets[0].score").doesNotExist())
+                .andExpect(jsonPath("$.data.sets[0].questions[0].stem").isNotEmpty())
+                .andExpect(jsonPath("$.data.sets[0].questions[0].answer").doesNotExist())
+                .andExpect(jsonPath("$.data.sets[0].questions[0].analysis").doesNotExist());
+        // 以前“在推荐页做题”的接口没有了
+        mockMvc.perform(as(5, post("/api/recommendations/practice")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":{\"3\":\"A\"}}"))
+                .andExpect(r -> assertThat(r.getResponse().getContentAsString()).doesNotContain("\"code\":200"));
     }
 
     // ------------------------------------------------------------------ 拓展（E1 Elaborate）
@@ -179,6 +214,14 @@ class RemedyAndChatTest {
                 .andExpect(jsonPath("$.data.text", Matchers.containsString("这组比较难")));
         assertThat(jdbc.queryForObject("SELECT first_mastery FROM mastery WHERE student_id = 5 AND knowledge_point_id = 1",
                 Double.class)).isEqualTo(firstBefore);
+        // 学习推荐：做完的拓展默认不保存，不显示；学生选“保存”后显示在“拓展”里
+        mockMvc.perform(as(5, get("/api/recommendations"))).andExpect(jsonPath("$.data.extendCount").value(0));
+        Integer roundId = jdbc.queryForObject("SELECT MAX(id) FROM remedy_round WHERE student_id = 5 AND kind = 'extend'",
+                Integer.class);
+        mockMvc.perform(as(5, put("/api/recommendations/extend/" + roundId + "/saved"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"saved\":true}"));
+        mockMvc.perform(as(5, get("/api/recommendations"))).andExpect(jsonPath("$.data.extendCount").value(1))
+                .andExpect(jsonPath("$.data.remedyCount").value(1));
         mockMvc.perform(as(5, get("/api/diagnosis/me")))
                 .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].color").value("orange"));
         // 没有要交的了

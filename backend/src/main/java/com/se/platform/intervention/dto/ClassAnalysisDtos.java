@@ -81,7 +81,8 @@ public final class ClassAnalysisDtos {
 
     /** 学生看到的推送：老师补充讲解 + 新题（不带答案） */
     public record MyPush(Long id, String knowledgePointName, List<String> keyPoints, String assessLabel,
-                         String explanation, LocalDateTime dueAt, boolean done, List<QuizQuestion> questions) {
+                         String explanation, LocalDateTime dueAt, boolean done, boolean accepted,
+                         List<QuizQuestion> questions) {
     }
 
     public record PushSubmit(java.util.Map<Long, String> answers) {

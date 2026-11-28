@@ -542,6 +542,7 @@ CREATE TABLE remedy_round (
     status             VARCHAR(16)  NOT NULL DEFAULT 'open', -- open 还没交 / done 交了
     score              DOUBLE,                             -- 这一轮的平均分
     escalated          TINYINT(1)   NOT NULL DEFAULT 0,    -- 2 轮做完还没补回来（只记录，老师能看到，不转给老师处理）
+    saved              TINYINT(1)   NOT NULL DEFAULT 0,    -- 拓展：学生选了“保存到学习推荐”（补练一律保存，不看这一列）
     created_at         DATETIME,
     finished_at        DATETIME,
     PRIMARY KEY (id)
@@ -616,6 +617,7 @@ CREATE TABLE class_push (
     explanation_by     VARCHAR(16),                        -- ai 大模型起草 / teacher 老师写的
     exercise_ids       VARCHAR(255),                       -- 新题（来源 class），逗号分隔
     student_ids        VARCHAR(2000) NOT NULL,             -- 推送对象：做错的学生
+    accepted_ids       VARCHAR(2000) NOT NULL DEFAULT '',  -- 在小助手里点了“接收”的学生（接收后存到学习推荐）
     before_rate        DOUBLE,                             -- 推送前的错误率（卡片上的）
     status             VARCHAR(16)  NOT NULL DEFAULT 'draft', -- draft 老师还在改 / pushed 已推送
     due_at             DATETIME,

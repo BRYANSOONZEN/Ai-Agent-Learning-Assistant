@@ -33,6 +33,8 @@ public class RemedyRound {
     private Double score;
     /** 2 轮补练做完还没补回来（只记录，老师能看到；2026-11-25 起不转给老师处理） */
     private Boolean escalated;
+    /** 拓展：学生选了保存到学习推荐 */
+    private Boolean saved;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

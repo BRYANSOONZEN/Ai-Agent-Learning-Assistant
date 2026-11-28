@@ -1,260 +1,183 @@
 package com.se.platform.recommend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.se.platform.assistant.entity.RemedyRound;
+import com.se.platform.assistant.mapper.RemedyRoundMapper;
+import com.se.platform.auth.entity.User;
+import com.se.platform.auth.mapper.UserMapper;
 import com.se.platform.common.BusinessException;
 import com.se.platform.course.dto.ExerciseView;
 import com.se.platform.course.dto.LearnDtos.QuestionResult;
-import com.se.platform.course.dto.LearnDtos.QuizResult;
 import com.se.platform.course.entity.Chapter;
-import com.se.platform.course.entity.ChapterItem;
+import com.se.platform.course.entity.Course;
 import com.se.platform.course.entity.Exercise;
-import com.se.platform.course.entity.ExerciseKnowledgePoint;
 import com.se.platform.course.entity.KnowledgePoint;
-import com.se.platform.course.mapper.ChapterItemMapper;
 import com.se.platform.course.mapper.ChapterMapper;
-import com.se.platform.course.mapper.ExerciseKnowledgePointMapper;
+import com.se.platform.course.mapper.CourseMapper;
 import com.se.platform.course.mapper.ExerciseMapper;
 import com.se.platform.course.mapper.KnowledgePointMapper;
 import com.se.platform.course.service.ExerciseService;
-import com.se.platform.course.service.LearnService;
-import com.se.platform.diagnosis.dto.DiagnosisDtos.CourseDiagnosis;
-import com.se.platform.diagnosis.dto.DiagnosisDtos.MasteryChange;
-import com.se.platform.diagnosis.dto.DiagnosisDtos.PointDiagnosis;
-import com.se.platform.diagnosis.dto.DiagnosisDtos.StudentDiagnosis;
-import com.se.platform.diagnosis.service.DiagnosisService;
-import com.se.platform.diagnosis.service.MasteryService;
-import com.se.platform.recommend.dto.RecommendDtos.PointRecommendation;
-import com.se.platform.recommend.dto.RecommendDtos.RecExercise;
+import com.se.platform.course.service.Grader;
+import com.se.platform.intervention.entity.ClassPush;
+import com.se.platform.intervention.mapper.ClassPushMapper;
+import com.se.platform.intervention.service.ClassAnalysisService;
 import com.se.platform.recommend.dto.RecommendDtos.RecommendationList;
-import com.se.platform.recommend.dto.RecommendDtos.ReviewLink;
-import com.se.platform.recommend.entity.Recommendation;
-import com.se.platform.recommend.mapper.RecommendationMapper;
+import com.se.platform.recommend.dto.RecommendDtos.SavedSet;
 import com.se.platform.record.entity.AnswerRecord;
 import com.se.platform.record.mapper.AnswerRecordMapper;
-import com.se.platform.record.service.RecordService;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 学习推荐（docs/design.md 5.2）：取掌握度 < 0.6 的知识点，从低到高；
- * 每个知识点只挑学生没做过的新题（掌握度只算每道题第一次作答，重做旧题不改掌握度），难度接近知识点的在前；
- * 每个知识点最多 3 道，一共最多 5 道，每道写明理由。
- * 推荐过的题记在 recommendation 表：做过了是 done，点"换一道"是 dismissed，这两种以后都不再推。
- * 在推荐页做题和交卷一样记进学习记录、重算掌握度，所以做完刷新，推荐会跟着变。
- * 老师正在干预的知识点（干预执行中）不在这里推，学生按"老师布置"的安排做，干预结束后再恢复。
+ * 学习推荐 = 小助手的延伸。设计：补弱点、拓展都由小助手负责，学生要先经过小助手——
+ * 在小助手里点“做补练题”“来点更难的”，大模型出完题，学生点“去查看”到学习推荐页做；
+ * 老师的推送在小助手里点“接收”后存到这里。页面分三类：
+ * <ul>
+ *   <li>系统补充（remedy_round.kind = remedy）：小助手按这个学生的错题出的补练，一律保存——知识点变色（补回来）要有记录；</li>
+ *   <li>拓展（kind = extend）：还没做的显示出来；做完后学生自己选保存不保存，不保存的不再显示；</li>
+ *   <li>老师推送（class_push）：学生接收了的。</li>
+ * </ul>
+ * 做题仍然调小助手原来的接口（补练、拓展、老师推送各自的提交接口），判分和“补回来”的规则只有一套。
+ * 做过的题带上我的答案、对错、正确答案、解析和“你可能是这样想的”（用存下来的作答重新判一遍）。
+ * 练习里的题不会出现在这里（不绕过解锁顺序，也不占用“第一次作答”）。
  */
 @Service
 public class RecommendService {
 
-    static final int MAX_TOTAL = 5;
-    static final int MAX_PER_POINT = 3;
-
-    private final DiagnosisService diagnosisService;
-    private final MasteryService masteryService;
-    private final RecordService recordService;
-    private final ExerciseService exerciseService;
-    private final RecommendationMapper recommendationMapper;
+    private final RemedyRoundMapper roundMapper;
+    private final ClassPushMapper pushMapper;
     private final AnswerRecordMapper answerMapper;
-    private final ExerciseKnowledgePointMapper linkMapper;
     private final ExerciseMapper exerciseMapper;
+    private final ExerciseService exerciseService;
     private final KnowledgePointMapper kpMapper;
     private final ChapterMapper chapterMapper;
-    private final ChapterItemMapper itemMapper;
+    private final CourseMapper courseMapper;
+    private final UserMapper userMapper;
 
-    public RecommendService(DiagnosisService diagnosisService, MasteryService masteryService,
-                            RecordService recordService, ExerciseService exerciseService,
-                            RecommendationMapper recommendationMapper, AnswerRecordMapper answerMapper,
-                            ExerciseKnowledgePointMapper linkMapper, ExerciseMapper exerciseMapper,
-                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, ChapterItemMapper itemMapper) {
-        this.diagnosisService = diagnosisService;
-        this.masteryService = masteryService;
-        this.recordService = recordService;
-        this.exerciseService = exerciseService;
-        this.recommendationMapper = recommendationMapper;
+    public RecommendService(RemedyRoundMapper roundMapper, ClassPushMapper pushMapper, AnswerRecordMapper answerMapper,
+                            ExerciseMapper exerciseMapper, ExerciseService exerciseService,
+                            KnowledgePointMapper kpMapper, ChapterMapper chapterMapper, CourseMapper courseMapper,
+                            UserMapper userMapper) {
+        this.roundMapper = roundMapper;
+        this.pushMapper = pushMapper;
         this.answerMapper = answerMapper;
-        this.linkMapper = linkMapper;
         this.exerciseMapper = exerciseMapper;
+        this.exerciseService = exerciseService;
         this.kpMapper = kpMapper;
         this.chapterMapper = chapterMapper;
-        this.itemMapper = itemMapper;
+        this.courseMapper = courseMapper;
+        this.userMapper = userMapper;
     }
 
-    // ------------------------------------------------------------------ 推荐列表
-
-    /** 打开推荐页时按最新的掌握度重新挑题，挑出来的写进 recommendation 表 */
-    @Transactional
+    /** 我的学习推荐：小助手出过的补练、拓展，和做过的老师推送，按时间从新到旧 */
     public RecommendationList student(long studentId) {
-        StudentDiagnosis diagnosis = diagnosisService.student(studentId);
-        Map<Long, String> courseNames = diagnosis.courses().stream()
-                .collect(Collectors.toMap(CourseDiagnosis::courseId, CourseDiagnosis::courseName));
-        Map<Long, Recommendation> mine = recommendationMapper.selectList(new LambdaQueryWrapper<Recommendation>()
-                        .eq(Recommendation::getStudentId, studentId)
-                        .eq(Recommendation::getTargetType, Recommendation.EXERCISE))
-                .stream().collect(Collectors.toMap(Recommendation::getTargetId, r -> r));
-        Map<Long, List<Boolean>> history = history(studentId);
+        List<SavedSet> sets = new ArrayList<>();
+        for (RemedyRound r : roundMapper.selectList(new LambdaQueryWrapper<RemedyRound>()
+                .eq(RemedyRound::getStudentId, studentId))) {
+            List<Long> ids = ClassAnalysisService.split(r.getExerciseIds());
+            boolean done = !RemedyRound.OPEN.equals(r.getStatus());
+            String kind = "extend".equals(r.getKind()) ? "extend" : "remedy";
+            boolean saved = "remedy".equals(kind) || Boolean.TRUE.equals(r.getSaved());
+            if ("extend".equals(kind) && done && !saved) {
+                continue; // 做完了、学生没选保存的拓展题不显示
+            }
+            sets.add(set(r.getId(), kind, r.getKnowledgePointId(), "remedy".equals(kind) ? nz(r.getRoundNo()) : 0,
+                    r.getAssessType(), done, saved, done ? r.getScore() : null, null, r.getCreatedAt(), null, studentId, ids));
+        }
+        for (ClassPush p : pushMapper.selectList(new LambdaQueryWrapper<ClassPush>()
+                .eq(ClassPush::getStatus, ClassPush.PUSHED))) {
+            if (!ClassAnalysisService.split(p.getStudentIds()).contains(studentId)) {
+                continue;
+            }
+            if (!ClassAnalysisService.split(p.getAcceptedIds()).contains(studentId)) {
+                continue; // 还没在小助手里接收：只在小助手里显示
+            }
+            List<Long> ids = ClassAnalysisService.split(p.getExerciseIds());
+            Map<Long, AnswerRecord> mine = firstAnswers(studentId, ids);
+            boolean done = !ids.isEmpty() && !mine.isEmpty();
+            Double score = done ? Math.round(mine.values().stream().mapToDouble(a -> a.getScore() == null ? 0 : a.getScore())
+                    .average().orElse(0) * 100) / 100.0 : null;
+            sets.add(set(p.getId(), "teacher", p.getKnowledgePointId(), 0, p.getAssessType() == null ? "concept" : p.getAssessType(),
+                    done, true, score, p.getExplanation(), p.getPushedAt(), p.getDueAt(), studentId, ids));
+        }
+        sets.sort(Comparator.comparing(SavedSet::at, Comparator.nullsLast(Comparator.reverseOrder())));
+        User u = userMapper.selectById(studentId);
+        return new RecommendationList(u == null ? "" : u.getName(),
+                (int) sets.stream().filter(s -> "remedy".equals(s.kind())).count(),
+                (int) sets.stream().filter(s -> "extend".equals(s.kind())).count(),
+                (int) sets.stream().filter(s -> "teacher".equals(s.kind())).count(), sets);
+    }
 
-        List<PointRecommendation> points = new ArrayList<>();
-        int left = MAX_TOTAL;
-        for (PointDiagnosis p : diagnosis.weakPoints()) { // 已经按掌握度从低到高
-            KnowledgePoint kp = kpMapper.selectById(p.knowledgePointId());
-            List<RecExercise> picked = new ArrayList<>();
-            for (Candidate c : candidates(kp, mine, history)) {
-                if (picked.size() == MAX_PER_POINT || left == 0) {
-                    break;
+    private SavedSet set(Long id, String kind, Long kpId, int round, String assessType, boolean done, boolean saved,
+                         Double score, String explanation, LocalDateTime at, LocalDateTime dueAt, long studentId,
+                         List<Long> ids) {
+        String assess = assessType == null ? null : ClassAnalysisService.ASSESS.getOrDefault(assessType, assessType);
+        KnowledgePoint kp = kpId == null ? null : kpMapper.selectById(kpId);
+        Chapter ch = kp == null || kp.getChapterId() == null ? null : chapterMapper.selectById(kp.getChapterId());
+        Course c = kp == null || kp.getCourseId() == null ? null : courseMapper.selectById(kp.getCourseId());
+        Map<Long, AnswerRecord> mine = firstAnswers(studentId, ids);
+        List<QuestionResult> qs = new ArrayList<>();
+        if (!ids.isEmpty()) {
+            Map<Long, Exercise> byId = new LinkedHashMap<>();
+            exerciseMapper.selectByIds(ids).forEach(e -> byId.put(e.getId(), e));
+            for (Long eid : ids) {
+                Exercise e = byId.get(eid);
+                if (e != null) {
+                    qs.add(result(exerciseService.toView(e), done ? mine.get(eid) : null));
                 }
-                Recommendation r = save(studentId, kp.getId(), c, mine.get(c.exercise.getId()));
-                ExerciseView v = exerciseService.toView(c.exercise);
-                picked.add(new RecExercise(r.getId(), v.id(), v.stem(), v.options(), v.difficulty(), c.reason));
-                left--;
             }
-            points.add(new PointRecommendation(p.knowledgePointId(), p.name(), p.courseId(),
-                    courseNames.get(p.courseId()), p.chapterId(), p.chapterTitle(), p.mastery(), p.level(),
-                    p.attemptCount(), p.correctCount(), p.misconception(), kp.getContent(),
-                    review(p.chapterId()), picked));
         }
-        int done = (int) mine.values().stream().filter(r -> Recommendation.DONE.equals(r.getStatus())).count();
-        return new RecommendationList(diagnosis.studentName(), diagnosis.weakPoints().size(), done, points);
+        return new SavedSet(id, kind, kpId, kp == null ? "" : kp.getName(), c == null ? null : c.getId(),
+                c == null ? "" : c.getName(), ch == null ? null : ch.getId(), ch == null ? "" : ch.getTitle(), round,
+                assessType, assess, done ? "done" : "open", saved, score, explanation, at, dueAt, qs);
     }
 
-    /** 一道候选题；rank 小的先推 */
-    private record Candidate(Exercise exercise, int rank, String reason) {
+    /** 拓展做完后学生选保存不保存；只能改自己的、已经做完的拓展 */
+    public void saveExtend(long studentId, Long roundId, boolean saved) {
+        RemedyRound r = roundMapper.selectById(roundId);
+        if (r == null || r.getStudentId() != studentId || !"extend".equals(r.getKind())) {
+            throw BusinessException.notFound("拓展题");
+        }
+        r.setSaved(saved);
+        roundMapper.updateById(r);
     }
 
-    /** 这个知识点下学生能看到的题（章节已发布），去掉做对过的推荐和换掉的，按优先级排好 */
-    private List<Candidate> candidates(KnowledgePoint kp, Map<Long, Recommendation> mine,
-                                       Map<Long, List<Boolean>> history) {
-        List<Long> ids = linkMapper.selectList(new LambdaQueryWrapper<ExerciseKnowledgePoint>()
-                        .eq(ExerciseKnowledgePoint::getKnowledgePointId, kp.getId()))
-                .stream().map(ExerciseKnowledgePoint::getExerciseId).toList();
+    /**
+     * 一道题的回看：做过的用存下来的答案重新判（客观题规则和做题时一样；简答用存下来的分数），
+     * 没做的只给题目，不给答案。
+     */
+    static QuestionResult result(ExerciseView v, AnswerRecord a) {
+        if (a == null) {
+            return new QuestionResult(v.id(), v.type(), v.stem(), v.options(), null, null, false, null, null, 0, 0, 0,
+                    "open", v.reasons(), null, null, List.of(), null, List.of());
+        }
+        if (Grader.SHORT.equals(v.type())) {
+            return new QuestionResult(v.id(), v.type(), v.stem(), v.options(), a.getAnswer(), null,
+                    Boolean.TRUE.equals(a.getIsCorrect()), v.analysis(), null, a.getScore() == null ? 0 : a.getScore(),
+                    0, 1, a.getStatus(), v.reasons(), null, null, List.of(), v.reference(), List.of());
+        }
+        return Grader.grade(v, a.getAnswer());
+    }
+
+    /** 每道题这个学生的第一次作答 */
+    private Map<Long, AnswerRecord> firstAnswers(long studentId, List<Long> ids) {
+        Map<Long, AnswerRecord> out = new LinkedHashMap<>();
         if (ids.isEmpty()) {
-            return List.of();
+            return out;
         }
-        List<Exercise> exercises = exerciseMapper.selectByIds(ids);
-        Set<Long> published = chapterMapper.selectByIds(exercises.stream().map(Exercise::getChapterId).toList())
-                .stream().filter(ch -> "published".equals(ch.getStatus())).map(Chapter::getId)
-                .collect(Collectors.toSet());
-        int kpDifficulty = kp.getDifficulty() == null ? 2 : kp.getDifficulty();
-
-        List<Candidate> list = new ArrayList<>();
-        for (Exercise e : exercises) {
-            if (!e.recommendable()) {
-                continue; // 草稿题学生看不到；简答要大模型判，推荐页只放客观题
-            }
-            Recommendation r = mine.get(e.getId());
-            if (!published.contains(e.getChapterId())
-                    || r != null && !Recommendation.NEW.equals(r.getStatus())
-                    || r != null && Recommendation.TEACHER.equals(r.getSource())) {
-                continue; // 老师布置的题单独显示在"老师布置"里，不占系统推荐的名额
-            }
-            List<Boolean> h = history.getOrDefault(e.getId(), List.of());
-            if (h.isEmpty()) {
-                list.add(new Candidate(e, 1, "还没做过的新题"));
-            }
-            // 做过的旧题不再推：掌握度只算第一次作答，重做不改
-        }
-        list.sort(Comparator.comparingInt(Candidate::rank)
-                .thenComparingInt(c -> Math.abs((c.exercise.getDifficulty() == null ? 2 : c.exercise.getDifficulty())
-                        - kpDifficulty))
-                .thenComparingInt(c -> c.exercise.getSortOrder() == null ? 0 : c.exercise.getSortOrder())
-                .thenComparingLong(c -> c.exercise.getId()));
-        return list;
-    }
-
-    private Recommendation save(long studentId, Long kpId, Candidate c, Recommendation existing) {
-        if (existing != null) {
-            if (!c.reason.equals(existing.getReason())) {
-                existing.setReason(c.reason);
-                recommendationMapper.updateById(existing);
-            }
-            return existing;
-        }
-        Recommendation r = new Recommendation();
-        r.setStudentId(studentId);
-        r.setSource(Recommendation.SYSTEM);
-        r.setTargetType(Recommendation.EXERCISE);
-        r.setTargetId(c.exercise.getId());
-        r.setKnowledgePointId(kpId);
-        r.setReason(c.reason);
-        r.setStatus(Recommendation.NEW);
-        recommendationMapper.insert(r);
-        return r;
-    }
-
-    /** 每道题的作答对错，从早到晚 */
-    private Map<Long, List<Boolean>> history(long studentId) {
-        Map<Long, List<Boolean>> map = new HashMap<>();
         answerMapper.selectList(new LambdaQueryWrapper<AnswerRecord>()
-                        .eq(AnswerRecord::getStudentId, studentId)
-                        .orderByAsc(AnswerRecord::getSubmittedAt)
-                        .orderByAsc(AnswerRecord::getId))
-                .forEach(a -> map.computeIfAbsent(a.getExerciseId(), k -> new ArrayList<>())
-                        .add(Boolean.TRUE.equals(a.getIsCorrect())));
-        return map;
+                        .eq(AnswerRecord::getStudentId, studentId).in(AnswerRecord::getExerciseId, ids)
+                        .orderByAsc(AnswerRecord::getSubmittedAt).orderByAsc(AnswerRecord::getId))
+                .forEach(a -> out.putIfAbsent(a.getExerciseId(), a));
+        return out;
     }
 
-    /** 本章可以回看的视频和文档 */
-    private List<ReviewLink> review(Long chapterId) {
-        return itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
-                        .eq(ChapterItem::getChapterId, chapterId)
-                        .in(ChapterItem::getType, "video", "document")
-                        .orderByAsc(ChapterItem::getSortOrder)
-                        .orderByAsc(ChapterItem::getId))
-                .stream().map(i -> new ReviewLink(i.getId(), i.getType(), i.getTitle())).toList();
-    }
-
-    // ------------------------------------------------------------------ 做题、反馈
-
-    /** 在推荐页做题：只能做推荐给自己、还没做对的题；判分、记进学习记录、重算掌握度 */
-    @Transactional
-    public QuizResult practice(long studentId, Map<Long, String> answers) {
-        if (answers == null || answers.isEmpty()) {
-            throw BusinessException.badRequest("没有作答");
-        }
-        Map<Long, Recommendation> recs = recommendationMapper.selectList(new LambdaQueryWrapper<Recommendation>()
-                        .eq(Recommendation::getStudentId, studentId)
-                        .eq(Recommendation::getTargetType, Recommendation.EXERCISE)
-                        .in(Recommendation::getTargetId, answers.keySet()))
-                .stream().collect(Collectors.toMap(Recommendation::getTargetId, r -> r));
-        // 按课程分开存，同一次提交时间相同，学习记录里算一次「推荐练习」
-        Map<Long, List<QuestionResult>> byCourse = new LinkedHashMap<>();
-        List<QuestionResult> results = new ArrayList<>();
-        for (Map.Entry<Long, String> a : answers.entrySet()) {
-            Recommendation r = recs.get(a.getKey());
-            Exercise e = exerciseMapper.selectById(a.getKey());
-            if (r == null || e == null || !Recommendation.NEW.equals(r.getStatus())) {
-                throw BusinessException.badRequest("这道题不在你的推荐里");
-            }
-            QuestionResult result = LearnService.grade(exerciseService.toView(e), a.getValue());
-            results.add(result);
-            byCourse.computeIfAbsent(e.getCourseId(), k -> new ArrayList<>()).add(result);
-            // 做过就算完成：这道题的第一次作答已经算进补练，再做也不改掌握度
-            r.setStatus(Recommendation.DONE);
-            recommendationMapper.updateById(r);
-        }
-        byCourse.forEach((courseId, list) -> recordService.saveAnswers(courseId, null, list));
-        List<MasteryChange> changes = masteryService.update(studentId, answers.keySet());
-        int correct = (int) results.stream().filter(QuestionResult::correct).count();
-        return new QuizResult(results.size(), correct, results, changes);
-    }
-
-    /** 学生反馈：done 已完成 / dismissed 换一道 */
-    public void feedback(long studentId, Long id, String status) {
-        if (!Recommendation.DONE.equals(status) && !Recommendation.DISMISSED.equals(status)) {
-            throw BusinessException.badRequest("status 只能是 done 或 dismissed");
-        }
-        Recommendation r = recommendationMapper.selectById(id);
-        if (r == null || r.getStudentId() != studentId) {
-            throw BusinessException.notFound("推荐");
-        }
-        r.setStatus(status);
-        recommendationMapper.updateById(r);
+    private static int nz(Integer i) {
+        return i == null ? 0 : i;
     }
 }

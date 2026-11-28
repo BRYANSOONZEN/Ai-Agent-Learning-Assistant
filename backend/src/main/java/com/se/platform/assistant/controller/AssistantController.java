@@ -85,6 +85,13 @@ public class AssistantController {
         return Result.ok(pushService.mine(recordService.currentStudentId()));
     }
 
+    /** POST /api/assistant/pushes/{id}/accept：接收老师的推送（接收后存到学习推荐，在学习推荐页里做） */
+    @PostMapping("/pushes/{id}/accept")
+    public Result<Void> acceptPush(@PathVariable Long id) {
+        pushService.accept(recordService.currentStudentId(), id);
+        return Result.ok();
+    }
+
     /** POST /api/assistant/pushes/{id}/submit：做老师推送的新题（算进补练，只算第一次） */
     @PostMapping("/pushes/{id}/submit")
     public Result<PushResult> submitPush(@PathVariable Long id, @RequestBody PushSubmit body) {

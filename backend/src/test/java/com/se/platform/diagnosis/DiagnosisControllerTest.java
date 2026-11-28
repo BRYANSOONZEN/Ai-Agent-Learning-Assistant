@@ -63,25 +63,12 @@ class DiagnosisControllerTest {
                 .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].after").value(0.0))
                 .andExpect(jsonPath("$.data.masteryChanges[?(@.knowledgePointId == 1)].level").value("weak"));
 
-        // 小助手推荐的新题（没做过的）：做对 1 道 → 补练中，当前掌握度还按第一次
-        String list = mockMvc.perform(get("/api/recommendations")).andReturn().getResponse().getContentAsString();
-        List<Integer> ids = com.jayway.jsonpath.JsonPath.read(list, "$.data.points[0].exercises[*].exerciseId");
-        java.util.Map<Integer, String> key = java.util.Map.of(3, "A", 4, "C", 5, "B", 7, "A", 8, "B", 9, "A");
-        mockMvc.perform(post("/api/recommendations/practice").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":{\"" + ids.get(0) + "\":\"" + key.get(ids.get(0)) + "\"}}"))
-                .andExpect(jsonPath("$.data.masteryChanges[0].after").value(0.0))
-                .andExpect(jsonPath("$.data.masteryChanges[0].remedyStatus").value("practicing"));
-        // 再做对 1 道：补练够 2 道、平均 1 ≥ 0.8 → 已补回来，当前掌握度 1（绿）；原始掌握度不改
-        mockMvc.perform(post("/api/recommendations/practice").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":{\"" + ids.get(1) + "\":\"" + key.get(ids.get(1)) + "\"}}"))
-                .andExpect(jsonPath("$.data.masteryChanges[0].after").value(1.0))
-                .andExpect(jsonPath("$.data.masteryChanges[0].level").value("good"))
-                .andExpect(jsonPath("$.data.masteryChanges[0].remedyStatus").value("recovered"));
+        // 补练（补回来）只在小助手里做，见 RemedyAndChatTest
         mockMvc.perform(get("/api/diagnosis/me"))
-                .andExpect(jsonPath("$.data.summary.weak").value(0))
+                .andExpect(jsonPath("$.data.summary.weak").value(1))
                 .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].firstMastery").value(0.0))
                 .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].firstLevel").value("weak"))
-                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].remedyStatus").value("recovered"));
+                .andExpect(jsonPath("$.data.courses[0].chapters[0].points[0].remedyStatus").doesNotExist());
     }
 
     @Test

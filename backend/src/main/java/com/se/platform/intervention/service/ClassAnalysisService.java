@@ -78,7 +78,7 @@ public class ClassAnalysisService {
             "data", new String[] {"示范讲解", "给一组数据，示范先看什么、比较什么、得出什么结论；再出几道数据分析题"},
             "process", new String[] {"步骤讲解", "按顺序讲每一步做什么、为什么在这一步；再出几道步骤题"},
             "custom", new String[] {"按老师的要求", "按你出题时写的要求补充讲解；再出几道同类的题"});
-    static final Map<String, String> ASSESS = Map.of("concept", "概念辨析", "scenario", "情境应用", "data", "数据分析",
+    public static final Map<String, String> ASSESS = Map.of("concept", "概念辨析", "scenario", "情境应用", "data", "数据分析",
             "process", "流程步骤", "custom", "老师定制");
 
     private final double minSubmitRatio;

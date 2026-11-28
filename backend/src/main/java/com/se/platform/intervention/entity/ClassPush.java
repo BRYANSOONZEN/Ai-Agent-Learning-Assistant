@@ -25,6 +25,8 @@ public class ClassPush {
     private String explanationBy;
     private String exerciseIds;
     private String studentIds;
+    /** 在小助手里点了“接收”的学生，逗号分隔 */
+    private String acceptedIds;
     private Double beforeRate;
     private String status;
     private LocalDateTime dueAt;
