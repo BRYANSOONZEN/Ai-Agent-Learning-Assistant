@@ -123,7 +123,7 @@ class ProgressTest {
     @Test
     void document_thirtySecondsThenButton() throws Exception {
         // 12 号：文档一直能读；AI 对话要等资料学完，练习要等 AI 对话完成
-        course(12).andExpect(jsonPath("$.data.lockedItemIds", Matchers.contains(2, 3)));
+        course(12).andExpect(jsonPath("$.data.lockedItemIds", Matchers.containsInAnyOrder(2, 3)));
 
         // 不能直接报"学完"，也不能一打开就点"我已读完"
         mockMvc.perform(post("/api/learn/events").header(DemoIdentity.HEADER, "12")

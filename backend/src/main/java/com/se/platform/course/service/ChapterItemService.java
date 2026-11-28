@@ -89,7 +89,27 @@ public class ChapterItemService {
                 .stream().mapToInt(x -> x.getSortOrder() == null ? 0 : x.getSortOrder()).max().orElse(-1) + 1);
         copy(req, item);
         itemMapper.insert(item);
-        return toView(item);
+        normalizeOrder(chapter.getId()); // 新加的 AI 对话排到练习前面
+        return toView(itemMapper.selectById(item.getId()));
+    }
+
+    /** 学习顺序的阶段：资料（视频、文档）→ AI 对话 → 练习。对话要在练习前面（练习要先完成对话才解锁） */
+    static int stage(String type) {
+        return "exercise".equals(type) ? 2 : "dialogue".equals(type) ? 1 : 0;
+    }
+
+    /** 按阶段重排本章内容项（同一阶段里保持原来的先后），重写 sort_order */
+    void normalizeOrder(Long chapterId) {
+        List<ChapterItem> items = new java.util.ArrayList<>(itemMapper.selectList(new LambdaQueryWrapper<ChapterItem>()
+                .eq(ChapterItem::getChapterId, chapterId)
+                .orderByAsc(ChapterItem::getSortOrder).orderByAsc(ChapterItem::getId)));
+        items.sort(java.util.Comparator.comparingInt(i -> stage(i.getType()))); // 稳定排序
+        for (int i = 0; i < items.size(); i++) {
+            if (!Integer.valueOf(i).equals(items.get(i).getSortOrder())) {
+                items.get(i).setSortOrder(i);
+                itemMapper.updateById(items.get(i));
+            }
+        }
     }
 
     public ChapterItemView update(Long id, ChapterItemSaveRequest req) {
@@ -154,6 +174,14 @@ public class ChapterItemService {
     @Transactional
     public List<ChapterItemView> reorder(Long chapterId, List<Long> ids) {
         chapterService.requireOwned(chapterId);
+        int last = 0;
+        for (Long id : ids) {
+            int st = stage(require(id).getType());
+            if (st < last) {
+                throw BusinessException.badRequest("学习顺序是：资料（视频、文档）→ AI 对话 → 练习。AI 对话不能排在练习后面，资料不能排在对话或练习后面");
+            }
+            last = st;
+        }
         for (int i = 0; i < ids.size(); i++) {
             ChapterItem item = require(ids.get(i));
             if (!item.getChapterId().equals(chapterId)) {

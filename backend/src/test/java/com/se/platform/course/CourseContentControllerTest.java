@@ -83,12 +83,18 @@ class CourseContentControllerTest {
         long quiz = postJson("/api/chapter-items", """
                 {"chapterId": %d, "type": "exercise", "title": "小测"}""".formatted(chapterId));
 
-        // 调顺序：练习放到最前
+        // 调顺序：练习不能排到资料前面（学习顺序：资料 → AI 对话 → 练习）
         mockMvc.perform(put("/api/chapters/" + chapterId + "/items/order").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ids\": [%d, %d, %d, %d]}".formatted(quiz, video1, video2, doc)))
-                .andExpect(jsonPath("$.data[0].id").value(quiz))
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("资料（视频、文档）→ AI 对话 → 练习")));
+        // 资料之间随便排：文档放到最前
+        mockMvc.perform(put("/api/chapters/" + chapterId + "/items/order").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\": [%d, %d, %d, %d]}".formatted(doc, video1, video2, quiz)))
+                .andExpect(jsonPath("$.data[0].id").value(doc))
+                .andExpect(jsonPath("$.data[0].ready").value(true))
                 .andExpect(jsonPath("$.data[2].ready").value(false))
-                .andExpect(jsonPath("$.data[3].ready").value(true));
+                .andExpect(jsonPath("$.data[3].id").value(quiz));
 
         long kpId = postJson("/api/knowledge-points", """
                 {"chapterId": %d, "name": "知识点 A", "isKey": true}""".formatted(chapterId));
@@ -206,7 +212,8 @@ class CourseContentControllerTest {
         mockMvc.perform(get("/api/chapters/1/items"))
                 .andExpect(jsonPath("$.data[0].type").value("document"))
                 .andExpect(jsonPath("$.data[0].ready").value(true))
-                .andExpect(jsonPath("$.data[1].exerciseCount").value(2))
-                .andExpect(jsonPath("$.data[2].topicCount").value(2));
+                // 学习顺序：阅读 → AI 对话 → 练习
+                .andExpect(jsonPath("$.data[1].topicCount").value(2))
+                .andExpect(jsonPath("$.data[2].exerciseCount").value(2));
     }
 }

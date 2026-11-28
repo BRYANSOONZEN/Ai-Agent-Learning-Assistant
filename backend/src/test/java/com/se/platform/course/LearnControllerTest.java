@@ -34,7 +34,8 @@ class LearnControllerTest {
                 .andExpect(jsonPath("$.data.course.name").value("软件测试"))
                 .andExpect(jsonPath("$.data.chapters.length()").value(1))
                 .andExpect(jsonPath("$.data.chapters[0].items.length()").value(3))
-                .andExpect(jsonPath("$.data.chapters[0].items[1].type").value("exercise"));
+                .andExpect(jsonPath("$.data.chapters[0].items[1].type").value("dialogue"))
+                .andExpect(jsonPath("$.data.chapters[0].items[2].type").value("exercise"));
 
         // 草稿课程（4 号）学生打不开
         mockMvc.perform(get("/api/learn/courses/4")).andExpect(jsonPath("$.code").value(404));

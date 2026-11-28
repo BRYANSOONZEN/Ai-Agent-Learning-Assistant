@@ -66,8 +66,8 @@ INSERT INTO chapter_item (course_id, chapter_id, type, title, description, sort_
  '1. 大量错误发生在输入范围的边界上，而不是在范围内部。
 2. 选取测试值时，在边界上、边界外侧、边界内侧各取一个值。
 3. 例：数量范围 1～99，下边界取 0、1、2，上边界取 98、99、100。', 0, NOW(), NOW()),
-(1, 1, 'exercise', '练习：边界值小测', '两道单选，做完再看结果。', 1, NOW(), NOW()),
-(1, 1, 'dialogue', 'AI 对话：订单数量怎么测', '学完后和 AI 聊一聊，检查自己是不是真的懂了。', 2, NOW(), NOW());
+(1, 1, 'exercise', '练习：边界值小测', '两道单选，做完再看结果。', 2, NOW(), NOW()),
+(1, 1, 'dialogue', 'AI 对话：订单数量怎么测', '读完后和 AI 聊一聊，检查自己是不是真的懂了；聊完再做练习。', 1, NOW(), NOW());
 
 -- 截止时间（演示）：练习 2 天后截止；AI 对话昨天已截止，但允许补做（学生01 还没做对话，会看到"已过期，可补做"）
 UPDATE chapter_item SET due_at = TIMESTAMPADD(DAY, 2, NOW()), allow_late = 1 WHERE id = 2;
