@@ -90,7 +90,7 @@ public class PracticeAnalysis {
 
     /**
      * @param weak        这个知识点要不要给方案（稳了的不给）
-     * @param conceptWeak 概念层也差：方案里加“和 AI 同学再讲一次”
+     * @param conceptWeak 概念层也差（现在不再加“和 AI 同学再讲一次”：AI 对话只在练习之前）
      */
     public Result analyse(long studentId, KnowledgePoint kp, Context ctx, boolean weak, boolean conceptWeak) {
         List<AnswerRecord> records = masteryService.answersOf(studentId, kp.getId()).stream()
@@ -157,9 +157,6 @@ public class PracticeAnalysis {
                         : "，先做" + failed + "类的"), null, null));
             } else if (!latest.isEmpty()) {
                 plan.add(new PlanStep("practice", "这个知识点的题都做过了，看完资料后去学习推荐里再练", null, null));
-            }
-            if (conceptWeak) {
-                plan.add(new PlanStep("dialogue", "把这个知识点讲给 AI 同学听一次，看看自己能不能讲清楚", null, null));
             }
         }
         return new Result(details, plan, misconception);

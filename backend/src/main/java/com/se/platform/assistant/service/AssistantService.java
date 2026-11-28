@@ -210,14 +210,14 @@ public class AssistantService {
             text = (first == null ? "" : first + "，") + "补练后补回来了。这里曾经错过，复习时多留意。";
             action = "extend";
         } else if (escalated) {
-            text = "两轮补练还没补回来。先回去看看资料，再去 AI 对话把它讲一遍。";
-            action = "dialogue";
+            // AI 对话只在练习之前（学习顺序：资料 → AI 对话 → 练习），练习之后不再把学生送回 AI 对话
+            text = "两轮补练还没补回来。先回去看看资料，有不懂的地方可以在“问问题”里问我，老师在学情诊断里也能看到。";
         } else {
             text = (first == null ? "" : first + "，") + "还没掌握"
                     + (misconception == null ? "" : "。你可能是这样想的：" + misconception) + "。先看资料，再做几道补练题。";
             action = "remedy";
             boolean open = !rounds.isEmpty() && RemedyRound.OPEN.equals(rounds.get(rounds.size() - 1).getStatus());
-            plan.add(new PlanStep("remedy", rounds.isEmpty() ? "做 3 道根据你的错题出的新题（在小助手里做）"
+            plan.add(new PlanStep("remedy", rounds.isEmpty() ? "做 3 道根据你的错题出的新题（出好后在学习推荐里做）"
                     : "继续补练（第 " + Math.min(rounds.size() + (open ? 0 : 1), RemedyService.MAX_ROUNDS) + " 轮）",
                     null, null));
         }

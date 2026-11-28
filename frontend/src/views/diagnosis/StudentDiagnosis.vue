@@ -45,6 +45,11 @@ async function load() {
 }
 
 onMounted(load)
+
+// 补弱点归小助手：打开小助手，直接看这一章的报告（错在哪、复习方案、出补练题）
+function askAssistant(chapterId) {
+  window.dispatchEvent(new CustomEvent('assistant-open', { detail: { chapterId } }))
+}
 </script>
 
 <template>
@@ -72,7 +77,7 @@ onMounted(load)
             <span class="sw-eyebrow">WEAK POINTS</span>
             <h3>需要先补的知识点</h3>
           </div>
-          <router-link :to="{ name: 'recommend' }" class="sw-link">去学习推荐<el-icon><Right /></el-icon></router-link>
+          <a href="#" class="sw-link" @click.prevent="askAssistant()">打开小助手<el-icon><Right /></el-icon></a>
         </div>
         <div class="weak-list">
           <article v-for="p in data.weakPoints" :key="p.knowledgePointId" class="weak-card">
@@ -85,6 +90,7 @@ onMounted(load)
               <span v-if="p.difficult" class="flag">难点</span>
             </div>
             <MasteryMeter :value="p.mastery" :level="p.level" />
+            <el-button size="small" type="primary" plain class="ask" @click="askAssistant(p.chapterId)">让小助手帮我补</el-button>
             <p v-if="p.firstMastery != null || p.remedyStatus" class="first-line">
               第一次 {{ percent(p.firstMastery) }}（{{ LEVELS[p.firstLevel]?.label || '未练习' }}）
               <span v-if="p.remedyStatus" class="remedy" :class="p.remedyStatus">
@@ -444,5 +450,9 @@ onMounted(load)
   .weak-list {
     grid-template-columns: 1fr;
   }
+}
+.ask {
+  align-self: flex-start;
+  margin: 6px 0;
 }
 </style>

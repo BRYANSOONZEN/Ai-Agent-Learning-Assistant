@@ -1,22 +1,16 @@
 import request from './request'
 
 /*
- * 学习推荐 (backend: RecommendController, /api/recommendations). No mock branch.
- * The list is picked from the weakest knowledge points every time it is opened; answering a question
- * here is recorded like a quiz and updates mastery, so reloading gives a new list.
+ * 学习推荐 = 小助手的延伸（backend: RecommendController）。分三类：系统补充（补练）、拓展、老师推送。
+ * 出题在小助手里；做题用小助手原来的提交接口（api/assistant.js）。
  */
 
-// GET /api/recommendations -> { weakCount, doneCount, points: [{ name, mastery, misconception, content, review, exercises }] }
+// GET /api/recommendations -> { studentName, remedyCount, extendCount, teacherCount, sets: [...] }
 export function getRecommendations() {
   return request.get('/recommendations')
 }
 
-// POST /api/recommendations/practice { answers: { exerciseId: 'A' } } -> same shape as a quiz result
-export function practiceRecommended(answers) {
-  return request.post('/recommendations/practice', { answers })
-}
-
-// POST /api/recommendations/{id}/feedback { status: 'done' | 'dismissed' }
-export function recommendationFeedback(id, status) {
-  return request.post(`/recommendations/${id}/feedback`, { status })
+// PUT /api/recommendations/extend/{roundId}/saved { saved } -> 拓展做完后保存 / 不保存
+export function saveExtend(roundId, saved) {
+  return request.put(`/recommendations/extend/${roundId}/saved`, { saved })
 }

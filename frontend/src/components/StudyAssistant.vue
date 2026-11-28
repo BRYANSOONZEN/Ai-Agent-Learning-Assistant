@@ -2,11 +2,13 @@
 /*
  * 个人学习助手. Design and rules: docs/模块说明/小助手-自动干预与聊天.md.
  * Two tabs: 学习情况 (per knowledge point, practice only, with the automatic intervention: review the
- * material, then 补练题 generated from this student's own mistakes, done right here) and 问问题 (free chat
+ * material, then 补练题 generated from this student's own mistakes) and 问问题 (free chat
  * with the model; no quiz answers, no questions before the first quiz submission).
  * Opens by itself after a quiz submission that left red / orange points (event 'assistant-open').
  * A floating button in the bottom-right corner; the panel opens only when clicked.
  * Hidden while an exercise is being answered or an AI dialogue is going (stores/assistantFocus).
+ * 补练题 / 拓展题 are generated here; when ready the student clicks 去查看 and does them on the 学习推荐 page
+ * (an extension of the assistant). 老师推送 is accepted here (接收) and then saved to 学习推荐 too.
  * Shows only this student's own data:
  *   - a chapter finished, or one whose exercises were done: a personal report per knowledge point
  *     (colour from the exercises only). From the exercise answers: which assessment type went wrong,
@@ -19,9 +21,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAssistantSummary, getMyPushes, getNotices } from '@/api/assistant'
-import PushBox from './PushBox.vue'
-import RemedyBox from './RemedyBox.vue'
+import { acceptPush, getAssistantSummary, getMyPushes, getNotices, startExtend, startRemedy } from '@/api/assistant'
 import AssistantChat from './AssistantChat.vue'
 import { getMyDeadlines } from '@/api/learn'
 import { studentBusy } from '@/stores/assistantFocus'
@@ -38,8 +38,8 @@ const notices = ref([]) // 老师提醒
 const openPush = ref(null)
 const shownChapter = ref(null)
 const mode = ref('report') // 'report' 学习情况 | 'chat' 问问题
-const remedyKp = ref(null) // which knowledge point's 补练题 are open
-const extendKp = ref(null) // E1 拓展: which point's harder questions are open
+// 补练、拓展：在这里让大模型出题，出好后点“去查看”到学习推荐页去做（学习推荐是小助手的延伸）
+const gen = ref(null) // { kpId, kind: 'remedy' | 'extend', assessType, loading, text, count }
 const extendType = ref('scenario')
 const EXTEND_TYPES = [
   { value: 'scenario', label: '情境应用' },
@@ -47,10 +47,28 @@ const EXTEND_TYPES = [
   { value: 'concept', label: '概念辨析' },
   { value: 'process', label: '流程步骤' },
 ]
+async function generate(p, kind, assessType) {
+  if (gen.value?.loading) return
+  if (kind === 'extend') extendType.value = assessType
+  gen.value = { kpId: p.knowledgePointId, kind, assessType, loading: true, text: '', count: 0 }
+  try {
+    const v = kind === 'extend' ? await startExtend(p.knowledgePointId, assessType) : await startRemedy(p.knowledgePointId)
+    gen.value = { ...gen.value, loading: false, text: v.text, count: v.questions?.length || 0 }
+  } catch {
+    gen.value = null
+  }
+}
 function openExtend(p, type) {
-  extendType.value = type
-  extendKp.value = null
-  setTimeout(() => (extendKp.value = p.knowledgePointId)) // remount the box with the new type
+  generate(p, 'extend', type)
+}
+function goRecommend(kind, kpId) {
+  open.value = false
+  router.push({ name: 'recommend', query: { kind: kind || undefined, kp: kpId || undefined } })
+}
+async function accept(p) {
+  await acceptPush(p.id)
+  p.accepted = true
+  goRecommend('teacher')
 }
 
 const hidden = computed(() => studentBusy.value || route.name === 'dialogue')
@@ -86,10 +104,10 @@ async function refresh() {
 }
 
 // after a quiz submission with red / orange points: open by itself on 学习情况
-function openAfterQuiz() {
+function openAfterQuiz(e) {
   mode.value = 'report'
   open.value = true
-  shownChapter.value = null
+  shownChapter.value = e?.detail?.chapterId ?? null // 学情诊断“让小助手帮我补”：直接打开那一章
   refresh()
 }
 
@@ -171,8 +189,7 @@ function dueText(d) {
 }
 
 function goPractice() {
-  open.value = false
-  router.push({ name: 'recommend' })
+  goRecommend()
 }
 
 // one step of the automatic review plan: open the video at the right second / the document, or go practise
@@ -185,13 +202,13 @@ function doStep(ch, st, p) {
       query: { chapter: ch.chapterId, view: 'item:' + st.itemId, ...(st.startSec != null ? { t: st.startSec } : {}) },
     })
   } else if (st.kind === 'dialogue') goItem(ch, ch.dialogueItemId)
-  else if (st.kind === 'remedy') remedyKp.value = remedyKp.value === p.knowledgePointId ? null : p.knowledgePointId
+  else if (st.kind === 'remedy') generate(p, 'remedy')
   else goPractice()
 }
 
 function act(ch, p) {
   if (p.action === 'dialogue') goItem(ch, ch.dialogueItemId)
-  else if (p.action === 'remedy') remedyKp.value = p.knowledgePointId
+  else if (p.action === 'remedy') generate(p, 'remedy')
   else goPractice()
 }
 </script>
@@ -231,10 +248,17 @@ function act(ch, p) {
             <div v-for="p in pushes" :key="p.id" class="push-item">
               <div class="push-head" @click="openPush = openPush === p.id ? null : p.id">
                 <b>老师补充讲解：「{{ p.knowledgePointName }}」</b>
-                <el-tag size="small" :type="p.done ? 'success' : 'warning'">{{ p.done ? '已完成' : '待完成' }}</el-tag>
+                <el-tag size="small" :type="p.done ? 'success' : p.accepted ? 'primary' : 'warning'">{{ p.done ? '已完成' : p.accepted ? '已接收' : '待接收' }}</el-tag>
               </div>
               <small>{{ p.keyPoints.join('；') }}<template v-if="p.dueAt"> · 期限 {{ String(p.dueAt).slice(5, 16) }}</template></small>
-              <PushBox v-if="openPush === p.id" :push="p" @changed="refresh" />
+              <div v-if="openPush === p.id" class="push-body">
+                <p class="explain">{{ p.explanation }}</p>
+                <p class="muted">老师还出了 {{ p.questions.length }} 道新题。接收后保存到“学习推荐 · 老师推送”，在那里做。</p>
+                <el-button v-if="!p.accepted && !p.done" size="small" type="primary" @click="accept(p)">接收</el-button>
+                <el-button v-else size="small" type="primary" plain @click="goRecommend('teacher')">
+                  {{ p.done ? '去学习推荐查看' : '已接收，去学习推荐做题' }}
+                </el-button>
+              </div>
             </div>
           </div>
 
@@ -295,19 +319,28 @@ function act(ch, p) {
                     <li v-for="(st, k) in p.plan" :key="k">
                       <span>{{ st.text }}</span>
                       <el-button size="small" link type="primary" @click="doStep(current, st, p)">
-                        {{ st.kind === 'review' ? '去看' : st.kind === 'dialogue' ? '去讲' : st.kind === 'remedy' ? (remedyKp === p.knowledgePointId ? '收起' : '做补练题') : '去做题' }}
+                        {{ st.kind === 'review' ? '去看' : st.kind === 'dialogue' ? '去讲' : st.kind === 'remedy' ? '出补练题' : '去做题' }}
                       </el-button>
                     </li>
                   </ol>
                   <div v-if="p.action === 'extend'" class="extend">
                     <span>来点更难的：</span>
-                    <el-button v-for="t in EXTEND_TYPES" :key="t.value" size="small" :type="extendKp === p.knowledgePointId && extendType === t.value ? 'primary' : 'default'" plain @click="openExtend(p, t.value)">{{ t.label }}</el-button>
+                    <el-button v-for="t in EXTEND_TYPES" :key="t.value" size="small" :type="gen?.kind === 'extend' && gen.kpId === p.knowledgePointId && extendType === t.value ? 'primary' : 'default'" plain @click="openExtend(p, t.value)">{{ t.label }}</el-button>
                   </div>
-                  <RemedyBox v-if="extendKp === p.knowledgePointId" :key="'ex' + p.knowledgePointId + extendType" :kp-id="p.knowledgePointId" mode="extend" :assess-type="extendType" />
+
                   <el-button v-if="p.action && p.action !== 'extend' && !p.plan?.length" size="small" type="primary" plain @click="act(current, p)">
                     {{ p.action === 'dialogue' ? '巩固一下（AI 对话）' : '做补练题' }}
                   </el-button>
-                  <RemedyBox v-if="remedyKp === p.knowledgePointId" :key="'rm' + p.knowledgePointId" :kp-id="p.knowledgePointId" @changed="refresh" />
+                  <div v-if="gen && gen.kpId === p.knowledgePointId" class="gen">
+                    <p v-if="gen.loading" class="muted"><el-icon class="is-loading"><Loading /></el-icon>
+                      {{ gen.kind === 'extend' ? '正在出更难的题……' : '正在根据你的错题出补练题……' }}</p>
+                    <template v-else>
+                      <p>{{ gen.text }}</p>
+                      <el-button v-if="gen.count" size="small" type="primary" @click="goRecommend(gen.kind, gen.kpId)">
+                        题目出好了，去查看（学习推荐）
+                      </el-button>
+                    </template>
+                  </div>
                 </li>
               </ul>
             </template>

@@ -4,11 +4,11 @@
  * navy sidebar (brand, "我的工作区" menu, a small study prompt, user card at the bottom)
  * + light top bar (page title and subtitle, today, user).
  * The menu comes straight from the route table, filtered by the current role.
- * The student prompt is real: weak knowledge points from 学情诊断, linking to 学习推荐.
+ * The student prompt is real: weak knowledge points from 学情诊断; clicking it opens the study assistant (补弱点归小助手).
  * Teachers see the number of open alerts next to 干预管理.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getMyDiagnosis } from '@/api/diagnosis'
 import { getOpenIssueCount } from '@/api/classAnalysis'
@@ -75,10 +75,14 @@ const studyPrompt = computed(() => {
   const s = study.value
   if (!s?.total) return null
   const practised = s.total - s.none
-  if (s.weak) return { title: `${s.weak} 个知识点待补`, text: '去学习推荐做几道针对的题。', to: { name: 'recommend' }, ratio: s.good / s.total }
+  if (s.weak) return { title: `${s.weak} 个知识点待补`, text: '点这里打开小助手，看错在哪里、做补练题。', assistant: true, ratio: s.good / s.total }
   if (!practised) return { title: '先做一次练习', text: '做完练习就能看到自己的掌握度。', to: { name: 'courses' }, ratio: 0 }
   return { title: '学习节奏不错', text: `练过的 ${practised} 个知识点都不薄弱，继续学新内容。`, to: { name: 'courses' }, ratio: s.good / s.total }
 })
+
+function openAssistant() {
+  window.dispatchEvent(new Event('assistant-open'))
+}
 
 const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 
@@ -132,14 +136,16 @@ const mustChange = computed(() => !!userStore.user?.mustChangePassword)
       </nav>
 
       <div class="sidebar-bottom">
-        <router-link v-if="studyPrompt && !collapsed" :to="studyPrompt.to" class="sidebar-prompt">
+        <component :is="studyPrompt.assistant ? 'a' : RouterLink" v-if="studyPrompt && !collapsed"
+          v-bind="studyPrompt.assistant ? { href: '#' } : { to: studyPrompt.to }" class="sidebar-prompt"
+          @click="studyPrompt.assistant && ($event.preventDefault(), openAssistant())">
           <span class="prompt-orb"><el-icon :size="16"><MagicStick /></el-icon></span>
           <strong>{{ studyPrompt.title }}</strong>
           <p>{{ studyPrompt.text }}</p>
           <span class="prompt-progress" :title="`已掌握 ${Math.round(studyPrompt.ratio * 100)}%`">
             <span :style="{ width: Math.max(studyPrompt.ratio * 100, 3) + '%' }" />
           </span>
-        </router-link>
+        </component>
         <el-dropdown trigger="click" placement="top-start">
           <button type="button" class="profile-row">
             <span class="avatar">{{ userStore.user?.name?.[0] }}</span>

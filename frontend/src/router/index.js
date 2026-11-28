@@ -96,11 +96,11 @@ export const layoutChildren = [
     name: 'recommend',
     component: () => import('@/views/recommend/RecommendView.vue'),
     meta: {
-      eyebrow: 'RECOMMENDED FOR YOU', subtitle: '针对薄弱的地方，补得刚刚好', title: '学习推荐',
+      eyebrow: 'RECOMMENDED FOR YOU', subtitle: '小助手出的补练、拓展和老师推送，都存在这里', title: '学习推荐',
       icon: 'Star',
       stage: '荐',
       roles: ['student'],
-      description: '根据薄弱知识点推荐习题与资源。',
+      description: '小助手的延伸：补练题（系统补充）、拓展题、老师推送，在这里做和回看。',
     },
   },
   {

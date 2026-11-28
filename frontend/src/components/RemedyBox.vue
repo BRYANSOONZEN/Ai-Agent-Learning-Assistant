@@ -16,6 +16,8 @@ const props = defineProps({
   kpId: { type: Number, required: true },
   mode: { type: String, default: 'remedy' }, // 'remedy' 补练 | 'extend' 拓展
   assessType: { type: String, default: 'scenario' },
+  // 学习推荐页里做：出新一轮要回到小助手（要先经过小助手），这里不显示“再来一轮 / 再来一组”
+  noContinue: { type: Boolean, default: false },
 })
 const emit = defineEmits(['changed'])
 
@@ -111,7 +113,7 @@ start()
 
       <div class="actions">
         <el-button v-if="view.questions.length && !result" type="primary" size="small" @click="submit">交补练题</el-button>
-        <el-button v-if="result?.canContinue" size="small" type="primary" plain @click="start">{{ mode === 'extend' ? '再来一组' : '再来一轮' }}</el-button>
+        <el-button v-if="result?.canContinue && !noContinue" size="small" type="primary" plain @click="start">{{ mode === 'extend' ? '再来一组' : '再来一轮' }}</el-button>
       </div>
     </template>
   </div>

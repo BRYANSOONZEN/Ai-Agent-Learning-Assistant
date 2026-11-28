@@ -58,3 +58,8 @@ export function startExtend(kpId, assessType) {
 export function submitExtend(kpId, answers) {
   return request.post(`/assistant/extend/${kpId}/submit`, { answers })
 }
+
+// POST /api/assistant/pushes/{id}/accept -> 接收老师的推送（接收后保存到学习推荐）
+export function acceptPush(id) {
+  return request.post(`/assistant/pushes/${id}/accept`)
+}

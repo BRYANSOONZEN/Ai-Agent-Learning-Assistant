@@ -4,7 +4,7 @@
  * Teachers: their own courses come first (TeacherCourses).
  * Students: a dark welcome banner with the next thing to learn; three real numbers (study time from 学习记录,
  * mastered / weak knowledge points from 学情诊断); the chapter they were in as a path; recent activity;
- * their courses; questions picked by 学习推荐; and the learning chain (学 → 记 → 诊 → 画 → 荐).
+ * their courses; sets saved in 学习推荐 (from the study assistant); and the learning chain (学 → 记 → 诊 → 画 → 荐).
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -36,7 +36,8 @@ const courseTotal = ref(0)
 const steps = ref([]) // the chapter the student was in: intro + items, each { view, title, icon, done, current }
 const records = ref(null)
 const diagnosis = ref(null)
-const recommended = ref([]) // up to 3 questions from 学习推荐
+const recommended = ref([]) // up to 3 sets from 学习推荐 (the assistant's extension)
+const REC_KIND = { remedy: '补练', extend: '拓展', teacher: '老师推送' }
 const deadlines = ref([]) // exercises / AI dialogues with a deadline, not done yet (overdue first, then by date)
 // remind: overdue + due within REMIND_DAYS; the rest are only counted
 const urgent = computed(() => deadlines.value.filter((d) => d.state !== 'later'))
@@ -141,9 +142,8 @@ onMounted(async () => {
     if (r.status === 'fulfilled') records.value = r.value
     if (d.status === 'fulfilled') diagnosis.value = d.value
     if (rec.status === 'fulfilled') {
-      recommended.value = rec.value.points
-        .flatMap((p) => p.exercises.map((e) => ({ ...e, point: p.name })))
-        .slice(0, 3)
+      // 学习推荐（小助手的延伸）里还没做的排前面
+      recommended.value = [...rec.value.sets].sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1)).slice(0, 3)
     }
   } catch {
     /* the request helper already showed the error */
@@ -328,19 +328,19 @@ onMounted(async () => {
           <span class="sw-eyebrow">RECOMMENDED FOR YOU</span>
           <h3>为你推荐</h3>
         </div>
-        <router-link :to="{ name: 'recommend' }" class="sw-link">去做题<el-icon><Right /></el-icon></router-link>
+        <router-link :to="{ name: 'recommend' }" class="sw-link">去学习推荐<el-icon><Right /></el-icon></router-link>
       </div>
       <div v-if="recommended.length" class="grid3">
-        <router-link v-for="(r, i) in recommended" :key="r.exerciseId" :to="{ name: 'recommend' }" class="tile">
+        <router-link v-for="(r, i) in recommended" :key="r.kind + r.id" :to="{ name: 'recommend', query: { kind: r.kind } }" class="tile">
           <span class="tile-no">{{ String(i + 1).padStart(2, '0') }}</span>
           <span class="tile-main">
-            <strong>{{ r.stem }}</strong>
-            <small>{{ r.point }}</small>
+            <strong>「{{ r.knowledgePointName }}」{{ REC_KIND[r.kind] }}</strong>
+            <small>{{ r.chapterTitle }} · {{ r.questions.length }} 道题</small>
           </span>
-          <span class="sw-tag" :class="r.reason === '上次做错了' ? 'orange' : 'purple'">{{ r.reason }}</span>
+          <span class="sw-tag" :class="r.status === 'open' ? 'orange' : 'purple'">{{ r.status === 'open' ? '还没做' : '已做完' }}</span>
         </router-link>
       </div>
-      <p v-else class="muted">没有薄弱的知识点，暂时不用补。做错的题会出现在这里。</p>
+      <p v-else class="muted">还没有补练题。交卷后打开右下角的小助手，没掌握的知识点可以让它出补练题，出好的题保存在学习推荐里。</p>
     </section>
 
     <section class="app-card">

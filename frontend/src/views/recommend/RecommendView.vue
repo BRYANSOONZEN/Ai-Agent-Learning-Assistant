@@ -1,447 +1,249 @@
 <script setup>
 /*
- * 学习推荐 (the 荐 stage). GET /api/recommendations picks questions for the weakest knowledge points
- * (mastery < 60%): last answered wrong > never done > wrong once then right, at most 3 per point, 5 in all.
- * Each point card says why (mastery, the misconception from the last wrong answer), what to re-read first,
- * then the questions. A question is answered right here, one at a time: it is graded, recorded as
- * 「推荐练习」 and mastery is recomputed. Right answers and 换一道 are not recommended again.
+ * 学习推荐 = 小助手的延伸（backend: RecommendService）。要先经过小助手：
+ *   - 系统补充：在小助手里点“出补练题”，大模型按自己的错题出题，点“去查看”到这里做；一律保存
+ *     （知识点变色、补回来要有记录）；
+ *   - 拓展：在小助手里点“来点更难的”，到这里做；做完自己选保存不保存，不保存的不再显示；
+ *   - 老师推送：在小助手里点“接收”后保存到这里，在这里做老师的新题。
+ * 做题用小助手原来的提交接口（RemedyBox / PushBox），判分和“补回来”的规则只有一套。
+ * 练习里的题不在这里。
  */
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
-import MasteryMeter from '@/views/diagnosis/MasteryMeter.vue'
-import { LEVELS, percent } from '@/views/diagnosis/levels'
-import { getRecommendations, practiceRecommended, recommendationFeedback } from '@/api/recommend'
+import RemedyBox from '@/components/RemedyBox.vue'
+import PushBox from '@/components/PushBox.vue'
+import { getRecommendations, saveExtend } from '@/api/recommend'
 
+const route = useRoute()
 const router = useRouter()
-const LETTERS = 'ABCDEF'
 
 const data = ref(null)
 const loading = ref(false)
-const chosen = reactive({}) // exerciseId -> letter
-const results = reactive({}) // exerciseId -> graded result
-const changes = reactive({}) // knowledgePointId -> latest mastery change
-const busy = ref(null) // exerciseId being submitted
+const tab = ref(['remedy', 'extend', 'teacher'].includes(route.query.kind) ? route.query.kind : 'remedy')
+const decide = ref({}) // 拓展刚做完、还没选保存不保存的：setId -> true
 
-const total = computed(() => (data.value?.points || []).reduce((n, p) => n + p.exercises.length, 0))
-const answeredSome = computed(() => Object.keys(results).length > 0)
-const headline = computed(() => {
-  const d = data.value
-  if (!d.weakCount) return '没有薄弱的知识点，暂时不用补'
-  if (!d.points.length) return '薄弱知识点的题都做完了，先回看内容'
-  const first = d.points[0]
-  if (!total.value) return `「${first.name}」的题都做完了，先回看内容`
-  return d.points.length === 1
-    ? `先补「${first.name}」，做这 ${total.value} 道题`
-    : `先补 ${d.points.length} 个薄弱知识点，一共 ${total.value} 道题`
-})
+const TABS = [
+  { key: 'remedy', label: '系统补充', hint: '小助手按你的错题出的补练题，全部保存：知识点补回来（变色）要靠这些记录。' },
+  { key: 'extend', label: '拓展', hint: '掌握得好的知识点，小助手出的更难的题。做完你自己决定保存不保存。' },
+  { key: 'teacher', label: '老师推送', hint: '老师看了全班的练习后补充的讲解和新题，在小助手里接收后保存到这里。' },
+]
+const countOf = (k) => (data.value?.sets || []).filter((s) => s.kind === k).length
+const shown = computed(() => (data.value?.sets || []).filter((s) => s.kind === tab.value))
+const hint = computed(() => TABS.find((t) => t.key === tab.value)?.hint)
 
 async function load() {
   loading.value = true
   try {
     data.value = await getRecommendations()
-    for (const k of Object.keys(chosen)) delete chosen[k]
-    for (const k of Object.keys(results)) delete results[k]
-    for (const k of Object.keys(changes)) delete changes[k]
   } finally {
     loading.value = false
   }
 }
+load()
+watch(() => route.query.kind, (k) => {
+  if (['remedy', 'extend', 'teacher'].includes(k)) tab.value = k
+})
 
-async function submit(point, ex) {
-  if (!chosen[ex.exerciseId]) return ElMessage.warning('先选一个答案')
-  busy.value = ex.exerciseId
-  try {
-    const r = await practiceRecommended({ [ex.exerciseId]: chosen[ex.exerciseId] })
-    results[ex.exerciseId] = r.results[0]
-    const c = r.masteryChanges.find((m) => m.knowledgePointId === point.knowledgePointId)
-    if (c) changes[point.knowledgePointId] = c
-  } finally {
-    busy.value = null
-  }
+const focusKp = computed(() => Number(route.query.kp) || null)
+
+function when(t) {
+  return t ? String(t).replace('T', ' ').slice(5, 16) : ''
 }
-
-async function dismiss(point, ex) {
-  await recommendationFeedback(ex.recommendationId, 'dismissed')
-  point.exercises = point.exercises.filter((e) => e !== ex)
-  ElMessage.success('换掉了，刷新后会补上别的题')
+function statusTag(s) {
+  if (s.status === 'open') return { type: 'warning', text: s.kind === 'teacher' ? '还没做' : '还没做完' }
+  const pct = s.score == null ? '' : `，得分 ${Math.round(s.score * 100)}%`
+  return { type: 'success', text: '做完了' + pct }
 }
-
-function optionClass(ex, letter) {
-  const r = results[ex.exerciseId]
-  if (!r) return { chosen: chosen[ex.exerciseId] === letter }
-  return { right: r.answer === letter, wrong: r.chosen === letter && !r.correct }
+function title(s) {
+  if (s.kind === 'remedy') return `补练第 ${s.round} 轮`
+  if (s.kind === 'extend') return `拓展 · ${s.assessLabel || ''}`
+  return `老师补充讲解 · ${s.assessLabel || ''}`
 }
-
-function openItem(point, item) {
-  router.push({
-    name: 'course-detail',
-    params: { id: point.courseId },
-    query: { chapter: point.chapterId, view: 'item:' + item.itemId },
-  })
+function tag(q) {
+  if (q.correct) return { type: 'success', text: '答对' }
+  if (q.score > 0) return { type: 'warning', text: `部分对，得 ${q.score} 分` }
+  return { type: 'danger', text: '答错' }
 }
+const LETTERS = 'ABCDEF'
 
-onMounted(load)
+// 做完一组：补练、老师推送直接刷新；拓展先让学生选保存不保存
+function finished(s) {
+  if (s.kind === 'extend') decide.value = { ...decide.value, [s.id]: true }
+  else load()
+}
+async function keep(s, saved) {
+  await saveExtend(s.id, saved)
+  ElMessage.success(saved ? '已保存到“拓展”' : '不保存，这组题不再显示')
+  decide.value = { ...decide.value, [s.id]: false }
+  load()
+}
+function openAssistant() {
+  window.dispatchEvent(new Event('assistant-open'))
+}
 </script>
 
 <template>
   <div v-loading="loading" class="recommend">
     <PageHeader
       title="学习推荐"
-      description="按学情诊断里最薄弱的知识点挑题：先补上次做错的，再做没做过的。在这里做题会记进学习记录，掌握度跟着变。"
+      description="小助手的延伸：小助手给你出的补练题、拓展题，以及老师推送给你的讲解和新题，都保存在这里，在这里做、回看。"
     />
 
-    <template v-if="data">
-      <section class="sw-summary conclusion">
-        <div class="sw-summary-main">
-          <span class="sw-eyebrow on-dark">TODAY'S PLAN</span>
-          <h2>{{ headline }}</h2>
-          <p>掌握度低于 60% 算薄弱，最低的排在前面。做对的题不会再推；不想做可以换一道。</p>
+    <div class="tabs">
+      <button v-for="t in TABS" :key="t.key" type="button" :class="{ active: tab === t.key }" @click="tab = t.key">
+        {{ t.label }}<span class="count">{{ countOf(t.key) }}</span>
+      </button>
+    </div>
+    <p class="hint">{{ hint }}</p>
+
+    <el-empty v-if="data && !shown.length" :description="tab === 'teacher' ? '还没有接收老师的推送' : '这里还没有题'">
+      <p class="muted">要先经过小助手：交卷后打开右下角的小助手，{{ tab === 'remedy' ? '在没掌握的知识点下点“出补练题”' : tab === 'extend' ? '在掌握得好的知识点下点“来点更难的”' : '在“老师给你的”里点“接收”' }}。</p>
+      <el-button type="primary" @click="openAssistant">打开小助手</el-button>
+    </el-empty>
+
+    <article v-for="s in shown" :key="s.kind + s.id" class="set app-card" :class="{ focus: focusKp === s.knowledgePointId && s.status === 'open' }">
+      <header class="set-head">
+        <div>
+          <span class="sw-eyebrow">{{ s.courseName }} · {{ s.chapterTitle }}</span>
+          <h3>「{{ s.knowledgePointName }}」{{ title(s) }}</h3>
+          <small>{{ s.kind === 'teacher' ? '推送' : '出题' }}时间 {{ when(s.at) }}<template v-if="s.dueAt"> · 期限 {{ when(s.dueAt) }}</template></small>
         </div>
-        <div class="sw-summary-stat">
-          <strong>{{ data.weakCount }}</strong>
-          <span>薄弱知识点</span>
+        <el-tag :type="statusTag(s).type">{{ statusTag(s).text }}</el-tag>
+      </header>
+
+      <p v-if="s.explanation" class="explain">{{ s.explanation }}</p>
+
+      <!-- 还没做：在这里做（调小助手原来的接口） -->
+      <template v-if="s.status === 'open'">
+        <RemedyBox v-if="s.kind !== 'teacher'" :kp-id="s.knowledgePointId" :mode="s.kind" :assess-type="s.assessType || 'scenario'" no-continue
+          @changed="finished(s)" />
+        <PushBox v-else :push="{ id: s.id, explanation: '', done: false, questions: s.questions }" @changed="finished(s)" />
+        <div v-if="decide[s.id]" class="decide">
+          <span>这组拓展题要保存到学习推荐吗？</span>
+          <el-button size="small" type="primary" @click="keep(s, true)">保存</el-button>
+          <el-button size="small" @click="keep(s, false)">不保存</el-button>
         </div>
-        <div class="sw-summary-stat">
-          <strong>{{ total }}</strong>
-          <span>推荐的题</span>
-        </div>
-        <div class="sw-summary-stat">
-          <strong>{{ data.doneCount }}</strong>
-          <span>已经做对</span>
-        </div>
-        <button v-if="answeredSome" type="button" class="sw-button-light" @click="load">
-          <el-icon><Refresh /></el-icon>重新推荐
-        </button>
-      </section>
+      </template>
 
-
-      <el-empty v-if="!data.weakCount" description="继续学新的内容吧，做错的题会出现在这里">
-        <el-button @click="router.push({ name: 'diagnosis' })">看学情诊断</el-button>
-      </el-empty>
-
-      <article v-for="p in data.points" :key="p.knowledgePointId" class="point app-card">
-        <header class="point-head">
-          <div class="point-name">
-            <span class="sw-eyebrow">WEAK POINT</span>
-            <h3>{{ p.name }}</h3>
-            <small>{{ p.courseName }} / {{ p.chapterTitle }}，答对 {{ p.correctCount }} / {{ p.attemptCount }} 次</small>
-          </div>
-          <div class="meter">
-            <MasteryMeter :value="p.mastery" :level="p.level" />
-          </div>
-        </header>
-
-        <div v-if="changes[p.knowledgePointId]" class="change">
-          掌握度 {{ percent(changes[p.knowledgePointId].before) }}
-          <el-icon><Right /></el-icon>
-          <b>{{ percent(changes[p.knowledgePointId].after) }}</b>
-          <span class="lv" :class="changes[p.knowledgePointId].level">
-            {{ LEVELS[changes[p.knowledgePointId].level].label }}
-          </span>
-        </div>
-
-        <div class="point-body">
-          <!-- why + what to re-read first -->
-          <aside class="review">
-            <div v-if="p.misconception" class="block">
-              <span class="label">上次答错时可能是这样想的</span>
-              <p class="mis">{{ p.misconception }}</p>
-            </div>
-            <div v-if="p.content" class="block">
-              <span class="label">要点</span>
-              <p>{{ p.content }}</p>
-            </div>
-            <div v-if="p.review.length" class="block">
-              <span class="label">先回看</span>
-              <button v-for="r in p.review" :key="r.itemId" type="button" class="link" @click="openItem(p, r)">
-                <el-icon><component :is="r.type === 'video' ? 'VideoPlay' : 'Document'" /></el-icon>
-                {{ r.title }}
-              </button>
-            </div>
-          </aside>
-
-          <!-- the recommended questions, answered one at a time -->
-          <div class="questions">
-            <p v-if="!p.exercises.length" class="empty-note">
-              这个知识点推荐的题都做完或换掉了。先回看左边的内容，再去学情诊断看看掌握度。
-            </p>
-            <div v-for="(ex, i) in p.exercises" :key="ex.exerciseId" class="question">
-              <div class="stem">
-                <span class="q-num">{{ i + 1 }}</span>
-                <span class="stem-text">{{ ex.stem }}</span>
-                <span class="reason" :class="{ hot: ex.reason === '上次做错了' }">{{ ex.reason }}</span>
-              </div>
-              <div class="options">
-                <button
-                  v-for="(opt, j) in ex.options"
-                  :key="j"
-                  type="button"
-                  class="option"
-                  :class="optionClass(ex, LETTERS[j])"
-                  :disabled="!!results[ex.exerciseId]"
-                  @click="chosen[ex.exerciseId] = LETTERS[j]"
-                >
-                  <span class="letter">{{ LETTERS[j] }}</span>
-                  <span>{{ opt }}</span>
-                </button>
-              </div>
-
-              <div v-if="results[ex.exerciseId]" class="explain" :class="{ ok: results[ex.exerciseId].correct }">
-                <p class="verdict">
-                  {{ results[ex.exerciseId].correct ? '答对了，这道题不会再推荐。' : `答错了，正确答案是 ${results[ex.exerciseId].answer}。` }}
-                </p>
-                <p v-if="results[ex.exerciseId].note" class="note">
-                  你选的 {{ results[ex.exerciseId].chosen }} 可能是这样想的：{{ results[ex.exerciseId].note }}
-                </p>
-                <p v-if="results[ex.exerciseId].analysis">解析：{{ results[ex.exerciseId].analysis }}</p>
-              </div>
-              <div v-else class="q-actions">
-                <el-button text size="small" @click="dismiss(p, ex)">换一道</el-button>
-                <el-button
-                  type="primary"
-                  size="small"
-                  :loading="busy === ex.exerciseId"
-                  :disabled="!chosen[ex.exerciseId]"
-                  @click="submit(p, ex)"
-                >
-                  提交这道
-                </el-button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </article>
-    </template>
+      <!-- 做完了：回看 -->
+      <ol v-else class="review">
+        <li v-for="q in s.questions" :key="q.id">
+          <p class="stem">{{ q.stem }} <el-tag size="small" :type="tag(q).type">{{ tag(q).text }}</el-tag></p>
+          <ul v-if="q.options?.length" class="opts">
+            <li v-for="(o, k) in q.options" :key="k"
+              :class="{ right: LETTERS[k] === q.answer, mine: LETTERS[k] === q.chosen && LETTERS[k] !== q.answer }">
+              {{ LETTERS[k] }}. {{ o }}
+            </li>
+          </ul>
+          <p v-if="q.type === 'two_tier' && q.reasons?.length" class="muted">
+            理由：你选 {{ q.reasonChosen || '—' }}，正确 {{ q.reasonAnswer }}
+          </p>
+          <p v-if="!q.options?.length" class="muted">你的回答：{{ q.chosen }}</p>
+          <p v-if="!q.correct && q.note" class="note">你可能是这样想的：{{ q.note }}</p>
+          <p v-if="q.analysis" class="muted">解析：{{ q.analysis }}</p>
+        </li>
+      </ol>
+    </article>
   </div>
 </template>
 
 <style scoped>
-.conclusion {
-  margin-bottom: 18px;
-}
-
-/* ---------- one weak point ---------- */
-.point + .point {
-  margin-top: 18px;
-}
-.point-head {
+.tabs {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.point-name h3 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-.point-name small {
-  color: var(--app-text-muted);
-  font-size: 13px;
-}
-.meter {
-  width: min(340px, 100%);
-}
-.change {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
-  font-size: 13px;
-}
-.lv {
-  padding: 0 6px;
-  border-radius: 5px;
-  font-size: 12px;
-  background: var(--el-fill-color);
-}
-.lv.good {
-  background: var(--el-color-success-light-9);
-  color: #1f7a69;
-}
-.lv.medium {
-  background: var(--el-color-warning-light-9);
-  color: #9a5a1c;
-}
-.lv.weak {
-  background: var(--el-color-danger-light-9);
-  color: #b23b2f;
-}
-.point-body {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
-  gap: 28px;
-  padding-top: 18px;
-}
-
-/* ---------- left: why and what to re-read ---------- */
-.review {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-.label {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--app-text-muted);
-  font-size: 12px;
-}
-.block p {
-  margin: 0;
-  line-height: 1.65;
-}
-.block .mis {
-  color: #b23b2f;
-}
-.link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--app-primary);
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.link:hover {
-  text-decoration: underline;
-}
-
-/* ---------- right: questions ---------- */
-.empty-note {
-  margin: 0;
-  color: var(--app-text-muted);
-  line-height: 1.6;
-}
-.question + .question {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-.stem {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  line-height: 1.6;
-  font-weight: 500;
-}
-.stem-text {
-  flex: 1;
-}
-.q-num {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--el-fill-color);
-  font-size: 12px;
-}
-.reason {
-  flex: none;
-  padding: 1px 8px;
-  border-radius: 6px;
-  background: var(--el-fill-color);
-  color: var(--app-text-secondary);
-  font-size: 12px;
-  font-weight: 400;
-}
-.reason.hot {
-  background: var(--el-color-danger-light-9);
-  color: #b23b2f;
-}
-.options {
-  display: grid;
   gap: 8px;
-  margin: 12px 0 0 32px;
+  margin: 4px 0 8px;
 }
-.option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+.tabs button {
   border: 1px solid var(--el-border-color);
-  border-radius: 8px;
   background: var(--el-bg-color);
-  font: inherit;
-  text-align: left;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 14px;
   cursor: pointer;
+  color: var(--el-text-color-regular);
 }
-.option:hover:not(:disabled) {
-  border-color: var(--el-color-primary-light-5);
+.tabs button.active {
+  background: var(--app-primary, var(--el-color-primary));
+  border-color: transparent;
+  color: #fff;
 }
-.option:disabled {
-  cursor: default;
-  color: var(--el-text-color-primary);
-}
-.option.chosen {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-.option.right {
-  border-color: var(--el-color-success);
-  background: var(--el-color-success-light-9);
-}
-.option.wrong {
-  border-color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
-}
-.letter {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--el-border-color);
-  border-radius: 50%;
-  font-size: 12px;
-}
-.q-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-}
-.explain {
-  margin: 10px 0 0 32px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--el-color-danger-light-9);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.explain.ok {
-  background: var(--el-color-success-light-9);
-}
-.explain p {
-  margin: 0;
-}
-.explain p + p {
-  margin-top: 4px;
-}
-.verdict {
+.count {
+  margin-left: 6px;
   font-weight: 600;
 }
-.note {
-  color: #b23b2f;
+.hint {
+  color: var(--app-text-muted, var(--el-text-color-secondary));
+  margin: 0 0 14px;
+  font-size: 13px;
 }
-
-@media (max-width: 1100px) {
-  .point-body {
-    grid-template-columns: 1fr;
-  }
+.set {
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.set.focus {
+  outline: 2px solid var(--el-color-primary-light-5);
+}
+.set-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-bottom: 12px;
+}
+.set-head h3 {
+  margin: 4px 0;
+  font-size: 16px;
+}
+.set-head small,
+.muted {
+  color: var(--app-text-muted, var(--el-text-color-secondary));
+}
+.explain {
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+.decide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--el-color-primary-light-9);
+}
+.review {
+  padding-left: 20px;
+  margin: 0;
+}
+.review > li + li {
+  margin-top: 14px;
+}
+.stem {
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+.opts {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+}
+.opts li {
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.opts li.right {
+  background: var(--el-color-success-light-9);
+}
+.opts li.mine {
+  background: var(--el-color-danger-light-9);
+}
+.note {
+  color: var(--el-color-warning-dark-2);
 }
 </style>
