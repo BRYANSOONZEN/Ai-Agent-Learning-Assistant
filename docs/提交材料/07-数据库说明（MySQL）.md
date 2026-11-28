@@ -138,7 +138,7 @@
 ### 1.3 ③ H2 内存库（测试）
 
 - 连接：`jdbc:h2:mem:platform;…`（`backend/src/test/resources/config/application.yml`）。
-- 每个测试类启动时建表、放演示数据，测试之间互不影响；测试结束就没了。160 个自动测试和 GitHub 上的 CI 都用它，不需要装 MySQL。
+- 每个测试类启动时建表、放演示数据，测试之间互不影响；测试结束就没了。158 个自动测试和 GitHub 上的 CI 都用它，不需要装 MySQL。
 
 ### 1.4 ④ 资料文件
 
