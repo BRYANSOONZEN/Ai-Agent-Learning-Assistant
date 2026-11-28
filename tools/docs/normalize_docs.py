@@ -13,6 +13,9 @@ DOCS = os.path.join(HERE, '..', '..', 'docs', '提交材料')
 DATE = '2026-11-28'
 REPO = 'GitHub：BRYANSOONZEN/Ai-Agent-Learning-Assistant，分支 feature/ai-learning-studywise'
 
+# 只放标题和目录、不放文档信息表和修订记录的文档（按提交要求逐份改成规范格式）
+PLAIN = {'01-需求分析.md'}
+
 DOCS_INFO = [
     ('01-需求分析.md', 'SE-G2-01', '需求分析说明书'),
     ('02-组件设计.md', 'SE-G2-02', '组件设计说明书'),
@@ -66,6 +69,11 @@ def main():
         p = os.path.join(DOCS, name)
         text = open(p, encoding='utf-8').read()
         notes, body = split_header(text)
+        if name in PLAIN:
+            out = '\n'.join(['# 软件工程智能学习平台 · %s' % title, '', BEGIN, '', '**目录**', '', toc(body), '', END, '', '---', ''])
+            open(p, 'w', encoding='utf-8', newline='\n').write(out + '\n' + body)
+            print('ok', name)
+            continue
         head = [
             '# 软件工程智能学习平台 · %s' % title, '',
             BEGIN, '',
