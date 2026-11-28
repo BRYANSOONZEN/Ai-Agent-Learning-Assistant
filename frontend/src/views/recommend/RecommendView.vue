@@ -42,8 +42,11 @@ async function load() {
   }
 }
 load()
-watch(() => route.query.kind, (k) => {
+// 已经在这一页时从小助手“去查看 / 接收”过来：地址只变了参数，页面不会重新创建，要自己重新取一次
+watch(() => route.fullPath, () => {
+  const k = route.query.kind
   if (['remedy', 'extend', 'teacher'].includes(k)) tab.value = k
+  load()
 })
 
 const focusKp = computed(() => Number(route.query.kp) || null)

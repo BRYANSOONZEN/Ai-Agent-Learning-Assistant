@@ -8,7 +8,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SEGMENTS } from './segments.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(HERE, '..', '..')
@@ -120,27 +119,44 @@ class Driver {
       await sleep(250)
     }
     const r = await this.eval(`(() => { const e = window.__demoTarget; const r0 = e.getBoundingClientRect();
-      if (r0.top < 70 || r0.bottom > innerHeight - 20) e.scrollIntoView({ block: 'center', behavior: 'smooth' }); return true })()`)
+      const hit = document.elementFromPoint(r0.left + r0.width / 2, r0.top + r0.height / 2); const covered = !hit || (hit !== e && !e.contains(hit)); if (r0.top < 70 || r0.bottom > innerHeight - 20 || covered) { e.scrollIntoView({ block: 'center', behavior: covered ? 'auto' : 'smooth' }); return true } return false })()`)
     await sleep(r ? 700 : 0)
     return await this.eval(`(() => { const r = window.__demoTarget.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height } })()`)
   }
-  /** 鼠标平滑移过去 */
-  async moveTo(x, y, ms = 650) {
-    const steps = Math.max(8, Math.round(ms / 16))
+  /** 鼠标移过去：走一条略弯的曲线，距离越远越久，快到时减速（像人手在移） */
+  async moveTo(x, y, ms) {
     const x0 = this.cx, y0 = this.cy
+    const dist = Math.hypot(x - x0, y - y0)
+    if (dist < 2) return
+    const dur = ms ?? Math.min(1100, 280 + dist * 0.55) * (0.85 + Math.random() * 0.3)
+    const steps = Math.max(10, Math.round(dur / 16))
+    // 控制点：在连线中点旁边偏一点，路径就不是直线
+    const bend = (Math.random() - 0.5) * Math.min(160, dist * 0.35)
+    const mx = (x0 + x) / 2 - ((y - y0) / (dist || 1)) * bend
+    const my = (y0 + y) / 2 + ((x - x0) / (dist || 1)) * bend
     for (let i = 1; i <= steps; i++) {
-      const k = i / steps, e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2
-      this.cx = x0 + (x - x0) * e; this.cy = y0 + (y - y0) * e
+      const k = i / steps
+      const e = 1 - Math.pow(1 - k, 3) // 先快后慢
+      const u = 1 - e
+      this.cx = u * u * x0 + 2 * u * e * mx + e * e * x
+      this.cy = u * u * y0 + 2 * u * e * my + e * e * y
       await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: this.cx, y: this.cy })
-      await sleep(ms / steps)
+      await sleep(dur / steps)
     }
+  }
+  /** 像在看某处：鼠标移过去停一会儿（读这一段） */
+  async look(text, opts = {}) {
+    const p = await this.locate(text, opts)
+    const jx = (Math.random() - 0.5) * Math.min(80, p.w * 0.4)
+    await this.moveTo(p.x + jx, p.y + (Math.random() - 0.5) * 6)
+    await sleep(opts.after ?? 1800)
   }
   async click(text, opts = {}) {
     const p = await this.locate(text, opts)
     const x = p.x + (opts.dx || 0), y = p.y + (opts.dy || 0)
-    await this.moveTo(x, y, opts.moveMs ?? 650)
-    await sleep(opts.before ?? 250)
+    await this.moveTo(x, y, opts.moveMs)
+    await sleep(opts.before ?? 200 + Math.random() * 250)
     await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
     await sleep(70)
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
@@ -148,19 +164,26 @@ class Driver {
   }
   async hover(text, opts = {}) {
     const p = await this.locate(text, opts)
-    await this.moveTo(p.x, p.y, opts.moveMs ?? 650)
+    await this.moveTo(p.x, p.y, opts.moveMs)
     await sleep(opts.after ?? 600)
   }
-  /** 一个字一个字地打（中文用 insertText） */
-  async type(text, cps = 14) {
+  /** 一个字一个字地打（中文用 insertText）：速度有快有慢，标点后停一下 */
+  async type(text, cps = 9) {
     for (const ch of text) {
       if (ch === '\n') await this.key('Enter')
       else await this.send('Input.insertText', { text: ch })
-      await sleep(1000 / cps)
+      let ms = (1000 / cps) * (0.5 + Math.random())
+      if ('，。；：、！？,.'.includes(ch)) ms += 250 + Math.random() * 350
+      await sleep(ms)
     }
   }
+  /** 全选输入框里的字（Ctrl+A），接着打字就替换掉 */
+  async selectAll() {
+    await this.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 2 })
+    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 2 })
+  }
   async key(key) {
-    const codes = { Enter: 13, Tab: 9, Escape: 27, Backspace: 8 }
+    const codes = { Enter: 13, Tab: 9, Escape: 27, Backspace: 8, End: 35 }
     await this.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: codes[key] || 0,
       text: key === 'Enter' ? '\r' : undefined })
     await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: codes[key] || 0 })
@@ -278,6 +301,8 @@ async function recordSegment(name, fn) {
   }
 }
 
+// 用哪个段落文件：默认 segments.mjs；老师端单独录用 DEMO_SEGMENTS=segments_teacher.mjs
+const { SEGMENTS } = await import('./' + (process.env.DEMO_SEGMENTS || 'segments.mjs'))
 const want = process.argv.slice(2)
 const list = Object.entries(SEGMENTS).filter(([k]) => !want.length || want.includes(k))
 if (!list.length) { console.error('没有这个段：', want.join(' '), '\n可选：', Object.keys(SEGMENTS).join(' ')); process.exit(1) }
